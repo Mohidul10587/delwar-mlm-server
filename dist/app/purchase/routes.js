@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const controller_1 = require("./controller");
+const status_controller_1 = require("./status.controller");
+const auth_1 = require("../../middleware/auth");
+const installment_controller_1 = require("./installment.controller");
+const router = (0, express_1.Router)();
+router.post("/", auth_1.verifyUser, controller_1.createPurchase);
+router.get("/my", auth_1.verifyUser, controller_1.getMyPurchases);
+router.get("/", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), controller_1.getPurchases);
+router.patch("/:id/status", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), status_controller_1.updatePurchaseStatus);
+router.post("/:purchaseId/installments", auth_1.verifyUser, installment_controller_1.createInstallmentPayment);
+router.get("/:purchaseId/installments/summary", auth_1.verifyUser, installment_controller_1.getInstallmentSummary);
+router.get("/:purchaseId/installments", auth_1.verifyUser, installment_controller_1.getInstallmentsByPurchase);
+router.patch("/installments/:id/status", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), installment_controller_1.updateInstallmentStatus);
+exports.default = router;

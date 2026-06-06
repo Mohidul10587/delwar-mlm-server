@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const controller_1 = require("./controller");
+const router = (0, express_1.Router)();
+router.post("/", controller_1.createComboOffer);
+router.get("/", controller_1.getComboOffers);
+router.get("/:id", controller_1.getComboOfferById);
+router.get("/seller/:sellerId", controller_1.getSellerComboOffers);
+router.put("/:id", controller_1.updateComboOffer);
+router.delete("/:id", controller_1.deleteComboOffer);
+exports.default = router;

@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.InstallmentPayment = void 0;
+const mongoose_1 = require("mongoose");
+const InstallmentPaymentSchema = new mongoose_1.Schema({
+    purchaseId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Purchase", required: true },
+    userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
+    installmentNo: { type: Number, required: true, min: 1 },
+    amount: { type: Number, required: true, min: 1 },
+    senderAccount: { type: String, required: true },
+    transactionId: { type: String, required: true },
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+    reviewNote: { type: String, default: "" },
+    reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    reviewedAt: { type: Date },
+}, { timestamps: true });
+exports.InstallmentPayment = (0, mongoose_1.model)("InstallmentPayment", InstallmentPaymentSchema);

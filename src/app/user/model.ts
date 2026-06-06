@@ -1,0 +1,58 @@
+import mongoose, { Schema, model, Document } from "mongoose";
+
+export interface IAncestorEntry {
+  level: number; // 1 = direct parent, 2 = grandparent, etc.
+  userId: mongoose.Types.ObjectId;
+  side?: "A" | "B"; // only for placementAncestors: which side of that ancestor this user's subtree is on
+}
+
+export interface IUser extends Document {
+  _id: mongoose.Types.ObjectId;
+  username: string;
+  name: string;
+  phone: string;
+  password: string;
+  role: "superadmin" | "admin" | "staff" | "user";
+  isActive: boolean;
+  image: string | null;
+  linkedPhoneAccounts: mongoose.Types.ObjectId[];
+  permissions: string[];
+  generationAncestors: IAncestorEntry[];
+  placementAncestors: IAncestorEntry[];
+  directSalesCount: number;
+  teamSalesCount: number;
+  currentRank: string | null;
+}
+
+const AncestorEntrySchema = new Schema<IAncestorEntry>(
+  {
+    level: { type: Number, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    side: { type: String, enum: ["A", "B"] },
+  },
+  { _id: false }
+);
+
+const UserSchema = new Schema<IUser>(
+  {
+    username: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    phone: { type: String, required: true },
+    password: { type: String, required: true },
+    role: { type: String, enum: ["superadmin", "admin", "staff", "user"], default: "user" },
+    isActive: { type: Boolean, default: true },
+    image: { type: String, default: null },
+    linkedPhoneAccounts: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    permissions: [{ type: String }],
+    generationAncestors: [AncestorEntrySchema],
+    placementAncestors: [AncestorEntrySchema],
+    directSalesCount: { type: Number, default: 0 },
+    teamSalesCount: { type: Number, default: 0 },
+    currentRank: { type: String, default: null },
+  },
+  { timestamps: true }
+);
+
+UserSchema.index({ "placementAncestors.userId": 1 });
+
+export const User = model<IUser>("User", UserSchema);

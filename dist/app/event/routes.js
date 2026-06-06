@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.notificationRouter = exports.eventRouter = void 0;
+const express_1 = require("express");
+const controller_1 = require("./controller");
+const auth_1 = require("../../middleware/auth");
+exports.eventRouter = (0, express_1.Router)();
+exports.notificationRouter = (0, express_1.Router)();
+exports.eventRouter.get("/", controller_1.getEvents);
+exports.eventRouter.get("/all", auth_1.verifyAdmin, controller_1.getAllEvents);
+exports.eventRouter.post("/", auth_1.verifySuperAdmin, controller_1.createEvent);
+exports.eventRouter.put("/:id", auth_1.verifySuperAdmin, controller_1.updateEvent);
+exports.eventRouter.delete("/:id", auth_1.verifySuperAdmin, controller_1.deleteEvent);
+exports.notificationRouter.get("/", auth_1.verifyUser, controller_1.getNotifications);
+exports.notificationRouter.post("/", auth_1.verifyAdmin, controller_1.createNotification);
+exports.notificationRouter.delete("/:id", auth_1.verifySuperAdmin, controller_1.deleteNotification);

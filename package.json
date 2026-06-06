@@ -1,0 +1,53 @@
+{
+  "name": "s",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "mm": "node scripts/generateModule.js",
+    "set-admin-referrer": "ts-node src/scripts/set-admin-referrer.ts"
+  },
+  "keywords": [],
+  "author": "mohid",
+  "license": "ISC",
+  "dependencies": {
+    "@types/multer": "^1.4.11",
+    "@types/node-cron": "^3.0.11",
+    "@types/uuid": "^10.0.0",
+    "axios": "^1.13.2",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.8.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.3.4",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
+    "slugify": "^1.6.8",
+    "sslcommerz-lts": "^1.2.0",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.12.10",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "root": "dist"
+}
