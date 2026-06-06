@@ -7,7 +7,7 @@ interface IInstallment {
 }
 
 export interface IShare extends Document {
-  title: { en: string; bn: string };
+  title: string;
   image: string;
   images: string[];
   cashPrice: number;
@@ -21,10 +21,7 @@ export interface IShare extends Document {
 
 const ShareSchema = new Schema<IShare>(
   {
-    title: {
-      en: { type: String, required: true },
-      bn: { type: String, required: true },
-    },
+    title: { type: String, required: true },
     image: { type: String, required: true },
     images: [{ type: String }],
     cashPrice: { type: Number, required: true },

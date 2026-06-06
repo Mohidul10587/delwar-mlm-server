@@ -16,14 +16,14 @@ export const createInstallmentPayment = async (req: Request, res: Response, next
     const { installmentNo, amount, senderAccount, transactionId } = req.body;
     const purchase = await Purchase.findById(req.params.purchaseId).populate("shareId", "installment");
     if (!purchase) {
-      return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Purchase not found" });
     }
     if (purchase.userId.toString() !== req.user!._id.toString()) {
-      return res.status(403).json({ message: { en: "Forbidden", bn: "অনুমতি নেই" } });
+      return res.status(403).json({ message: "Forbidden" });
     }
     if (purchase.paymentType !== "installment") {
       return res.status(400).json({
-        message: { en: "This purchase is not installment type", bn: "এটি কিস্তি ভিত্তিক ক্রয় নয়" },
+        message: "This purchase is not installment type",
       });
     }
 
@@ -37,7 +37,7 @@ export const createInstallmentPayment = async (req: Request, res: Response, next
     });
 
     res.status(201).json({
-      message: { en: "Installment payment submitted", bn: "কিস্তির পেমেন্ট জমা হয়েছে" },
+      message: "Installment payment submitted",
       payment,
     });
   } catch (err) {
@@ -51,13 +51,13 @@ export const getInstallmentSummary = async (req: Request, res: Response, next: N
       .populate("shareId", "installment cashPrice")
       .lean();
     if (!purchase)
-      return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Purchase not found" });
 
     if (purchase.userId.toString() !== req.user!._id.toString())
-      return res.status(403).json({ message: { en: "Forbidden", bn: "অনুমতি নেই" } });
+      return res.status(403).json({ message: "Forbidden" });
 
     if (purchase.paymentType !== "installment")
-      return res.status(400).json({ message: { en: "Not an installment purchase", bn: "এটি কিস্তি ভিত্তিক ক্রয় নয়" } });
+      return res.status(400).json({ message: "Not an installment purchase" });
 
     const share = purchase.shareId as any;
     const totalInstallments: number = share?.installment?.totalInstallments ?? 0;
@@ -86,13 +86,13 @@ export const getInstallmentsByPurchase = async (req: Request, res: Response, nex
   try {
     const purchase = await Purchase.findById(req.params.purchaseId).select("userId");
     if (!purchase) {
-      return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Purchase not found" });
     }
 
     const isOwner = purchase.userId.toString() === req.user!._id.toString();
     const isAdmin = ["superadmin", "admin", "staff"].includes(req.user!.role);
     if (!isOwner && !isAdmin) {
-      return res.status(403).json({ message: { en: "Forbidden", bn: "অনুমতি নেই" } });
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     const payments = await InstallmentPayment.find({ purchaseId: purchase._id })
@@ -109,20 +109,20 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
   try {
     const { status, reviewNote } = req.body as { status: "approved" | "rejected"; reviewNote?: string };
     if (!["approved", "rejected"].includes(status)) {
-      return res.status(400).json({ message: { en: "Invalid status", bn: "অবৈধ স্ট্যাটাস" } });
+      return res.status(400).json({ message: "Invalid status" });
     }
     if (status === "rejected" && !String(reviewNote ?? "").trim()) {
       return res.status(400).json({
-        message: { en: "Rejection reason is required", bn: "প্রত্যাখ্যানের কারণ লিখতে হবে" },
+        message: "Rejection reason is required",
       });
     }
 
     const payment = await InstallmentPayment.findById(req.params.id);
     if (!payment) {
-      return res.status(404).json({ message: { en: "Installment not found", bn: "কিস্তির রেকর্ড পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Installment not found" });
     }
     if (payment.status !== "pending") {
-      return res.status(400).json({ message: { en: "Already reviewed", bn: "ইতোমধ্যে রিভিউ করা হয়েছে" } });
+      return res.status(400).json({ message: "Already reviewed" });
     }
 
     payment.status = status;
@@ -174,7 +174,7 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
     }
 
     res.json({
-      message: { en: `Installment ${status}`, bn: `কিস্তি ${status === "approved" ? "অনুমোদিত" : "প্রত্যাখ্যাত"}` },
+      message: `Installment ${status}`,
       payment,
     });
   } catch (err) {

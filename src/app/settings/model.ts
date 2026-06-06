@@ -1,18 +1,18 @@
 import { Schema, model, Document } from "mongoose";
 
 export interface ISettings extends Document {
-  siteTitle: { en: string; bn: string };
-  siteTagline: { en: string; bn: string };
-  aboutMission: { en: string; bn: string };
-  aboutVision: { en: string; bn: string };
-  aboutValues: { en: string; bn: string };
+  siteTitle: string;
+  siteTagline: string;
+  aboutMission: string;
+  aboutVision: string;
+  aboutValues: string;
   logo: string;
   favicon: string;
-  metaDescription: { en: string; bn: string };
+  metaDescription: string;
   metaKeywords: string;
   contactPhone: string;
   contactEmail: string;
-  contactAddress: { en: string; bn: string };
+  contactAddress: string;
   socialFacebook: string;
   socialYoutube: string;
   bkash: string;
@@ -35,21 +35,19 @@ export interface ISettings extends Document {
   ranks: { name: string; minDirectSales: number; minTeamSales: number; order: number }[];
 }
 
-const bilingualField = { en: { type: String, default: "" }, bn: { type: String, default: "" } };
-
 const SettingsSchema = new Schema<ISettings>({
-  siteTitle:       { type: bilingualField, default: () => ({}) },
-  siteTagline:     { type: bilingualField, default: () => ({}) },
-  aboutMission:    { type: bilingualField, default: () => ({}) },
-  aboutVision:     { type: bilingualField, default: () => ({}) },
-  aboutValues:     { type: bilingualField, default: () => ({}) },
+  siteTitle:       { type: String, default: "" },
+  siteTagline:     { type: String, default: "" },
+  aboutMission:    { type: String, default: "" },
+  aboutVision:     { type: String, default: "" },
+  aboutValues:     { type: String, default: "" },
   logo:            { type: String, default: "" },
   favicon:         { type: String, default: "" },
-  metaDescription: { type: bilingualField, default: () => ({}) },
+  metaDescription: { type: String, default: "" },
   metaKeywords:    { type: String, default: "" },
   contactPhone:    { type: String, default: "" },
   contactEmail:    { type: String, default: "" },
-  contactAddress:  { type: bilingualField, default: () => ({}) },
+  contactAddress:  { type: String, default: "" },
   socialFacebook:  { type: String, default: "" },
   socialYoutube:   { type: String, default: "" },
   bkash:           { type: String, default: "" },

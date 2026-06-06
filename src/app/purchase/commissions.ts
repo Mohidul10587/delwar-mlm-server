@@ -162,7 +162,7 @@ export const distributeCommissions = async (purchaseId: string) => {
       buyerId: purchase.userId,
       buyerName: buyer.name,
       buyerUsername: buyer.username,
-      shareTitle: share.title?.en ?? share.title ?? "",
+      shareTitle: share.title ?? "",
       paymentType: purchase.paymentType,
       approvedAmount: managerialBase,
       entries: debugEntries,

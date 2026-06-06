@@ -8,9 +8,9 @@ export const updatePurchaseStatus = async (req: Request, res: Response, next: Ne
   try {
     const { status, reviewNote } = req.body;
     if (!["approved", "rejected"].includes(status))
-      return res.status(400).json({ message: { en: "Invalid status", bn: "অবৈধ স্ট্যাটাস" } });
+      return res.status(400).json({ message: "Invalid status" });
     if (status === "rejected" && !String(reviewNote ?? "").trim())
-      return res.status(400).json({ message: { en: "Rejection reason is required", bn: "প্রত্যাখ্যানের কারণ লিখতে হবে" } });
+      return res.status(400).json({ message: "Rejection reason is required" });
 
     const purchase = await Purchase.findByIdAndUpdate(
       req.params.id,
@@ -18,7 +18,7 @@ export const updatePurchaseStatus = async (req: Request, res: Response, next: Ne
       { new: true }
     );
     if (!purchase)
-      return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Purchase not found" });
 
     const purchaseWithShare = await Purchase.findById(purchase._id).populate("shareId", "cashPrice").lean();
     if (purchaseWithShare) {
@@ -41,7 +41,7 @@ export const updatePurchaseStatus = async (req: Request, res: Response, next: Ne
       distributeCommissions((purchase._id as any).toString());
 
     res.json({
-      message: { en: `Purchase ${status}`, bn: `ক্রয় ${status === "approved" ? "অনুমোদিত" : "বাতিল"}` },
+      message: `Purchase ${status}`,
       purchase,
     });
   } catch (err) { next(err); }

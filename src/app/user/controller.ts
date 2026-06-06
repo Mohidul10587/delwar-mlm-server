@@ -113,28 +113,28 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 
     const existingUsername = await Model.findOne({ username });
     if (existingUsername)
-      return res.status(400).json({ message: { en: "Username already taken", bn: "ইউজারনেম ইতিমধ্যে ব্যবহৃত" } });
+      return res.status(400).json({ message: "Username already taken" });
 
     let referrerId: mongoose.Types.ObjectId | null = null;
     if (referrerUsername) {
       const referrer = await Model.findOne({ username: referrerUsername }).select("_id");
       if (!referrer)
-        return res.status(400).json({ message: { en: "Referrer not found", bn: "রেফারার পাওয়া যায়নি" } });
+        return res.status(400).json({ message: "Referrer not found" });
       referrerId = referrer._id;
     }
 
     let placementParentId: mongoose.Types.ObjectId | null = null;
     if (placementParentUsername || placementSide) {
       if (!placementParentUsername || !placementSide)
-        return res.status(400).json({ message: { en: "Both placementParentUsername and placementSide are required", bn: "placementParentUsername এবং placementSide উভয়ই প্রয়োজন" } });
+        return res.status(400).json({ message: "Both placementParentUsername and placementSide are required" });
       const parent = await Model.findOne({ username: placementParentUsername }).select("_id");
       if (!parent)
-        return res.status(400).json({ message: { en: "Placement parent not found", bn: "প্লেসমেন্ট প্যারেন্ট পাওয়া যায়নি" } });
+        return res.status(400).json({ message: "Placement parent not found" });
       placementParentId = parent._id;
 
       const sideOccupied = await Model.findOne({ "placementAncestors.0.userId": placementParentId, "placementAncestors.0.side": placementSide });
       if (sideOccupied)
-        return res.status(400).json({ message: { en: `Side ${placementSide} is already occupied`, bn: `${placementSide} সাইডে ইতিমধ্যে একজন আছেন` } });
+        return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -161,7 +161,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     res.cookie("accessToken", accessToken, cookieOpts());
     res.cookie("refreshToken", refreshToken, cookieOpts());
 
-    res.status(201).json({ message: { en: "Registered successfully", bn: "সফলভাবে নিবন্ধিত" }, user });
+    res.status(201).json({ message: "Registered successfully", user });
   } catch (err) {
     next(err);
   }
@@ -172,7 +172,7 @@ const resolveUsername = async (username: string | undefined, label: string, res:
   if (!username) return { id: null, error: false };
   const found = await Model.findOne({ username }).select("_id");
   if (!found) {
-    res.status(400).json({ message: { en: `${label} not found`, bn: `${label} পাওয়া যায়নি` } });
+    res.status(400).json({ message: `${label} not found` });
     return { id: null, error: true };
   }
   return { id: found._id as mongoose.Types.ObjectId, error: false };
@@ -185,13 +185,13 @@ export const adminRegister = async (req: Request, res: Response, next: NextFunct
 
     const existingUsername = await Model.findOne({ username });
     if (existingUsername)
-      return res.status(400).json({ message: { en: "Username already taken", bn: "ইউজারনেম ইতিমধ্যে ব্যবহৃত" } });
+      return res.status(400).json({ message: "Username already taken" });
 
     const { id: referrerId, error: refErr } = await resolveUsername(referrerUsername, "Referrer", res);
     if (refErr) return;
 
     if ((placementParentUsername && !placementSide) || (!placementParentUsername && placementSide))
-      return res.status(400).json({ message: { en: "Both placementParentUsername and placementSide are required", bn: "placementParentUsername এবং placementSide উভয়ই প্রয়োজন" } });
+      return res.status(400).json({ message: "Both placementParentUsername and placementSide are required" });
 
     const { id: placementParentId, error: plErr } = await resolveUsername(placementParentUsername, "Placement parent", res);
     if (plErr) return;
@@ -199,7 +199,7 @@ export const adminRegister = async (req: Request, res: Response, next: NextFunct
     if (placementParentId && placementSide) {
       const sideOccupied = await Model.findOne({ "placementAncestors.0.userId": placementParentId, "placementAncestors.0.side": placementSide });
       if (sideOccupied)
-        return res.status(400).json({ message: { en: `Side ${placementSide} is already occupied`, bn: `${placementSide} সাইডে ইতিমধ্যে একজন আছেন` } });
+        return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -226,7 +226,7 @@ export const adminRegister = async (req: Request, res: Response, next: NextFunct
       await user.save();
     }
 
-    res.status(201).json({ message: { en: "User registered successfully", bn: "ব্যবহারকারী সফলভাবে নিবন্ধিত" }, user });
+    res.status(201).json({ message: "User registered successfully", user });
   } catch (err) {
     next(err);
   }
@@ -238,20 +238,20 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     const user = await Model.findOne({ username });
     if (!user)
-      return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "User not found" });
 
     if (!user.isActive)
-      return res.status(403).json({ message: { en: "Account is inactive", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" } });
+      return res.status(403).json({ message: "Account is inactive" });
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid)
-      return res.status(401).json({ message: { en: "Invalid password", bn: "ভুল পাসওয়ার্ড" } });
+      return res.status(401).json({ message: "Invalid password" });
 
     const { accessToken, refreshToken } = generateTokens(user._id.toString());
     res.cookie("accessToken", accessToken, cookieOpts());
     res.cookie("refreshToken", refreshToken, cookieOpts());
 
-    res.json({ message: { en: "Login successful", bn: "লগইন সফল" }, user });
+    res.json({ message: "Login successful", user });
   } catch (err) {
     next(err);
   }
@@ -279,7 +279,7 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
   try {
     res.clearCookie("accessToken", cookieOpts());
     res.clearCookie("refreshToken", cookieOpts());
-    res.json({ message: { en: "Logged out successfully", bn: "সফলভাবে লগআউট হয়েছে" } });
+    res.json({ message: "Logged out successfully" });
   } catch (error) {
     next(error);
   }
@@ -289,16 +289,16 @@ export const verify = async (req: Request, res: Response) => {
   try {
     const token = req.cookies.accessToken;
     if (!token)
-      return res.status(401).json({ message: { en: "No token provided", bn: "টোকেন প্রদান করা হয়নি" } });
+      return res.status(401).json({ message: "No token provided" });
 
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
     const user = await Model.findById(decoded.id).select("-password");
     if (!user)
-      return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "User not found" });
 
     res.json({ user });
   } catch {
-    res.status(401).json({ message: { en: "Invalid token", bn: "অবৈধ টোকেন" } });
+    res.status(401).json({ message: "Invalid token" });
   }
 };
 
@@ -312,20 +312,20 @@ export const switchAccount = async (req: Request, res: Response, next: NextFunct
       (id) => id.toString() === targetUserId
     );
     if (!isLinked)
-      return res.status(403).json({ message: { en: "Account not linked", bn: "অ্যাকাউন্ট লিংকড নয়" } });
+      return res.status(403).json({ message: "Account not linked" });
 
     const targetUser = await Model.findById(targetUserId).select("-password");
     if (!targetUser)
-      return res.status(404).json({ message: { en: "Target account not found", bn: "টার্গেট অ্যাকাউন্ট পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Target account not found" });
 
     if (!targetUser.isActive)
-      return res.status(403).json({ message: { en: "Target account is inactive", bn: "টার্গেট অ্যাকাউন্ট নিষ্ক্রিয়" } });
+      return res.status(403).json({ message: "Target account is inactive" });
 
     const { accessToken, refreshToken } = generateTokens(targetUser._id.toString());
     res.cookie("accessToken", accessToken, cookieOpts());
     res.cookie("refreshToken", refreshToken, cookieOpts());
 
-    res.json({ message: { en: "Switched account", bn: "অ্যাকাউন্ট সুইচ হয়েছে" }, user: targetUser });
+    res.json({ message: "Switched account", user: targetUser });
   } catch (err) {
     next(err);
   }
@@ -334,10 +334,10 @@ export const switchAccount = async (req: Request, res: Response, next: NextFunct
 export const updateImage = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { image } = req.body;
-    if (!image) return res.status(400).json({ message: { en: "Image URL required", bn: "ছবির URL প্রয়োজন" } });
+    if (!image) return res.status(400).json({ message: "Image URL required" });
     const user = await Model.findByIdAndUpdate(req.user?._id, { $set: { image } }, { new: true }).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
-    res.json({ message: { en: "Image updated", bn: "ছবি আপডেট হয়েছে" }, user });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "Image updated", user });
   } catch (err) { next(err); }
 };
 
@@ -345,8 +345,8 @@ export const updatePhone = async (req: Request, res: Response, next: NextFunctio
   try {
     const { phone } = req.body;
     const user = await Model.findByIdAndUpdate(req.user?._id, { $set: { phone } }, { new: true }).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
-    res.json({ message: { en: "Phone updated", bn: "ফোন আপডেট হয়েছে" }, user });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "Phone updated", user });
   } catch (err) { next(err); }
 };
 
@@ -354,25 +354,25 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
   try {
     const { currentPassword, newPassword } = req.body;
     const user = await Model.findById(req.user?._id);
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+    if (!user) return res.status(404).json({ message: "User not found" });
     const isValid = await bcrypt.compare(currentPassword, user.password);
-    if (!isValid) return res.status(401).json({ message: { en: "Current password is incorrect", bn: "বর্তমান পাসওয়ার্ড ভুল" } });
+    if (!isValid) return res.status(401).json({ message: "Current password is incorrect" });
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-    res.json({ message: { en: "Password changed", bn: "পাসওয়ার্ড পরিবর্তিত হয়েছে" } });
+    res.json({ message: "Password changed" });
   } catch (err) { next(err); }
 };
 
 export const toggleUserActive = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = await Model.findById(req.params.id).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+    if (!user) return res.status(404).json({ message: "User not found" });
     user.isActive = !user.isActive;
     await user.save();
     res.json({
       message: user.isActive
-        ? { en: "User activated", bn: "ব্যবহারকারী সক্রিয় করা হয়েছে" }
-        : { en: "User disabled", bn: "ব্যবহারকারী নিষ্ক্রিয় করা হয়েছে" },
+        ? "User activated"
+        : "User disabled",
       user,
     });
   } catch (err) { next(err); }
@@ -382,19 +382,19 @@ export const adminUpdatePhone = async (req: Request, res: Response, next: NextFu
   try {
     const { phone } = req.body;
     const user = await Model.findByIdAndUpdate(req.params.id, { $set: { phone } }, { new: true }).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
-    res.json({ message: { en: "Phone updated", bn: "ফোন আপডেট হয়েছে" }, user });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "Phone updated", user });
   } catch (err) { next(err); }
 };
 
 export const adminUpdatePassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { password } = req.body;
-    if (!password) return res.status(400).json({ message: { en: "Password required", bn: "পাসওয়ার্ড প্রয়োজন" } });
+    if (!password) return res.status(400).json({ message: "Password required" });
     const hashed = await bcrypt.hash(password, 10);
     const user = await Model.findByIdAndUpdate(req.params.id, { $set: { password: hashed } }, { new: true }).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
-    res.json({ message: { en: "Password updated", bn: "পাসওয়ার্ড আপডেট হয়েছে" } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "Password updated" });
   } catch (err) { next(err); }
 };
 
@@ -428,10 +428,10 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = await Model.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
-    if (user.role === "superadmin") return res.status(403).json({ message: { en: "Cannot delete superadmin", bn: "সুপারএডমিন ডিলিট করা যাবে না" } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.role === "superadmin") return res.status(403).json({ message: "Cannot delete superadmin" });
     await Model.findByIdAndDelete(req.params.id);
-    res.json({ message: { en: "User deleted", bn: "ব্যবহারকারী মুছে ফেলা হয়েছে" } });
+    res.json({ message: "User deleted" });
   } catch (err) { next(err); }
 };
 
@@ -442,7 +442,7 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
     };
 
     const user = await Model.findById(req.params.id).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     let newReferrerId: mongoose.Types.ObjectId | null = user.generationAncestors[0]?.userId ?? null;
     let newPlacementParentId: mongoose.Types.ObjectId | null = user.placementAncestors[0]?.userId ?? null;
@@ -453,7 +453,7 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
         newReferrerId = null;
       } else {
         const ref = await Model.findOne({ username: referrerUsername }).select("_id");
-        if (!ref) return res.status(400).json({ message: { en: "Referrer not found", bn: "রেফারার পাওয়া যায়নি" } });
+        if (!ref) return res.status(400).json({ message: "Referrer not found" });
         newReferrerId = ref._id;
       }
     }
@@ -463,12 +463,12 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
         newPlacementParentId = null;
         newPlacementSide = null;
       } else {
-        if (!placementSide) return res.status(400).json({ message: { en: "placementSide required", bn: "placementSide প্রয়োজন" } });
+        if (!placementSide) return res.status(400).json({ message: "placementSide required" });
         const parent = await Model.findOne({ username: placementParentUsername }).select("_id");
-        if (!parent) return res.status(400).json({ message: { en: "Placement parent not found", bn: "প্লেসমেন্ট প্যারেন্ট পাওয়া যায়নি" } });
+        if (!parent) return res.status(400).json({ message: "Placement parent not found" });
         const sideOccupied = await Model.findOne({ "placementAncestors.0.userId": parent._id, "placementAncestors.0.side": placementSide, _id: { $ne: req.params.id } });
         if (sideOccupied)
-          return res.status(400).json({ message: { en: `Side ${placementSide} is already occupied`, bn: `${placementSide} সাইডে ইতিমধ্যে একজন আছেন` } });
+          return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
         newPlacementParentId = parent._id;
         newPlacementSide = placementSide;
       }
@@ -487,7 +487,7 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
       placementParentUsername !== undefined ? cascadePlacementAncestors(user._id) : Promise.resolve(),
     ]);
 
-    res.json({ message: { en: "Updated successfully", bn: "সফলভাবে আপডেট হয়েছে" }, user });
+    res.json({ message: "Updated successfully", user });
   } catch (err) { next(err); }
 };
 
@@ -496,22 +496,22 @@ export const updatePermissions = async (req: Request, res: Response, next: NextF
     const { permissions } = req.body as { permissions?: unknown };
     if (!Array.isArray(permissions) || permissions.some((p) => typeof p !== "string")) {
       return res.status(400).json({
-        message: { en: "permissions must be string array", bn: "permissions স্ট্রিং অ্যারে হতে হবে" },
+        message: "permissions must be string array",
       });
     }
 
     const user = await Model.findById(req.params.id).select("-password");
-    if (!user) return res.status(404).json({ message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" } });
+    if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role === "superadmin") {
       return res.status(400).json({
-        message: { en: "Superadmin permissions are implicit", bn: "সুপারএডমিন পারমিশন আলাদা সেট করা যায় না" },
+        message: "Superadmin permissions are implicit",
       });
     }
 
     user.permissions = permissions;
     await user.save();
     res.json({
-      message: { en: "Permissions updated", bn: "পারমিশন আপডেট হয়েছে" },
+      message: "Permissions updated",
       user,
     });
   } catch (err) {

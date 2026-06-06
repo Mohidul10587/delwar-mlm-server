@@ -18,7 +18,7 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
       managerialCommissionForInstallmentSell:    defaultCommissions.managerialCommissionForInstallmentSell,
       ...req.body,
     });
-    res.status(201).json({ message: { en: "Share created", bn: "প্যাকেজ তৈরি হয়েছে" }, pkg });
+    res.status(201).json({ message: "Share created", pkg });
   } catch (err) { next(err); }
 };
 
@@ -44,7 +44,7 @@ export const getShareById = async (
     const pkg = await Share.findById(req.params.id).lean();
     if (!pkg)
       return res.status(404).json({
-        message: { en: "Share not found", bn: "প্যাকেজ পাওয়া যায়নি" },
+        message: "Share not found",
       });
     res.json({ pkg });
   } catch (err) {
@@ -65,10 +65,10 @@ export const updateShare = async (
     );
     if (!pkg)
       return res.status(404).json({
-        message: { en: "Share not found", bn: "প্যাকেজ পাওয়া যায়নি" },
+        message: "Share not found",
       });
     res.json({
-      message: { en: "Share updated", bn: "প্যাকেজ আপডেট হয়েছে" },
+      message: "Share updated",
       pkg,
     });
   } catch (err) {
@@ -85,10 +85,10 @@ export const deleteShare = async (
     const pkg = await Share.findByIdAndDelete(req.params.id);
     if (!pkg)
       return res.status(404).json({
-        message: { en: "Share not found", bn: "প্যাকেজ পাওয়া যায়নি" },
+        message: "Share not found",
       });
     res.json({
-      message: { en: "Share deleted", bn: "প্যাকেজ মুছে ফেলা হয়েছে" },
+      message: "Share deleted",
     });
   } catch (err) {
     next(err);

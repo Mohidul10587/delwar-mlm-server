@@ -17,6 +17,6 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
     const doc = await getOrCreate();
     Object.assign(doc, req.body);
     await doc.save();
-    res.json({ message: { en: "Settings updated", bn: "সেটিংস আপডেট হয়েছে" }, settings: doc });
+    res.json({ message: "Settings updated", settings: doc });
   } catch (err) { next(err); }
 };

@@ -19,22 +19,22 @@ export const getAllEvents = async (_req: Request, res: Response, next: NextFunct
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const event = await Event.create(req.body);
-    res.status(201).json({ message: { en: "Event created", bn: "ইভেন্ট তৈরি হয়েছে" }, event });
+    res.status(201).json({ message: "Event created", event });
   } catch (err) { next(err); }
 };
 
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!event) return res.status(404).json({ message: { en: "Event not found", bn: "ইভেন্ট পাওয়া যায়নি" } });
-    res.json({ message: { en: "Event updated", bn: "ইভেন্ট আপডেট হয়েছে" }, event });
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    res.json({ message: "Event updated", event });
   } catch (err) { next(err); }
 };
 
 export const deleteEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     await Event.findByIdAndDelete(req.params.id);
-    res.json({ message: { en: "Event deleted", bn: "ইভেন্ট মুছে ফেলা হয়েছে" } });
+    res.json({ message: "Event deleted" });
   } catch (err) { next(err); }
 };
 
@@ -49,13 +49,13 @@ export const getNotifications = async (_req: Request, res: Response, next: NextF
 export const createNotification = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const notification = await Notification.create({ ...req.body, createdBy: req.user!._id });
-    res.status(201).json({ message: { en: "Notification sent", bn: "নোটিফিকেশন পাঠানো হয়েছে" }, notification });
+    res.status(201).json({ message: "Notification sent", notification });
   } catch (err) { next(err); }
 };
 
 export const deleteNotification = async (req: Request, res: Response, next: NextFunction) => {
   try {
     await Notification.findByIdAndDelete(req.params.id);
-    res.json({ message: { en: "Notification deleted", bn: "নোটিফিকেশন মুছে ফেলা হয়েছে" } });
+    res.json({ message: "Notification deleted" });
   } catch (err) { next(err); }
 };

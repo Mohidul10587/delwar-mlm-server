@@ -11,7 +11,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
 
     const share = await Share.findById(shareId);
     if (!share)
-      return res.status(404).json({ message: { en: "Share not found", bn: "শেয়ার পাওয়া যায়নি" } });
+      return res.status(404).json({ message: "Share not found" });
 
     const qty = Number(quantity);
     const amountPaid =
@@ -37,7 +37,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     });
 
     res.status(201).json({
-      message: { en: "Purchase submitted, awaiting approval", bn: "ক্রয় জমা হয়েছে, অনুমোদনের অপেক্ষায়" },
+      message: "Purchase submitted, awaiting approval",
       purchase,
     });
   } catch (err) {
