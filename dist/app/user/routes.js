@@ -23,4 +23,5 @@ router.put("/admin/permissions/:id", auth_1.verifySuperAdmin, controller_1.updat
 router.put("/update-phone", auth_1.verifyUser, controller_1.updatePhone);
 router.put("/update-image", auth_1.verifyUser, controller_1.updateImage);
 router.put("/change-password", auth_1.verifyUser, controller_1.changePassword);
+router.put("/update-info", auth_1.verifyUser, controller_1.updateInfo);
 exports.default = router;

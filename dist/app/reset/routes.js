@@ -34,8 +34,6 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
         model_3.Wallet.updateMany({}, {
             balance: 0,
             pendingManagerialCommissionBalance: 0,
-            pendingTeamManagementCommissionOfSideA: 0,
-            pendingTeamManagementCommissionOfSideB: 0,
         }),
     ]);
     res.json({ message: "Reset complete" });

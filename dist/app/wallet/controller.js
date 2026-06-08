@@ -43,11 +43,11 @@ const adminCredit = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const { amount, note } = req.body;
         const wallet = yield findOrCreate(req.params.userId);
         if (!wallet)
-            return res.status(404).json({ message: { en: "Wallet not found", bn: "ওয়ালেট পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Wallet not found" });
         wallet.balance += Number(amount);
         yield wallet.save();
         yield model_1.TransactionLog.create({ userId: req.params.userId, type: "admin_credit", amount, balanceAfter: wallet.balance, note: note || "" });
-        res.json({ message: { en: "Credited", bn: "ক্রেডিট হয়েছে" }, wallet });
+        res.json({ message: "Credited", wallet });
     }
     catch (err) {
         next(err);
@@ -59,11 +59,11 @@ const adminDebit = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         const { amount, note } = req.body;
         const wallet = yield findOrCreate(req.params.userId);
         if (!wallet)
-            return res.status(404).json({ message: { en: "Wallet not found", bn: "ওয়ালেট পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Wallet not found" });
         wallet.balance = Math.max(0, wallet.balance - Number(amount));
         yield wallet.save();
         yield model_1.TransactionLog.create({ userId: req.params.userId, type: "admin_debit", amount, balanceAfter: wallet.balance, note: note || "" });
-        res.json({ message: { en: "Debited", bn: "ডেবিট হয়েছে" }, wallet });
+        res.json({ message: "Debited", wallet });
     }
     catch (err) {
         next(err);

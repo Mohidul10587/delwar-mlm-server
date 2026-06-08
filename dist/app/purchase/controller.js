@@ -12,15 +12,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMyPurchases = exports.getPurchases = exports.createPurchase = void 0;
 const model_1 = require("./model");
 const model_2 = require("../share/model");
+const model_3 = require("../user/model");
 const service_1 = require("./service");
-const model_3 = require("../certificate/model");
+const model_4 = require("../certificate/model");
 // POST /purchase  — logged-in user submits a purchase request
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     try {
-        const { shareId, quantity, paymentType, senderAccount, transactionId } = req.body;
+        const { shareId, quantity, paymentType, senderAccount, transactionId, buyerInfo } = req.body;
         const share = yield model_2.Share.findById(shareId);
         if (!share)
-            return res.status(404).json({ message: { en: "Share not found", bn: "শেয়ার পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Share not found" });
+        // Auto-load nominee from user profile if not provided in buyerInfo
+        const buyer = yield model_3.User.findById(req.user._id).select("name phone nominee nominee2");
+        const resolvedBuyerInfo = buyerInfo !== null && buyerInfo !== void 0 ? buyerInfo : (buyer ? {
+            name: buyer.name,
+            phone: buyer.phone,
+            nominee: (_a = buyer.nominee) !== null && _a !== void 0 ? _a : undefined,
+            nominee2: (_b = buyer.nominee2) !== null && _b !== void 0 ? _b : undefined,
+        } : null);
         const qty = Number(quantity);
         const amountPaid = paymentType === "cash"
             ? share.cashPrice * qty
@@ -33,15 +43,16 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             amountPaid,
             senderAccount,
             transactionId,
+            buyerInfo: resolvedBuyerInfo,
         });
-        yield model_3.Certificate.create({
+        yield model_4.Certificate.create({
             userId: req.user._id,
             purchaseId: purchase._id,
             shareId,
             status: "pending",
         });
         res.status(201).json({
-            message: { en: "Purchase submitted, awaiting approval", bn: "ক্রয় জমা হয়েছে, অনুমোদনের অপেক্ষায়" },
+            message: "Purchase submitted, awaiting approval",
             purchase,
         });
     }

@@ -3,6 +3,26 @@ import { Schema, model, Document, Types } from "mongoose";
 export type PaymentType = "cash" | "installment";
 export type PurchaseStatus = "pending" | "approved" | "rejected";
 
+export interface IBuyerInfo {
+  name: string;
+  phone: string;
+  nid?: string;
+  nominee?: {
+    name: string;
+    relation: string;
+    phone: string;
+    nid?: string;
+    image?: string;
+  };
+  nominee2?: {
+    name: string;
+    relation: string;
+    phone: string;
+    nid?: string;
+    image?: string;
+  };
+}
+
 export interface IPurchase extends Document {
   userId: Types.ObjectId;
   shareId: Types.ObjectId;
@@ -16,9 +36,32 @@ export interface IPurchase extends Document {
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
   commissionProcessed: boolean;
+  buyerInfo?: IBuyerInfo;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const NomineeSchema = new Schema(
+  {
+    name: { type: String },
+    relation: { type: String },
+    phone: { type: String },
+    nid: { type: String },
+    image: { type: String },
+  },
+  { _id: false }
+);
+
+const BuyerInfoSchema = new Schema(
+  {
+    name: { type: String },
+    phone: { type: String },
+    nid: { type: String },
+    nominee: { type: NomineeSchema },
+    nominee2: { type: NomineeSchema },
+  },
+  { _id: false }
+);
 
 const PurchaseSchema = new Schema<IPurchase>(
   {
@@ -34,6 +77,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     reviewedBy:    { type: Schema.Types.ObjectId, ref: "User" },
     reviewedAt:    { type: Date },
     commissionProcessed: { type: Boolean, default: false },
+    buyerInfo:     { type: BuyerInfoSchema, default: null },
   },
   { timestamps: true }
 );

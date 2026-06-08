@@ -29,7 +29,7 @@ const updateSettings = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         const doc = yield getOrCreate();
         Object.assign(doc, req.body);
         yield doc.save();
-        res.json({ message: { en: "Settings updated", bn: "সেটিংস আপডেট হয়েছে" }, settings: doc });
+        res.json({ message: "Settings updated", settings: doc });
     }
     catch (err) {
         next(err);

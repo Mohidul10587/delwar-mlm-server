@@ -19,13 +19,11 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const defaultCommissions = (_a = settings === null || settings === void 0 ? void 0 : settings.defaultCommissions) !== null && _a !== void 0 ? _a : {
             directSalesCommissionForCashSell: 0,
             directSalesCommissionForInstallmentSell: 0,
-            teamManagementCommissionForCashSell: 0,
-            teamManagementCommissionForInstallmentSell: 0,
             managerialCommissionForCashSell: 0,
             managerialCommissionForInstallmentSell: 0,
         };
-        const pkg = yield model_1.Share.create(Object.assign({ directSalesCommissionForCashSell: defaultCommissions.directSalesCommissionForCashSell, directSalesCommissionForInstallmentSell: defaultCommissions.directSalesCommissionForInstallmentSell, teamManagementCommissionForCashSell: defaultCommissions.teamManagementCommissionForCashSell, teamManagementCommissionForInstallmentSell: defaultCommissions.teamManagementCommissionForInstallmentSell, managerialCommissionForCashSell: defaultCommissions.managerialCommissionForCashSell, managerialCommissionForInstallmentSell: defaultCommissions.managerialCommissionForInstallmentSell }, req.body));
-        res.status(201).json({ message: { en: "Share created", bn: "প্যাকেজ তৈরি হয়েছে" }, pkg });
+        const pkg = yield model_1.Share.create(Object.assign({ directSalesCommissionForCashSell: defaultCommissions.directSalesCommissionForCashSell, directSalesCommissionForInstallmentSell: defaultCommissions.directSalesCommissionForInstallmentSell, managerialCommissionForCashSell: defaultCommissions.managerialCommissionForCashSell, managerialCommissionForInstallmentSell: defaultCommissions.managerialCommissionForInstallmentSell }, req.body));
+        res.status(201).json({ message: "Share created", pkg });
     }
     catch (err) {
         next(err);
@@ -47,7 +45,7 @@ const getShareById = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         const pkg = yield model_1.Share.findById(req.params.id).lean();
         if (!pkg)
             return res.status(404).json({
-                message: { en: "Share not found", bn: "প্যাকেজ পাওয়া যায়নি" },
+                message: "Share not found",
             });
         res.json({ pkg });
     }
@@ -61,10 +59,10 @@ const updateShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const pkg = yield model_1.Share.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
         if (!pkg)
             return res.status(404).json({
-                message: { en: "Share not found", bn: "প্যাকেজ পাওয়া যায়নি" },
+                message: "Share not found",
             });
         res.json({
-            message: { en: "Share updated", bn: "প্যাকেজ আপডেট হয়েছে" },
+            message: "Share updated",
             pkg,
         });
     }
@@ -78,10 +76,10 @@ const deleteShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const pkg = yield model_1.Share.findByIdAndDelete(req.params.id);
         if (!pkg)
             return res.status(404).json({
-                message: { en: "Share not found", bn: "প্যাকেজ পাওয়া যায়নি" },
+                message: "Share not found",
             });
         res.json({
-            message: { en: "Share deleted", bn: "প্যাকেজ মুছে ফেলা হয়েছে" },
+            message: "Share deleted",
         });
     }
     catch (err) {

@@ -491,6 +491,18 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
   } catch (err) { next(err); }
 };
 
+export const updateInfo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { nominee, nominee2 } = req.body;
+    const user = await Model.findById(req.user!._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (nominee !== undefined) user.nominee = nominee;
+    if (nominee2 !== undefined) user.nominee2 = nominee2;
+    await user.save();
+    res.json({ message: "Info updated successfully", user });
+  } catch (err) { next(err); }
+};
+
 export const updatePermissions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { permissions } = req.body as { permissions?: unknown };

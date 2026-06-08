@@ -2,6 +2,20 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Purchase = void 0;
 const mongoose_1 = require("mongoose");
+const NomineeSchema = new mongoose_1.Schema({
+    name: { type: String },
+    relation: { type: String },
+    phone: { type: String },
+    nid: { type: String },
+    image: { type: String },
+}, { _id: false });
+const BuyerInfoSchema = new mongoose_1.Schema({
+    name: { type: String },
+    phone: { type: String },
+    nid: { type: String },
+    nominee: { type: NomineeSchema },
+    nominee2: { type: NomineeSchema },
+}, { _id: false });
 const PurchaseSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     shareId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Share", required: true },
@@ -15,5 +29,6 @@ const PurchaseSchema = new mongoose_1.Schema({
     reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
     commissionProcessed: { type: Boolean, default: false },
+    buyerInfo: { type: BuyerInfoSchema, default: null },
 }, { timestamps: true });
 exports.Purchase = (0, mongoose_1.model)("Purchase", PurchaseSchema);

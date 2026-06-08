@@ -19,12 +19,12 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
-            return res.status(400).json({ message: { en: "Invalid status", bn: "অবৈধ স্ট্যাটাস" } });
+            return res.status(400).json({ message: "Invalid status" });
         if (status === "rejected" && !String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim())
-            return res.status(400).json({ message: { en: "Rejection reason is required", bn: "প্রত্যাখ্যানের কারণ লিখতে হবে" } });
+            return res.status(400).json({ message: "Rejection reason is required" });
         const purchase = yield model_1.Purchase.findByIdAndUpdate(req.params.id, { status, reviewNote: String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim(), reviewedBy: req.user._id, reviewedAt: new Date() }, { new: true });
         if (!purchase)
-            return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Purchase not found" });
         const purchaseWithShare = yield model_1.Purchase.findById(purchase._id).populate("shareId", "cashPrice").lean();
         if (purchaseWithShare) {
             const sharePrice = Number((_b = (_a = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.shareId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
@@ -40,7 +40,7 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
         if (status === "approved" && !purchase.commissionProcessed)
             (0, commissions_1.distributeCommissions)(purchase._id.toString());
         res.json({
-            message: { en: `Purchase ${status}`, bn: `ক্রয় ${status === "approved" ? "অনুমোদিত" : "বাতিল"}` },
+            message: `Purchase ${status}`,
             purchase,
         });
     }

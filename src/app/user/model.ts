@@ -6,6 +6,14 @@ export interface IAncestorEntry {
   side?: "A" | "B"; // only for placementAncestors: which side of that ancestor this user's subtree is on
 }
 
+export interface INominee {
+  name: string;
+  relation: string;
+  phone: string;
+  nid?: string;
+  image?: string;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   username: string;
@@ -22,6 +30,8 @@ export interface IUser extends Document {
   directSalesCount: number;
   teamSalesCount: number;
   currentRank: string | null;
+  nominee?: INominee;
+  nominee2?: INominee;
 }
 
 const AncestorEntrySchema = new Schema<IAncestorEntry>(
@@ -49,6 +59,26 @@ const UserSchema = new Schema<IUser>(
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
     currentRank: { type: String, default: null },
+    nominee: {
+      type: {
+        name: String,
+        relation: String,
+        phone: String,
+        nid: String,
+        image: String,
+      },
+      default: null,
+    },
+    nominee2: {
+      type: {
+        name: String,
+        relation: String,
+        phone: String,
+        nid: String,
+        image: String,
+      },
+      default: null,
+    },
   },
   { timestamps: true }
 );

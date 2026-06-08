@@ -35,7 +35,7 @@ exports.getAllEvents = getAllEvents;
 const createEvent = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const event = yield model_1.Event.create(req.body);
-        res.status(201).json({ message: { en: "Event created", bn: "ইভেন্ট তৈরি হয়েছে" }, event });
+        res.status(201).json({ message: "Event created", event });
     }
     catch (err) {
         next(err);
@@ -46,8 +46,8 @@ const updateEvent = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     try {
         const event = yield model_1.Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!event)
-            return res.status(404).json({ message: { en: "Event not found", bn: "ইভেন্ট পাওয়া যায়নি" } });
-        res.json({ message: { en: "Event updated", bn: "ইভেন্ট আপডেট হয়েছে" }, event });
+            return res.status(404).json({ message: "Event not found" });
+        res.json({ message: "Event updated", event });
     }
     catch (err) {
         next(err);
@@ -57,7 +57,7 @@ exports.updateEvent = updateEvent;
 const deleteEvent = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         yield model_1.Event.findByIdAndDelete(req.params.id);
-        res.json({ message: { en: "Event deleted", bn: "ইভেন্ট মুছে ফেলা হয়েছে" } });
+        res.json({ message: "Event deleted" });
     }
     catch (err) {
         next(err);
@@ -78,7 +78,7 @@ exports.getNotifications = getNotifications;
 const createNotification = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const notification = yield model_1.Notification.create(Object.assign(Object.assign({}, req.body), { createdBy: req.user._id }));
-        res.status(201).json({ message: { en: "Notification sent", bn: "নোটিফিকেশন পাঠানো হয়েছে" }, notification });
+        res.status(201).json({ message: "Notification sent", notification });
     }
     catch (err) {
         next(err);
@@ -88,7 +88,7 @@ exports.createNotification = createNotification;
 const deleteNotification = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         yield model_1.Notification.findByIdAndDelete(req.params.id);
-        res.json({ message: { en: "Notification deleted", bn: "নোটিফিকেশন মুছে ফেলা হয়েছে" } });
+        res.json({ message: "Notification deleted" });
     }
     catch (err) {
         next(err);

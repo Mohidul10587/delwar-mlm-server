@@ -21,14 +21,14 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const amt = Number(amount);
         const wallet = yield findOrCreateWallet(req.user._id.toString());
         if (!wallet)
-            return res.status(404).json({ message: { en: "Wallet not found", bn: "ওয়ালেট পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Wallet not found" });
         if (wallet.balance < amt)
-            return res.status(400).json({ message: { en: "Insufficient balance", bn: "পর্যাপ্ত ব্যালেন্স নেই" } });
+            return res.status(400).json({ message: "Insufficient balance" });
         wallet.balance -= amt;
         yield wallet.save();
         yield model_2.TransactionLog.create({ userId: req.user._id, type: "withdrawal", amount: amt, balanceAfter: wallet.balance, note: `${method}: ${accountDetails}` });
         const withdrawal = yield model_1.Withdrawal.create({ userId: req.user._id, amount: amt, method, accountDetails });
-        res.status(201).json({ message: { en: "Withdrawal request submitted", bn: "উইথড্র রিকোয়েস্ট জমা হয়েছে" }, withdrawal });
+        res.status(201).json({ message: "Withdrawal request submitted", withdrawal });
     }
     catch (err) {
         next(err);
@@ -61,12 +61,12 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
-            return res.status(400).json({ message: { en: "Invalid status", bn: "অবৈধ স্ট্যাটাস" } });
+            return res.status(400).json({ message: "Invalid status" });
         const withdrawal = yield model_1.Withdrawal.findById(req.params.id);
         if (!withdrawal)
-            return res.status(404).json({ message: { en: "Withdrawal not found", bn: "উইথড্র পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Withdrawal not found" });
         if (withdrawal.status !== "pending")
-            return res.status(400).json({ message: { en: "Already reviewed", bn: "ইতোমধ্যে রিভিউ করা হয়েছে" } });
+            return res.status(400).json({ message: "Already reviewed" });
         if (status === "rejected") {
             const wallet = yield findOrCreateWallet(withdrawal.userId.toString());
             if (wallet) {
@@ -80,7 +80,7 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
         withdrawal.reviewedBy = req.user._id;
         withdrawal.reviewedAt = new Date();
         yield withdrawal.save();
-        res.json({ message: { en: `Withdrawal ${status}`, bn: `উইথড্র ${status === "approved" ? "অনুমোদিত" : "প্রত্যাখ্যাত"}` }, withdrawal });
+        res.json({ message: `Withdrawal ${status}`, withdrawal });
     }
     catch (err) {
         next(err);

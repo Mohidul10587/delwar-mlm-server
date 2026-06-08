@@ -22,6 +22,26 @@ const UserSchema = new mongoose_1.Schema({
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
     currentRank: { type: String, default: null },
+    nominee: {
+        type: {
+            name: String,
+            relation: String,
+            phone: String,
+            nid: String,
+            image: String,
+        },
+        default: null,
+    },
+    nominee2: {
+        type: {
+            name: String,
+            relation: String,
+            phone: String,
+            nid: String,
+            image: String,
+        },
+        default: null,
+    },
 }, { timestamps: true });
 UserSchema.index({ "placementAncestors.userId": 1 });
 exports.User = (0, mongoose_1.model)("User", UserSchema);

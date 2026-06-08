@@ -46,7 +46,7 @@ const createRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         const { name, minDirectSales = 0, minTeamSales = 0, order = 0 } = req.body;
         s.ranks.push({ name, minDirectSales, minTeamSales, order });
         yield s.save();
-        res.status(201).json({ message: { en: "Rank created", bn: "র্যাংক তৈরি হয়েছে" }, ranks: s.ranks });
+        res.status(201).json({ message: "Rank created", ranks: s.ranks });
     }
     catch (err) {
         next(err);
@@ -58,10 +58,10 @@ const updateRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         const s = yield getSettings();
         const rank = s.ranks.find((r) => r._id.toString() === req.params.id);
         if (!rank)
-            return res.status(404).json({ message: { en: "Rank not found", bn: "র্যাংক পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Rank not found" });
         Object.assign(rank, req.body);
         yield s.save();
-        res.json({ message: { en: "Rank updated", bn: "র্যাংক আপডেট হয়েছে" }, ranks: s.ranks });
+        res.json({ message: "Rank updated", ranks: s.ranks });
     }
     catch (err) {
         next(err);
@@ -73,7 +73,7 @@ const deleteRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         const s = yield getSettings();
         s.ranks = s.ranks.filter((r) => r._id.toString() !== req.params.id);
         yield s.save();
-        res.json({ message: { en: "Rank deleted", bn: "র্যাংক মুছে ফেলা হয়েছে" } });
+        res.json({ message: "Rank deleted" });
     }
     catch (err) {
         next(err);

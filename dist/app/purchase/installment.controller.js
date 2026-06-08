@@ -24,14 +24,14 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
         const { installmentNo, amount, senderAccount, transactionId } = req.body;
         const purchase = yield model_1.Purchase.findById(req.params.purchaseId).populate("shareId", "installment");
         if (!purchase) {
-            return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Purchase not found" });
         }
         if (purchase.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: { en: "Forbidden", bn: "অনুমতি নেই" } });
+            return res.status(403).json({ message: "Forbidden" });
         }
         if (purchase.paymentType !== "installment") {
             return res.status(400).json({
-                message: { en: "This purchase is not installment type", bn: "এটি কিস্তি ভিত্তিক ক্রয় নয়" },
+                message: "This purchase is not installment type",
             });
         }
         const payment = yield installment_model_1.InstallmentPayment.create({
@@ -43,7 +43,7 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
             transactionId,
         });
         res.status(201).json({
-            message: { en: "Installment payment submitted", bn: "কিস্তির পেমেন্ট জমা হয়েছে" },
+            message: "Installment payment submitted",
             payment,
         });
     }
@@ -59,11 +59,11 @@ const getInstallmentSummary = (req, res, next) => __awaiter(void 0, void 0, void
             .populate("shareId", "installment cashPrice")
             .lean();
         if (!purchase)
-            return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Purchase not found" });
         if (purchase.userId.toString() !== req.user._id.toString())
-            return res.status(403).json({ message: { en: "Forbidden", bn: "অনুমতি নেই" } });
+            return res.status(403).json({ message: "Forbidden" });
         if (purchase.paymentType !== "installment")
-            return res.status(400).json({ message: { en: "Not an installment purchase", bn: "এটি কিস্তি ভিত্তিক ক্রয় নয়" } });
+            return res.status(400).json({ message: "Not an installment purchase" });
         const share = purchase.shareId;
         const totalInstallments = (_b = (_a = share === null || share === void 0 ? void 0 : share.installment) === null || _a === void 0 ? void 0 : _a.totalInstallments) !== null && _b !== void 0 ? _b : 0;
         const perInstallment = (_d = (_c = share === null || share === void 0 ? void 0 : share.installment) === null || _c === void 0 ? void 0 : _c.perInstallment) !== null && _d !== void 0 ? _d : 0;
@@ -91,12 +91,12 @@ const getInstallmentsByPurchase = (req, res, next) => __awaiter(void 0, void 0, 
     try {
         const purchase = yield model_1.Purchase.findById(req.params.purchaseId).select("userId");
         if (!purchase) {
-            return res.status(404).json({ message: { en: "Purchase not found", bn: "ক্রয় পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Purchase not found" });
         }
         const isOwner = purchase.userId.toString() === req.user._id.toString();
         const isAdmin = ["superadmin", "admin", "staff"].includes(req.user.role);
         if (!isOwner && !isAdmin) {
-            return res.status(403).json({ message: { en: "Forbidden", bn: "অনুমতি নেই" } });
+            return res.status(403).json({ message: "Forbidden" });
         }
         const payments = yield installment_model_1.InstallmentPayment.find({ purchaseId: purchase._id })
             .sort({ installmentNo: 1, createdAt: 1 })
@@ -113,19 +113,19 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status)) {
-            return res.status(400).json({ message: { en: "Invalid status", bn: "অবৈধ স্ট্যাটাস" } });
+            return res.status(400).json({ message: "Invalid status" });
         }
         if (status === "rejected" && !String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim()) {
             return res.status(400).json({
-                message: { en: "Rejection reason is required", bn: "প্রত্যাখ্যানের কারণ লিখতে হবে" },
+                message: "Rejection reason is required",
             });
         }
         const payment = yield installment_model_1.InstallmentPayment.findById(req.params.id);
         if (!payment) {
-            return res.status(404).json({ message: { en: "Installment not found", bn: "কিস্তির রেকর্ড পাওয়া যায়নি" } });
+            return res.status(404).json({ message: "Installment not found" });
         }
         if (payment.status !== "pending") {
-            return res.status(400).json({ message: { en: "Already reviewed", bn: "ইতোমধ্যে রিভিউ করা হয়েছে" } });
+            return res.status(400).json({ message: "Already reviewed" });
         }
         payment.status = status;
         payment.reviewNote = String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim();
@@ -170,7 +170,7 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
             }
         }
         res.json({
-            message: { en: `Installment ${status}`, bn: `কিস্তি ${status === "approved" ? "অনুমোদিত" : "প্রত্যাখ্যাত"}` },
+            message: `Installment ${status}`,
             payment,
         });
     }

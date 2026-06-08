@@ -44,7 +44,7 @@ const controller_1 = require("../rank/controller");
  * @param purchaseId - যে purchase-এর জন্য কমিশন বিতরণ করতে হবে তার ID
  */
 const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     try {
         // purchase ও তার share তথ্য একসাথে লোড করা হচ্ছে
         const purchase = yield model_1.Purchase.findById(purchaseId).populate("shareId");
@@ -135,38 +135,8 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
             // র্যাংক হিসাবের জন্য এই ancestor-এর টিম সেলস কাউন্ট বাড়ানো হচ্ছে
             yield model_3.User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: purchase.quantity } });
             yield (0, controller_1.recalcUserRank)(currentId);
-            // ancestor-এর নিজের sideA/sideB-এ commission value জমা করো
-            // childSide = buyer থেকে উপরে উঠতে উঠতে currentId-এর কোন সাইড দিয়ে এসেছে
-            const ancestor = yield model_3.User.findById(currentId).select("placementAncestors name username");
-            if (childSide) {
-                const teamRate = purchase.paymentType === "cash"
-                    ? share.teamManagementCommissionForCashSell
-                    : share.teamManagementCommissionForInstallmentSell;
-                const saleValue = purchase.paymentType === "cash"
-                    ? share.cashPrice * purchase.quantity
-                    : share.installment.downPayment * purchase.quantity;
-                const commissionValue = (teamRate / 100) * saleValue;
-                if (commissionValue > 0) {
-                    // volume goes into currentId's OWN wallet — on the side the sale came from
-                    const currentWallet = yield model_2.Wallet.findOne({ userId: currentId });
-                    if (currentWallet) {
-                        const currentLabel = ancestor ? `${ancestor.name} (${ancestor.username})` : currentId;
-                        if (childSide === "A") {
-                            const before = currentWallet.pendingTeamManagementCommissionOfSideA;
-                            currentWallet.pendingTeamManagementCommissionOfSideA += commissionValue;
-                            yield currentWallet.save();
-                            debugEntries.push({ userId: currentWallet.userId, role: "team_side_volume", placementSide: "A", field: "pendingTeamManagementCommissionOfSideA", before, added: commissionValue, after: currentWallet.pendingTeamManagementCommissionOfSideA, description: `টিম সাইড ভলিউম (A সাইড, ${teamRate}%): purchase #${purchase._id} থেকে ${currentLabel}-এর pendingTeamManagementCommissionOfSideA-তে ৳${commissionValue} যোগ হয়েছে। আগে ছিল ৳${before}, এখন ৳${currentWallet.pendingTeamManagementCommissionOfSideA}।` });
-                        }
-                        else if (childSide === "B") {
-                            const before = currentWallet.pendingTeamManagementCommissionOfSideB;
-                            currentWallet.pendingTeamManagementCommissionOfSideB += commissionValue;
-                            yield currentWallet.save();
-                            debugEntries.push({ userId: currentWallet.userId, role: "team_side_volume", placementSide: "B", field: "pendingTeamManagementCommissionOfSideB", before, added: commissionValue, after: currentWallet.pendingTeamManagementCommissionOfSideB, description: `টিম সাইড ভলিউম (B সাইড, ${teamRate}%): purchase #${purchase._id} থেকে ${currentLabel}-এর pendingTeamManagementCommissionOfSideB-তে ৳${commissionValue} যোগ হয়েছে। আগে ছিল ৳${before}, এখন ৳${currentWallet.pendingTeamManagementCommissionOfSideB}।` });
-                        }
-                    }
-                }
-            }
             // পরবর্তী জেনারেশনের জন্য আরও উপরে উঠো — placementAncestors[0] থেকে derive করো
+            const ancestor = yield model_3.User.findById(currentId).select("placementAncestors name username");
             const level1 = (_h = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _h === void 0 ? void 0 : _h[0];
             childSide = level1 === null || level1 === void 0 ? void 0 : level1.side;
             currentId = (_j = level1 === null || level1 === void 0 ? void 0 : level1.userId) === null || _j === void 0 ? void 0 : _j.toString();
@@ -179,7 +149,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
             buyerId: purchase.userId,
             buyerName: buyer.name,
             buyerUsername: buyer.username,
-            shareTitle: (_m = (_l = (_k = share.title) === null || _k === void 0 ? void 0 : _k.en) !== null && _l !== void 0 ? _l : share.title) !== null && _m !== void 0 ? _m : "",
+            shareTitle: (_k = share.title) !== null && _k !== void 0 ? _k : "",
             paymentType: purchase.paymentType,
             approvedAmount: managerialBase,
             entries: debugEntries,

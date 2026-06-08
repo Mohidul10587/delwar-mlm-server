@@ -33,6 +33,12 @@ export interface ISettings extends Document {
   };
   // Rank definitions
   ranks: { name: string; minDirectSales: number; minTeamSales: number; order: number }[];
+  // Investment config
+  investmentConfig: {
+    monthly:  { profitPercentage: number; minAmount: number; bulletPoints: { en: string; bn: string }[] };
+    partial:  { profitPercentage: number; minAmount: number; bulletPoints: { en: string; bn: string }[] };
+    maturity: { profitPercentage: number; minAmount: number; bulletPoints: { en: string; bn: string }[] };
+  };
 }
 
 const SettingsSchema = new Schema<ISettings>({
@@ -65,6 +71,18 @@ const SettingsSchema = new Schema<ISettings>({
   },
   managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
   ranks: [{ name: { type: String }, minDirectSales: { type: Number, default: 0 }, minTeamSales: { type: Number, default: 0 }, order: { type: Number, default: 0 } }],
+  investmentConfig: {
+    type: {
+      monthly:  { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },
+      partial:  { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },
+      maturity: { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },
+    },
+    default: () => ({
+      monthly:  { profitPercentage: 0, minAmount: 0, bulletPoints: [] },
+      partial:  { profitPercentage: 0, minAmount: 0, bulletPoints: [] },
+      maturity: { profitPercentage: 0, minAmount: 0, bulletPoints: [] },
+    }),
+  },
 }, { timestamps: true });
 
 export const Settings = model<ISettings>("Settings", SettingsSchema);

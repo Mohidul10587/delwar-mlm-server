@@ -26,7 +26,7 @@ const verifyUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         if (!user)
             return res.status(401).json({ message: "Unauthorized" });
         if (!user.isActive)
-            return res.status(403).json({ message: { en: "Account is disabled", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" } });
+            return res.status(403).json({ message: "Account is disabled" });
         req.user = user;
         next();
     }
@@ -45,7 +45,7 @@ const verifySuperAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         if (!user)
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
-            return res.status(403).json({ message: { en: "Account is disabled", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" } });
+            return res.status(403).json({ message: "Account is disabled" });
         if (user.role !== "superadmin")
             return res.status(403).json({ message: "Superadmin access required" });
         req.user = user;
@@ -66,7 +66,7 @@ const verifyAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         if (!user)
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
-            return res.status(403).json({ message: { en: "Account is disabled", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" } });
+            return res.status(403).json({ message: "Account is disabled" });
         if (!["superadmin", "admin"].includes(user.role))
             return res.status(403).json({ message: "Admin access required" });
         req.user = user;
@@ -87,7 +87,7 @@ const verifyStaff = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         if (!user)
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
-            return res.status(403).json({ message: { en: "Account is disabled", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" } });
+            return res.status(403).json({ message: "Account is disabled" });
         if (!["superadmin", "admin", "staff"].includes(user.role))
             return res.status(403).json({ message: "Staff access required" });
         req.user = user;

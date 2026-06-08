@@ -3,10 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Share = void 0;
 const mongoose_1 = require("mongoose");
 const ShareSchema = new mongoose_1.Schema({
-    title: {
-        en: { type: String, required: true },
-        bn: { type: String, required: true },
-    },
+    title: { type: String, required: true },
     image: { type: String, required: true },
     images: [{ type: String }],
     cashPrice: { type: Number, required: true },
@@ -17,8 +14,6 @@ const ShareSchema = new mongoose_1.Schema({
     },
     directSalesCommissionForCashSell: { type: Number, default: 0 },
     directSalesCommissionForInstallmentSell: { type: Number, default: 0 },
-    teamManagementCommissionForCashSell: { type: Number, default: 0 },
-    teamManagementCommissionForInstallmentSell: { type: Number, default: 0 },
     managerialCommissionForCashSell: { type: Number, default: 0 },
     managerialCommissionForInstallmentSell: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },

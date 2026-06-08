@@ -1,17 +1,27 @@
 import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
 import { Share } from "../share/model";
+import { User } from "../user/model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 
 // POST /purchase  — logged-in user submits a purchase request
 export const createPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { shareId, quantity, paymentType, senderAccount, transactionId } = req.body;
+    const { shareId, quantity, paymentType, senderAccount, transactionId, buyerInfo } = req.body;
 
     const share = await Share.findById(shareId);
     if (!share)
       return res.status(404).json({ message: "Share not found" });
+
+    // Auto-load nominee from user profile if not provided in buyerInfo
+    const buyer = await User.findById(req.user!._id).select("name phone nominee nominee2");
+    const resolvedBuyerInfo = buyerInfo ?? (buyer ? {
+      name: buyer.name,
+      phone: buyer.phone,
+      nominee: buyer.nominee ?? undefined,
+      nominee2: buyer.nominee2 ?? undefined,
+    } : null);
 
     const qty = Number(quantity);
     const amountPaid =
@@ -27,6 +37,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       amountPaid,
       senderAccount,
       transactionId,
+      buyerInfo: resolvedBuyerInfo,
     });
 
     await Certificate.create({

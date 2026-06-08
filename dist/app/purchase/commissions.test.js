@@ -26,15 +26,11 @@ const mockPurchase = (overrides = {}) => (Object.assign({ _id: "purchase1", user
         directSalesCommissionForInstallmentSell: 5,
         managerialCommissionForCashSell: 10,
         managerialCommissionForInstallmentSell: 5,
-        teamManagementCommissionForCashSell: 8,
-        teamManagementCommissionForInstallmentSell: 4,
         installment: { downPayment: 20000 },
     }, save: jest.fn() }, overrides));
 const mockWallet = (balance = 0) => ({
     balance,
     pendingManagerialCommissionBalance: 0,
-    pendingTeamManagementCommissionOfSideA: 0,
-    pendingTeamManagementCommissionOfSideB: 0,
     save: jest.fn(),
 });
 beforeEach(() => {
@@ -120,46 +116,6 @@ describe("distributeCommissions", () => {
         // managerialPool = 10% of 100000 = 10000; gen1 = 5% of 10000 = 500
         expect(parentWallet.pendingManagerialCommissionBalance).toBe(500);
         expect(model_2.TransactionLog.create).toHaveBeenCalledWith(expect.objectContaining({ type: "managerial_commission", amount: 500 }));
-    }));
-    test("adds team volume to sideA of ancestor's parent", () => __awaiter(void 0, void 0, void 0, function* () {
-        const purchase = mockPurchase();
-        const referrerWallet = mockWallet(0);
-        const parentWallet = mockWallet(0);
-        model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
-        model_3.User.findById
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [{ userId: "parent1", side: "A" }] }) }) // buyer
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Referrer", username: "referrer1" }) }) // referrer label
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Parent", username: "parent1", placementAncestors: [] }) }); // ancestor (no further parent)
-        model_4.Settings.findOne.mockResolvedValue({
-            maxGenerations: 1,
-            generationCommission: [{ generation: 1, rate: 0 }],
-        });
-        model_2.Wallet.findOne
-            .mockResolvedValueOnce(referrerWallet)
-            .mockResolvedValueOnce(parentWallet);
-        yield (0, commissions_1.distributeCommissions)("purchase1");
-        // 8% of 100000 = 8000 added to parent1's own sideA
-        expect(parentWallet.pendingTeamManagementCommissionOfSideA).toBe(8000);
-        expect(parentWallet.save).toHaveBeenCalled();
-    }));
-    test("adds team volume to sideB when ancestor is on side B", () => __awaiter(void 0, void 0, void 0, function* () {
-        const purchase = mockPurchase();
-        const referrerWallet = mockWallet(0);
-        const parentWallet = mockWallet(0);
-        model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
-        model_3.User.findById
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [{ userId: "parent1", side: "B" }] }) })
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Referrer", username: "referrer1" }) })
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Parent", username: "parent1", placementAncestors: [] }) });
-        model_4.Settings.findOne.mockResolvedValue({
-            maxGenerations: 1,
-            generationCommission: [{ generation: 1, rate: 0 }],
-        });
-        model_2.Wallet.findOne
-            .mockResolvedValueOnce(referrerWallet)
-            .mockResolvedValueOnce(parentWallet);
-        yield (0, commissions_1.distributeCommissions)("purchase1");
-        expect(parentWallet.pendingTeamManagementCommissionOfSideB).toBe(8000);
     }));
     test("sets commissionProcessed to true after distribution", () => __awaiter(void 0, void 0, void 0, function* () {
         const purchase = mockPurchase();

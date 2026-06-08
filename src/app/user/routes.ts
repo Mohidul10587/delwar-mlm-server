@@ -3,7 +3,7 @@ import {
   register, adminRegister, login, verify, logout, refresh,
   switchAccount, toggleUserActive, getUsers, deleteUser,
   adminUpdatePhone, adminUpdatePassword, adminUpdateRelations,
-  updatePhone, updateImage, changePassword, updatePermissions,
+  updatePhone, updateImage, changePassword, updatePermissions, updateInfo,
 } from "./controller";
 import { getSuperAdminStats } from "./stats.controller";
 import { verifyUser, verifyAdmin, verifySuperAdmin } from "../../middleware/auth";
@@ -30,5 +30,6 @@ router.put("/admin/permissions/:id", verifySuperAdmin, updatePermissions);
 router.put("/update-phone", verifyUser, updatePhone);
 router.put("/update-image", verifyUser, updateImage);
 router.put("/change-password", verifyUser, changePassword);
+router.put("/update-info", verifyUser, updateInfo);
 
 export default router;
