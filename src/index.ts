@@ -20,6 +20,7 @@ import networkRoutes from "./app/network/routes";
 import certificateRoutes from "./app/certificate/routes";
 import resetRoutes from "./app/reset/routes";
 import investmentRoutes from "./app/investment/routes";
+import dashboardRoutes from "./app/dashboard/routes";
 dotenv.config();
 const app: Express = express();
 const port = process.env.PORT || 5000;
@@ -58,6 +59,7 @@ app.use("/network", networkRoutes);
 app.use("/certificate", certificateRoutes);
 app.use("/reset", resetRoutes);
 app.use("/investment", investmentRoutes);
+app.use("/dashboard", dashboardRoutes);
 app.use(errorHandler);
 
 if (process.env.VERCEL !== "1") {
