@@ -32,6 +32,7 @@ const SettingsSchema = new mongoose_1.Schema({
     },
     managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
     ranks: [{ name: { type: String }, minDirectSales: { type: Number, default: 0 }, minTeamSales: { type: Number, default: 0 }, order: { type: Number, default: 0 } }],
+    branches: [{ type: String }],
     investmentConfig: {
         type: {
             monthly: { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },

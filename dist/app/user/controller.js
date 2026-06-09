@@ -116,7 +116,7 @@ function cascadePlacementAncestors(rootId) {
 }
 const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, username, phone, password, referrerUsername, placementParentUsername, placementSide } = validation_1.registerSchema.parse(req.body);
+        const { name, username, phone, password, referrerUsername, placementParentUsername } = validation_1.registerSchema.parse(req.body);
         const existingUsername = yield model_1.User.findOne({ username });
         if (existingUsername)
             return res.status(400).json({ message: "Username already taken" });
@@ -128,21 +128,16 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
             referrerId = referrer._id;
         }
         let placementParentId = null;
-        if (placementParentUsername || placementSide) {
-            if (!placementParentUsername || !placementSide)
-                return res.status(400).json({ message: "Both placementParentUsername and placementSide are required" });
+        if (placementParentUsername) {
             const parent = yield model_1.User.findOne({ username: placementParentUsername }).select("_id");
             if (!parent)
                 return res.status(400).json({ message: "Placement parent not found" });
             placementParentId = parent._id;
-            const sideOccupied = yield model_1.User.findOne({ "placementAncestors.0.userId": placementParentId, "placementAncestors.0.side": placementSide });
-            if (sideOccupied)
-                return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
         }
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const [generationAncestors, placementAncestors] = yield Promise.all([
             buildGenerationAncestors(referrerId),
-            buildPlacementAncestors(placementParentId, placementSide !== null && placementSide !== void 0 ? placementSide : null),
+            buildPlacementAncestors(placementParentId, null),
         ]);
         const user = yield model_1.User.create({
             name, username, phone, password: hashedPassword,
@@ -180,27 +175,20 @@ const resolveUsername = (username, label, res) => __awaiter(void 0, void 0, void
 const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
-        const { name, username, phone, password, referrerUsername, placementParentUsername, placementSide, role } = validation_1.adminRegisterSchema.parse(req.body);
+        const { name, username, phone, password, referrerUsername, placementParentUsername, role } = validation_1.adminRegisterSchema.parse(req.body);
         const existingUsername = yield model_1.User.findOne({ username });
         if (existingUsername)
             return res.status(400).json({ message: "Username already taken" });
         const { id: referrerId, error: refErr } = yield resolveUsername(referrerUsername, "Referrer", res);
         if (refErr)
             return;
-        if ((placementParentUsername && !placementSide) || (!placementParentUsername && placementSide))
-            return res.status(400).json({ message: "Both placementParentUsername and placementSide are required" });
         const { id: placementParentId, error: plErr } = yield resolveUsername(placementParentUsername, "Placement parent", res);
         if (plErr)
             return;
-        if (placementParentId && placementSide) {
-            const sideOccupied = yield model_1.User.findOne({ "placementAncestors.0.userId": placementParentId, "placementAncestors.0.side": placementSide });
-            if (sideOccupied)
-                return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
-        }
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const [generationAncestors, placementAncestors] = yield Promise.all([
             buildGenerationAncestors(referrerId),
-            buildPlacementAncestors(placementParentId, placementSide !== null && placementSide !== void 0 ? placementSide : null),
+            buildPlacementAncestors(placementParentId, null),
         ]);
         const user = yield model_1.User.create({
             name, username, phone,
@@ -510,7 +498,7 @@ const adminUpdateRelations = (req, res, next) => __awaiter(void 0, void 0, void 
 exports.adminUpdateRelations = adminUpdateRelations;
 const updateInfo = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { nominee, nominee2 } = req.body;
+        const { nominee, nominee2, district, upazila, dateOfBirth, paymentMethods } = req.body;
         const user = yield model_1.User.findById(req.user._id);
         if (!user)
             return res.status(404).json({ message: "User not found" });
@@ -518,6 +506,14 @@ const updateInfo = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
             user.nominee = nominee;
         if (nominee2 !== undefined)
             user.nominee2 = nominee2;
+        if (district !== undefined)
+            user.district = district;
+        if (upazila !== undefined)
+            user.upazila = upazila;
+        if (dateOfBirth !== undefined)
+            user.dateOfBirth = dateOfBirth;
+        if (paymentMethods !== undefined)
+            user.paymentMethods = paymentMethods;
         yield user.save();
         res.json({ message: "Info updated successfully", user });
     }

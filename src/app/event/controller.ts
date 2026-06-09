@@ -18,6 +18,9 @@ export const getAllEvents = async (_req: Request, res: Response, next: NextFunct
 
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { image, video } = req.body;
+    if (image && video)
+      return res.status(400).json({ message: "Provide either image or video, not both" });
     const event = await Event.create(req.body);
     res.status(201).json({ message: "Event created", event });
   } catch (err) { next(err); }
@@ -25,6 +28,9 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { image, video } = req.body;
+    if (image && video)
+      return res.status(400).json({ message: "Provide either image or video, not both" });
     const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!event) return res.status(404).json({ message: "Event not found" });
     res.json({ message: "Event updated", event });

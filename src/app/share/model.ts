@@ -17,6 +17,12 @@ export interface IShare extends Document {
   managerialCommissionForCashSell: number;
   managerialCommissionForInstallmentSell: number;
   isActive: boolean;
+  projectType?: string;
+  location?: string;
+  developer?: string;
+  videoLink?: string;
+  categoryId?: string;
+  projectStatus?: "complete" | "running" | "upcoming";
 }
 
 const ShareSchema = new Schema<IShare>(
@@ -35,6 +41,12 @@ const ShareSchema = new Schema<IShare>(
     managerialCommissionForCashSell:           { type: Number, default: 0 },
     managerialCommissionForInstallmentSell:    { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    projectType:    { type: String, default: "" },
+    location:       { type: String, default: "" },
+    developer:      { type: String, default: "" },
+    videoLink:      { type: String, default: "" },
+    categoryId:     { type: String, default: "" },
+    projectStatus:  { type: String, enum: ["complete", "running", "upcoming"], default: "upcoming" },
   },
   { timestamps: true }
 );

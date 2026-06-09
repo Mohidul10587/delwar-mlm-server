@@ -42,6 +42,18 @@ const UserSchema = new mongoose_1.Schema({
         },
         default: null,
     },
+    district: { type: String, default: null },
+    upazila: { type: String, default: null },
+    dateOfBirth: { type: String, default: null },
+    paymentMethods: {
+        type: {
+            bank: { type: String, default: null },
+            bkash: { type: String, default: null },
+            nagad: { type: String, default: null },
+            rocket: { type: String, default: null },
+        },
+        default: null,
+    },
 }, { timestamps: true });
 UserSchema.index({ "placementAncestors.userId": 1 });
 exports.User = (0, mongoose_1.model)("User", UserSchema);

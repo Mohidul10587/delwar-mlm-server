@@ -34,6 +34,9 @@ const getAllEvents = (_req, res, next) => __awaiter(void 0, void 0, void 0, func
 exports.getAllEvents = getAllEvents;
 const createEvent = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const { image, video } = req.body;
+        if (image && video)
+            return res.status(400).json({ message: "Provide either image or video, not both" });
         const event = yield model_1.Event.create(req.body);
         res.status(201).json({ message: "Event created", event });
     }
@@ -44,6 +47,9 @@ const createEvent = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
 exports.createEvent = createEvent;
 const updateEvent = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const { image, video } = req.body;
+        if (image && video)
+            return res.status(400).json({ message: "Provide either image or video, not both" });
         const event = yield model_1.Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!event)
             return res.status(404).json({ message: "Event not found" });

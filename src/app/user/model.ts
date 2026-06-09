@@ -14,6 +14,13 @@ export interface INominee {
   image?: string;
 }
 
+export interface IPaymentMethods {
+  bank?: string;
+  bkash?: string;
+  nagad?: string;
+  rocket?: string;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   username: string;
@@ -32,6 +39,10 @@ export interface IUser extends Document {
   currentRank: string | null;
   nominee?: INominee;
   nominee2?: INominee;
+  district?: string;
+  upazila?: string;
+  dateOfBirth?: string;
+  paymentMethods?: IPaymentMethods;
 }
 
 const AncestorEntrySchema = new Schema<IAncestorEntry>(
@@ -76,6 +87,18 @@ const UserSchema = new Schema<IUser>(
         phone: String,
         nid: String,
         image: String,
+      },
+      default: null,
+    },
+    district: { type: String, default: null },
+    upazila: { type: String, default: null },
+    dateOfBirth: { type: String, default: null },
+    paymentMethods: {
+      type: {
+        bank: { type: String, default: null },
+        bkash: { type: String, default: null },
+        nagad: { type: String, default: null },
+        rocket: { type: String, default: null },
       },
       default: null,
     },

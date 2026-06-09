@@ -44,7 +44,7 @@ const controller_1 = require("../rank/controller");
  * @param purchaseId - যে purchase-এর জন্য কমিশন বিতরণ করতে হবে তার ID
  */
 const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     try {
         // purchase ও তার share তথ্য একসাথে লোড করা হচ্ছে
         const purchase = yield model_1.Purchase.findById(purchaseId).populate("shareId");
@@ -59,11 +59,10 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         // ancestor arrays থেকে direct parent/referrer derive করা হচ্ছে
         const referrerId = (_b = (_a = buyer.generationAncestors[0]) === null || _a === void 0 ? void 0 : _a.userId) !== null && _b !== void 0 ? _b : null;
         const placementParentId = (_d = (_c = buyer.placementAncestors[0]) === null || _c === void 0 ? void 0 : _c.userId) !== null && _d !== void 0 ? _d : null;
-        const buyerPlacementSide = (_e = buyer.placementAncestors[0]) === null || _e === void 0 ? void 0 : _e.side;
         // সিস্টেম সেটিংস থেকে সর্বোচ্চ জেনারেশন সংখ্যা ও প্রতিটি জেনারেশনের রেট নেওয়া হচ্ছে
         const settings = yield model_4.Settings.findOne();
-        const maxGen = (_f = settings === null || settings === void 0 ? void 0 : settings.maxGenerations) !== null && _f !== void 0 ? _f : 5;
-        const genRates = (_g = settings === null || settings === void 0 ? void 0 : settings.generationCommission) !== null && _g !== void 0 ? _g : [];
+        const maxGen = (_e = settings === null || settings === void 0 ? void 0 : settings.maxGenerations) !== null && _e !== void 0 ? _e : 5;
+        const genRates = (_f = settings === null || settings === void 0 ? void 0 : settings.generationCommission) !== null && _f !== void 0 ? _f : [];
         const debugEntries = [];
         // ── ১. ডাইরেক্ট সেলস কমিশন ──────────────────────────────────────────────
         if (referrerId) {
@@ -99,7 +98,6 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         }
         // ── ২. ম্যানেজারিয়াল কমিশন + ৩. Side ভলিউম আপডেট ──────────────────────
         let currentId = placementParentId === null || placementParentId === void 0 ? void 0 : placementParentId.toString();
-        let childSide = buyerPlacementSide;
         // managerial commission pool: share-এর নির্ধারিত % থেকে মোট পরিমাণ
         const managerialBase = purchase.paymentType === "cash"
             ? share.cashPrice * purchase.quantity
@@ -137,9 +135,8 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
             yield (0, controller_1.recalcUserRank)(currentId);
             // পরবর্তী জেনারেশনের জন্য আরও উপরে উঠো — placementAncestors[0] থেকে derive করো
             const ancestor = yield model_3.User.findById(currentId).select("placementAncestors name username");
-            const level1 = (_h = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _h === void 0 ? void 0 : _h[0];
-            childSide = level1 === null || level1 === void 0 ? void 0 : level1.side;
-            currentId = (_j = level1 === null || level1 === void 0 ? void 0 : level1.userId) === null || _j === void 0 ? void 0 : _j.toString();
+            const level1 = (_g = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _g === void 0 ? void 0 : _g[0];
+            currentId = (_h = level1 === null || level1 === void 0 ? void 0 : level1.userId) === null || _h === void 0 ? void 0 : _h.toString();
         }
         // দ্বিতীয়বার কমিশন যাওয়া ঠেকাতে flag সেট করো
         purchase.commissionProcessed = true;
@@ -149,7 +146,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
             buyerId: purchase.userId,
             buyerName: buyer.name,
             buyerUsername: buyer.username,
-            shareTitle: (_k = share.title) !== null && _k !== void 0 ? _k : "",
+            shareTitle: (_j = share.title) !== null && _j !== void 0 ? _j : "",
             paymentType: purchase.paymentType,
             approvedAmount: managerialBase,
             entries: debugEntries,

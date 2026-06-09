@@ -108,7 +108,7 @@ async function cascadePlacementAncestors(rootId: mongoose.Types.ObjectId): Promi
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, username, phone, password, referrerUsername, placementParentUsername, placementSide } =
+    const { name, username, phone, password, referrerUsername, placementParentUsername } =
       registerSchema.parse(req.body);
 
     const existingUsername = await Model.findOne({ username });
@@ -124,23 +124,17 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     }
 
     let placementParentId: mongoose.Types.ObjectId | null = null;
-    if (placementParentUsername || placementSide) {
-      if (!placementParentUsername || !placementSide)
-        return res.status(400).json({ message: "Both placementParentUsername and placementSide are required" });
+    if (placementParentUsername) {
       const parent = await Model.findOne({ username: placementParentUsername }).select("_id");
       if (!parent)
         return res.status(400).json({ message: "Placement parent not found" });
       placementParentId = parent._id;
-
-      const sideOccupied = await Model.findOne({ "placementAncestors.0.userId": placementParentId, "placementAncestors.0.side": placementSide });
-      if (sideOccupied)
-        return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const [generationAncestors, placementAncestors] = await Promise.all([
       buildGenerationAncestors(referrerId),
-      buildPlacementAncestors(placementParentId, placementSide ?? null),
+      buildPlacementAncestors(placementParentId, null),
     ]);
     const user = await Model.create({
       name, username, phone, password: hashedPassword,
@@ -180,7 +174,7 @@ const resolveUsername = async (username: string | undefined, label: string, res:
 
 export const adminRegister = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, username, phone, password, referrerUsername, placementParentUsername, placementSide, role } =
+    const { name, username, phone, password, referrerUsername, placementParentUsername, role } =
       adminRegisterSchema.parse(req.body);
 
     const existingUsername = await Model.findOne({ username });
@@ -190,22 +184,13 @@ export const adminRegister = async (req: Request, res: Response, next: NextFunct
     const { id: referrerId, error: refErr } = await resolveUsername(referrerUsername, "Referrer", res);
     if (refErr) return;
 
-    if ((placementParentUsername && !placementSide) || (!placementParentUsername && placementSide))
-      return res.status(400).json({ message: "Both placementParentUsername and placementSide are required" });
-
     const { id: placementParentId, error: plErr } = await resolveUsername(placementParentUsername, "Placement parent", res);
     if (plErr) return;
-
-    if (placementParentId && placementSide) {
-      const sideOccupied = await Model.findOne({ "placementAncestors.0.userId": placementParentId, "placementAncestors.0.side": placementSide });
-      if (sideOccupied)
-        return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
-    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const [generationAncestors, placementAncestors] = await Promise.all([
       buildGenerationAncestors(referrerId),
-      buildPlacementAncestors(placementParentId, placementSide ?? null),
+      buildPlacementAncestors(placementParentId, null),
     ]);
     const user = await Model.create({
       name, username, phone,
@@ -493,11 +478,15 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
 
 export const updateInfo = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { nominee, nominee2 } = req.body;
+    const { nominee, nominee2, district, upazila, dateOfBirth, paymentMethods } = req.body;
     const user = await Model.findById(req.user!._id);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (nominee !== undefined) user.nominee = nominee;
     if (nominee2 !== undefined) user.nominee2 = nominee2;
+    if (district !== undefined) user.district = district;
+    if (upazila !== undefined) user.upazila = upazila;
+    if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth;
+    if (paymentMethods !== undefined) user.paymentMethods = paymentMethods;
     await user.save();
     res.json({ message: "Info updated successfully", user });
   } catch (err) { next(err); }

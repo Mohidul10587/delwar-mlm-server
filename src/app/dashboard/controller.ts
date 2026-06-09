@@ -4,6 +4,7 @@ import { Purchase } from "../purchase/model";
 import { Settings } from "../settings/model";
 import { User } from "../user/model";
 import { Share } from "../share/model";
+import { Event } from "../event/model";
 
 const buildTree = (nodes: any[], parentId: string): any[] =>
   nodes
@@ -21,13 +22,14 @@ export const getUserDashboard = async (req: Request, res: Response, next: NextFu
   try {
     const userId = req.user!._id;
 
-    const [wallet, purchases, user, downlineNodes, settings, shares] = await Promise.all([
+    const [wallet, purchases, user, downlineNodes, settings, shares, events] = await Promise.all([
       Wallet.findOne({ userId }).lean(),
       Purchase.find({ userId }).populate("shareId", "title cashPrice installment image").sort({ createdAt: -1 }).lean(),
       User.findById(userId).select("directSalesCount teamSalesCount currentRank").lean(),
       User.find({ "placementAncestors.userId": userId }).select("_id username name placementAncestors").lean(),
       Settings.findOne().lean(),
       Share.find({ isActive: true }).lean(),
+      Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),
     ]);
 
     const allRanks = ((settings as any)?.ranks ?? []).sort((a: any, b: any) => a.order - b.order);
@@ -41,6 +43,7 @@ export const getUserDashboard = async (req: Request, res: Response, next: NextFu
       wallet,
       purchases,
       shares,
+      events,
       investmentConfig: (settings as any)?.investmentConfig ?? null,
       network: { tree: buildTree(downlineNodes, userId.toString()) },
       rank: { currentRank, nextRank, directSalesCount, teamSalesCount },

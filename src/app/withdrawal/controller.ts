@@ -8,8 +8,14 @@ const findOrCreateWallet = async (userId: string) => {
 
 export const createWithdrawal = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { amount, method, accountDetails } = req.body;
+    const { amount, method, accountDetails, branch } = req.body;
     const amt = Number(amount);
+
+    if (method === "branch" && !branch)
+      return res.status(400).json({ message: "Branch is required" });
+    if (method !== "branch" && !accountDetails)
+      return res.status(400).json({ message: "Account details required" });
+
     const wallet = await findOrCreateWallet(req.user!._id.toString());
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
     if (wallet.balance < amt)
@@ -17,9 +23,14 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
 
     wallet.balance -= amt;
     await wallet.save();
-    await TransactionLog.create({ userId: req.user!._id, type: "withdrawal", amount: amt, balanceAfter: wallet.balance, note: `${method}: ${accountDetails}` });
+    const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method}: ${accountDetails}`;
+    await TransactionLog.create({ userId: req.user!._id, type: "withdrawal", amount: amt, balanceAfter: wallet.balance, note: noteDetail });
 
-    const withdrawal = await Withdrawal.create({ userId: req.user!._id, amount: amt, method, accountDetails });
+    const withdrawal = await Withdrawal.create({
+      userId: req.user!._id, amount: amt, method,
+      accountDetails: method === "branch" ? "" : accountDetails,
+      branch: method === "branch" ? branch : undefined,
+    });
     res.status(201).json({ message: "Withdrawal request submitted", withdrawal });
   } catch (err) { next(err); }
 };

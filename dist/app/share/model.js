@@ -17,5 +17,11 @@ const ShareSchema = new mongoose_1.Schema({
     managerialCommissionForCashSell: { type: Number, default: 0 },
     managerialCommissionForInstallmentSell: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    projectType: { type: String, default: "" },
+    location: { type: String, default: "" },
+    developer: { type: String, default: "" },
+    videoLink: { type: String, default: "" },
+    categoryId: { type: String, default: "" },
+    projectStatus: { type: String, enum: ["complete", "running", "upcoming"], default: "upcoming" },
 }, { timestamps: true });
 exports.Share = (0, mongoose_1.model)("Share", ShareSchema);

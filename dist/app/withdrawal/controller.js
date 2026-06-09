@@ -17,8 +17,12 @@ const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, functio
 });
 const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { amount, method, accountDetails } = req.body;
+        const { amount, method, accountDetails, branch } = req.body;
         const amt = Number(amount);
+        if (method === "branch" && !branch)
+            return res.status(400).json({ message: "Branch is required" });
+        if (method !== "branch" && !accountDetails)
+            return res.status(400).json({ message: "Account details required" });
         const wallet = yield findOrCreateWallet(req.user._id.toString());
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
@@ -26,8 +30,13 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             return res.status(400).json({ message: "Insufficient balance" });
         wallet.balance -= amt;
         yield wallet.save();
-        yield model_2.TransactionLog.create({ userId: req.user._id, type: "withdrawal", amount: amt, balanceAfter: wallet.balance, note: `${method}: ${accountDetails}` });
-        const withdrawal = yield model_1.Withdrawal.create({ userId: req.user._id, amount: amt, method, accountDetails });
+        const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method}: ${accountDetails}`;
+        yield model_2.TransactionLog.create({ userId: req.user._id, type: "withdrawal", amount: amt, balanceAfter: wallet.balance, note: noteDetail });
+        const withdrawal = yield model_1.Withdrawal.create({
+            userId: req.user._id, amount: amt, method,
+            accountDetails: method === "branch" ? "" : accountDetails,
+            branch: method === "branch" ? branch : undefined,
+        });
         res.status(201).json({ message: "Withdrawal request submitted", withdrawal });
     }
     catch (err) {

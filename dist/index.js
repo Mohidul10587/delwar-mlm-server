@@ -13,6 +13,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const http_1 = require("http");
+const socket_io_1 = require("socket.io");
 const dotenv_1 = __importDefault(require("dotenv"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const cors_1 = __importDefault(require("cors"));
@@ -34,8 +36,20 @@ const routes_10 = __importDefault(require("./app/network/routes"));
 const routes_11 = __importDefault(require("./app/certificate/routes"));
 const routes_12 = __importDefault(require("./app/reset/routes"));
 const routes_13 = __importDefault(require("./app/investment/routes"));
+const routes_14 = __importDefault(require("./app/dashboard/routes"));
+const routes_15 = __importDefault(require("./app/category/routes"));
+const routes_16 = __importDefault(require("./app/notice/routes"));
+const controller_1 = require("./app/notice/controller");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
+const httpServer = (0, http_1.createServer)(app);
+const io = new socket_io_1.Server(httpServer, {
+    cors: {
+        origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
+        credentials: true,
+    },
+});
+(0, controller_1.setSocketIO)(io);
 const port = process.env.PORT || 5000;
 mongoose_1.default.connect(process.env.MONGODB_URI);
 mongoose_1.default.connection.once("open", () => __awaiter(void 0, void 0, void 0, function* () {
@@ -66,8 +80,11 @@ app.use("/network", routes_10.default);
 app.use("/certificate", routes_11.default);
 app.use("/reset", routes_12.default);
 app.use("/investment", routes_13.default);
+app.use("/dashboard", routes_14.default);
+app.use("/category", routes_15.default);
+app.use("/notice", routes_16.default);
 app.use(errorHandler_1.errorHandler);
 if (process.env.VERCEL !== "1") {
-    app.listen(port, () => console.log(`Server running on port ${port}`));
+    httpServer.listen(port, () => console.log(`Server running on port ${port}`));
 }
 exports.default = app;

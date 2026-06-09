@@ -1,4 +1,6 @@
 import express, { Express, Request, Response } from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -21,8 +23,19 @@ import certificateRoutes from "./app/certificate/routes";
 import resetRoutes from "./app/reset/routes";
 import investmentRoutes from "./app/investment/routes";
 import dashboardRoutes from "./app/dashboard/routes";
+import categoryRoutes from "./app/category/routes";
+import noticeRoutes from "./app/notice/routes";
+import { setSocketIO } from "./app/notice/controller";
 dotenv.config();
 const app: Express = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
+    credentials: true,
+  },
+});
+setSocketIO(io);
 const port = process.env.PORT || 5000;
 
 mongoose.connect(process.env.MONGODB_URI as string);
@@ -60,10 +73,12 @@ app.use("/certificate", certificateRoutes);
 app.use("/reset", resetRoutes);
 app.use("/investment", investmentRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/category", categoryRoutes);
+app.use("/notice", noticeRoutes);
 app.use(errorHandler);
 
 if (process.env.VERCEL !== "1") {
-  app.listen(port, () => console.log(`Server running on port ${port}`));
+  httpServer.listen(port, () => console.log(`Server running on port ${port}`));
 }
 
 export default app;

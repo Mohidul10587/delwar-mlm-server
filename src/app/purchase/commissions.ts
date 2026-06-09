@@ -49,7 +49,6 @@ export const distributeCommissions = async (purchaseId: string) => {
     // ancestor arrays থেকে direct parent/referrer derive করা হচ্ছে
     const referrerId = buyer.generationAncestors[0]?.userId ?? null;
     const placementParentId = buyer.placementAncestors[0]?.userId ?? null;
-    const buyerPlacementSide = (buyer.placementAncestors[0] as any)?.side as "A" | "B" | null | undefined;
 
     // সিস্টেম সেটিংস থেকে সর্বোচ্চ জেনারেশন সংখ্যা ও প্রতিটি জেনারেশনের রেট নেওয়া হচ্ছে
     const settings = await Settings.findOne();
@@ -99,7 +98,6 @@ export const distributeCommissions = async (purchaseId: string) => {
 
     // ── ২. ম্যানেজারিয়াল কমিশন + ৩. Side ভলিউম আপডেট ──────────────────────
     let currentId = placementParentId?.toString();
-    let childSide = buyerPlacementSide;
 
     // managerial commission pool: share-এর নির্ধারিত % থেকে মোট পরিমাণ
     const managerialBase = purchase.paymentType === "cash"
@@ -149,7 +147,6 @@ export const distributeCommissions = async (purchaseId: string) => {
       // পরবর্তী জেনারেশনের জন্য আরও উপরে উঠো — placementAncestors[0] থেকে derive করো
       const ancestor = await User.findById(currentId).select("placementAncestors name username");
       const level1 = (ancestor as any)?.placementAncestors?.[0];
-      childSide = level1?.side as "A" | "B" | null | undefined;
       currentId = level1?.userId?.toString();
     }
 
