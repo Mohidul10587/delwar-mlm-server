@@ -2,7 +2,7 @@ import { Schema, model, Document, Types } from "mongoose";
 
 export interface ICommissionDebugEntry {
   userId: Types.ObjectId;
-  role: "referrer_direct" | "managerial_gen";
+  role: "referrer_direct" | "managerial_gen" | "managerial_installment";
   generation?: number;
   field: "balance" | "pendingManagerialCommissionBalance";
   before: number;
@@ -26,7 +26,7 @@ export interface ICommissionDebug extends Document {
 const EntrySchema = new Schema<ICommissionDebugEntry>(
   {
     userId:        { type: Schema.Types.ObjectId, ref: "User", required: true },
-    role:          { type: String, enum: ["referrer_direct", "managerial_gen"], required: true },
+    role: { type: String, enum: ["referrer_direct", "managerial_gen", "managerial_installment"], required: true },
     generation:    { type: Number },
     field:         { type: String, required: true },
     before:        { type: Number, required: true },

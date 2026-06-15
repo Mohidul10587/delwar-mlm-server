@@ -23,13 +23,28 @@ export interface IBuyerInfo {
   };
 }
 
+export interface IPurchaseSnapshot {
+  shareTitle: string;
+  cashPrice: number;
+  minDownPayment: number;
+  maxDownPayment: number;
+  cashDownPaymentLimit: number;
+  installmentOptions: number[];
+  minInstallments: number;
+  maxInstallments: number;
+  directSaleCommissionValue: number;
+  downPaymentGenerationRates: { generation: number; rate: number }[];
+  installmentCommissionRate: number;
+}
+
 export interface IPurchase extends Document {
   userId: Types.ObjectId;
   shareId: Types.ObjectId;
   quantity: number;
   paymentType: PaymentType;
-  amountPaid: number;          // cash: full price × qty | installment: downPayment × qty
-  senderAccount: string;       // bank account / bkash / nagad number buyer paid from
+  amountPaid: number;
+  selectedInstallments?: number;
+  senderAccount: string;
   transactionId: string;
   status: PurchaseStatus;
   reviewNote: string;
@@ -37,6 +52,7 @@ export interface IPurchase extends Document {
   reviewedAt?: Date;
   commissionProcessed: boolean;
   buyerInfo?: IBuyerInfo;
+  snapshot?: IPurchaseSnapshot;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +79,23 @@ const BuyerInfoSchema = new Schema(
   { _id: false }
 );
 
+const SnapshotSchema = new Schema(
+  {
+    shareTitle: { type: String },
+    cashPrice: { type: Number },
+    minDownPayment: { type: Number },
+    maxDownPayment: { type: Number },
+    cashDownPaymentLimit: { type: Number },
+    installmentOptions: [{ type: Number }],
+    minInstallments: { type: Number },
+    maxInstallments: { type: Number },
+    directSaleCommissionValue: { type: Number },
+    downPaymentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
+    installmentCommissionRate: { type: Number },
+  },
+  { _id: false }
+);
+
 const PurchaseSchema = new Schema<IPurchase>(
   {
     userId:        { type: Schema.Types.ObjectId, ref: "User",  required: true },
@@ -70,6 +103,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     quantity:      { type: Number, required: true, min: 1 },
     paymentType:   { type: String, enum: ["cash", "installment"], required: true },
     amountPaid:    { type: Number, required: true },
+    selectedInstallments: { type: Number },
     senderAccount: { type: String, required: true },
     transactionId: { type: String, required: true },
     status:        { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
@@ -78,6 +112,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     reviewedAt:    { type: Date },
     commissionProcessed: { type: Boolean, default: false },
     buyerInfo:     { type: BuyerInfoSchema, default: null },
+    snapshot:      { type: SnapshotSchema, default: null },
   },
   { timestamps: true }
 );

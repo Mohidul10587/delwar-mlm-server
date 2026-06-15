@@ -6,6 +6,7 @@ import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
+import { distributeInstallmentPaymentCommission } from "./commissions";
 
 const findOrCreateWallet = async (userId: string) => {
   return await Wallet.findOne({ userId });
@@ -153,22 +154,9 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
           { upsert: true, new: true }
         );
 
-        // Installment commission to referrer
+        // Installment commission via snapshot
         try {
-          const buyer = await User.findById(purchase.userId).select("generationAncestors");
-          const referrerId = buyer?.generationAncestors?.[0]?.userId;
-          if (referrerId && share?.directSalesCommissionForInstallmentSell) {
-            const rate = share.directSalesCommissionForInstallmentSell;
-            const commission = (rate / 100) * payment.amount;
-            if (commission > 0) {
-              const wallet = await findOrCreateWallet(referrerId.toString());
-              if (wallet) {
-                wallet.balance += commission;
-                await wallet.save();
-                await TransactionLog.create({ userId: referrerId, type: "installment_commission", amount: commission, balanceAfter: wallet.balance, relatedPurchaseId: purchase._id, note: `Installment #${payment.installmentNo} commission` });
-              }
-            }
-          }
+          await distributeInstallmentPaymentCommission(purchase._id.toString(), payment.amount);
         } catch (e) { console.error("Installment commission error:", e); }
       }
     }

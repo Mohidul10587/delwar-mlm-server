@@ -8,13 +8,12 @@ import { Certificate } from "../certificate/model";
 // POST /purchase  — logged-in user submits a purchase request
 export const createPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { shareId, quantity, paymentType, senderAccount, transactionId, buyerInfo } = req.body;
+    const { shareId, quantity, paymentType, selectedInstallments, senderAccount, transactionId, buyerInfo } = req.body;
 
     const share = await Share.findById(shareId);
     if (!share)
       return res.status(404).json({ message: "Share not found" });
 
-    // Auto-load nominee from user profile if not provided in buyerInfo
     const buyer = await User.findById(req.user!._id).select("name phone nominee nominee2");
     const resolvedBuyerInfo = buyerInfo ?? (buyer ? {
       name: buyer.name,
@@ -24,10 +23,26 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     } : null);
 
     const qty = Number(quantity);
+    const downPaymentAmount = Math.min(share.maxDownPayment, share.cashDownPaymentLimit);
     const amountPaid =
       paymentType === "cash"
         ? share.cashPrice * qty
-        : share.installment.downPayment * qty;
+        : downPaymentAmount * qty;
+
+    // Build snapshot — locks all commission/config at time of purchase
+    const snapshot = {
+      shareTitle: share.title,
+      cashPrice: share.cashPrice,
+      minDownPayment: share.minDownPayment,
+      maxDownPayment: share.maxDownPayment,
+      cashDownPaymentLimit: share.cashDownPaymentLimit,
+      installmentOptions: share.installmentOptions,
+      minInstallments: share.minInstallments,
+      maxInstallments: share.maxInstallments,
+      directSaleCommissionValue: share.directSaleCommissionValue,
+      downPaymentGenerationRates: share.downPaymentGenerationRates,
+      installmentCommissionRate: share.installmentCommissionRate,
+    };
 
     const purchase = await Purchase.create({
       userId: req.user!._id,
@@ -35,9 +50,11 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       quantity: qty,
       paymentType,
       amountPaid,
+      selectedInstallments: paymentType === "installment" ? Number(selectedInstallments) : undefined,
       senderAccount,
       transactionId,
       buyerInfo: resolvedBuyerInfo,
+      snapshot,
     });
 
     await Certificate.create({

@@ -20,17 +20,19 @@ export interface ISettings extends Document {
   bankName: string;
   bankAccount: string;
   bankBranch: string;
-  // Commission settings
-  generationCommission: { generation: number; rate: number }[];
-  maxGenerations: number;
-  managerialCommissionWeeklyProcessDay: number;
-  // Default share commissions
-  defaultCommissions: {
-    directSalesCommissionForCashSell: number;
-    directSalesCommissionForInstallmentSell: number;
-    managerialCommissionForCashSell: number;
-    managerialCommissionForInstallmentSell: number;
+  // Default share config (pre-filled when uploading a new share)
+  defaultShareConfig: {
+    minDownPayment: number;
+    maxDownPayment: number;
+    cashDownPaymentLimit: number;
+    installmentOptions: number[];
+    minInstallments: number;
+    maxInstallments: number;
+    directSaleCommissionValue: number;
+    downPaymentGenerationRates: { generation: number; rate: number }[];
+    installmentCommissionRate: number;
   };
+  managerialCommissionWeeklyProcessDay: number;
   // Rank definitions
   ranks: { name: string; minDirectSales: number; minTeamSales: number; order: number }[];
   // Branches
@@ -63,13 +65,29 @@ const SettingsSchema = new Schema<ISettings>({
   bankName:        { type: String, default: "" },
   bankAccount:     { type: String, default: "" },
   bankBranch:      { type: String, default: "" },
-  generationCommission: [{ generation: { type: Number }, rate: { type: Number } }],
-  maxGenerations:  { type: Number, default: 5 },
-  defaultCommissions: {
-    directSalesCommissionForCashSell:          { type: Number, default: 0 },
-    directSalesCommissionForInstallmentSell:   { type: Number, default: 0 },
-    managerialCommissionForCashSell:           { type: Number, default: 0 },
-    managerialCommissionForInstallmentSell:    { type: Number, default: 0 },
+  defaultShareConfig: {
+    type: {
+      minDownPayment:       { type: Number, default: 15000 },
+      maxDownPayment:       { type: Number, default: 50000 },
+      cashDownPaymentLimit: { type: Number, default: 50000 },
+      installmentOptions:   [{ type: Number }],
+      minInstallments:      { type: Number, default: 5 },
+      maxInstallments:      { type: Number, default: 60 },
+      directSaleCommissionValue: { type: Number, default: 0 },
+      downPaymentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
+      installmentCommissionRate: { type: Number, default: 0 },
+    },
+    default: () => ({
+      minDownPayment: 15000,
+      maxDownPayment: 50000,
+      cashDownPaymentLimit: 50000,
+      installmentOptions: [5, 12, 24, 36, 60],
+      minInstallments: 5,
+      maxInstallments: 60,
+      directSaleCommissionValue: 0,
+      downPaymentGenerationRates: [],
+      installmentCommissionRate: 0,
+    }),
   },
   managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
   ranks: [{ name: { type: String }, minDirectSales: { type: Number, default: 0 }, minTeamSales: { type: Number, default: 0 }, order: { type: Number, default: 0 } }],

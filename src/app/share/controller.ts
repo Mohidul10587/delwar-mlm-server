@@ -5,19 +5,8 @@ import { Settings } from "../settings/model";
 export const createShare = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const settings = await Settings.findOne();
-    const defaultCommissions = settings?.defaultCommissions ?? {
-      directSalesCommissionForCashSell: 0,
-      directSalesCommissionForInstallmentSell: 0,
-      managerialCommissionForCashSell: 0,
-      managerialCommissionForInstallmentSell: 0,
-    };
-    const pkg = await Share.create({
-      directSalesCommissionForCashSell:          defaultCommissions.directSalesCommissionForCashSell,
-      directSalesCommissionForInstallmentSell:   defaultCommissions.directSalesCommissionForInstallmentSell,
-      managerialCommissionForCashSell:           defaultCommissions.managerialCommissionForCashSell,
-      managerialCommissionForInstallmentSell:    defaultCommissions.managerialCommissionForInstallmentSell,
-      ...req.body,
-    });
+    const defaults = settings?.defaultShareConfig ?? {};
+    const pkg = await Share.create({ ...defaults, ...req.body });
     res.status(201).json({ message: "Share created", pkg });
   } catch (err) { next(err); }
 };
