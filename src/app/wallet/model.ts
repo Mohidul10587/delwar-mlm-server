@@ -4,11 +4,23 @@ export interface IWallet extends Document {
   userId: Types.ObjectId;
   balance: number;
   pendingManagerialCommissionBalance: number;
+  salaryBalance: number;
+  rewardBalance: number;
 }
 
 export interface ITransactionLog extends Document {
   userId: Types.ObjectId;
-  type: "direct_commission" | "installment_commission" | "managerial_commission" | "withdrawal" | "withdrawal_rejected" | "admin_credit" | "admin_debit";
+  type:
+    | "direct_commission"
+    | "installment_commission"
+    | "managerial_commission"
+    | "managerial_installment_commission"
+    | "salary"
+    | "reward"
+    | "withdrawal"
+    | "withdrawal_rejected"
+    | "admin_credit"
+    | "admin_debit";
   amount: number;
   balanceAfter: number;
   note: string;
@@ -20,6 +32,8 @@ const WalletSchema = new Schema<IWallet>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     balance: { type: Number, default: 0 },
     pendingManagerialCommissionBalance: { type: Number, default: 0 },
+    salaryBalance: { type: Number, default: 0 },
+    rewardBalance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -29,7 +43,18 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     type: {
       type: String,
-      enum: ["direct_commission", "installment_commission", "managerial_commission", "withdrawal", "withdrawal_rejected", "admin_credit", "admin_debit"],
+      enum: [
+        "direct_commission",
+        "installment_commission",
+        "managerial_commission",
+        "managerial_installment_commission",
+        "salary",
+        "reward",
+        "withdrawal",
+        "withdrawal_rejected",
+        "admin_credit",
+        "admin_debit",
+      ],
       required: true,
     },
     amount: { type: Number, required: true },

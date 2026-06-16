@@ -37,8 +37,16 @@ export const updatePurchaseStatus = async (req: Request, res: Response, next: Ne
       );
     }
 
-    if (status === "approved" && !purchase.commissionProcessed)
+    if (status === "approved" && !purchase.commissionProcessed) {
       distributeCommissions((purchase._id as any).toString());
+      // Update buyer's personal purchase stats
+      await (await import("../user/model")).User.findByIdAndUpdate(purchase.userId, {
+        $inc: {
+          personalSharesCount: purchase.quantity,
+          totalPersonalPurchaseAmount: purchase.amountPaid,
+        },
+      });
+    }
 
     res.json({
       message: `Purchase ${status}`,

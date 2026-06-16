@@ -48,9 +48,7 @@ export const createInstallmentPayment = async (req: Request, res: Response, next
 
 export const getInstallmentSummary = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const purchase = await Purchase.findById(req.params.purchaseId)
-      .populate("shareId", "installment cashPrice")
-      .lean();
+    const purchase = await Purchase.findById(req.params.purchaseId).lean();
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
 
@@ -60,25 +58,24 @@ export const getInstallmentSummary = async (req: Request, res: Response, next: N
     if (purchase.paymentType !== "installment")
       return res.status(400).json({ message: "Not an installment purchase" });
 
-    const share = purchase.shareId as any;
-    const totalInstallments: number = share?.installment?.totalInstallments ?? 0;
-    const perInstallment: number = share?.installment?.perInstallment ?? 0;
+    const totalInstallments: number = purchase.installmentCount ?? 0;
+    const perInstallment: number = purchase.installmentAmount ?? 0;
 
-    const approvedPayments = await InstallmentPayment.find({
-      purchaseId: purchase._id,
-      status: "approved",
-    }).sort({ installmentNo: 1 }).lean();
+    const allPayments = await InstallmentPayment.find({ purchaseId: purchase._id })
+      .sort({ installmentNo: 1, createdAt: 1 }).lean();
 
-    const completed = approvedPayments.length;
-    const remaining = Math.max(0, totalInstallments - completed);
+    const approvedCount = allPayments.filter((p) => p.status === "approved").length;
+    const totalPayable = (purchase.downPayment ?? 0) + totalInstallments * perInstallment;
+    const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
 
     res.json({
       totalInstallments,
-      completed,
-      remaining,
+      completed: approvedCount,
+      remaining: Math.max(0, totalInstallments - approvedCount),
       perInstallment,
       amountPaid: purchase.amountPaid,
-      payments: approvedPayments,
+      amountRemaining,
+      payments: allPayments,
     });
   } catch (err) { next(err); }
 };

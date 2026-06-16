@@ -34,7 +34,25 @@ export interface ISettings extends Document {
   };
   managerialCommissionWeeklyProcessDay: number;
   // Rank definitions
-  ranks: { name: string; minDirectSales: number; minTeamSales: number; order: number }[];
+  ranks: {
+    name: string;
+    order: number;
+    requiredGeneration: number;
+    requiredApprovedSales: number;
+    reward?: {
+      name: string;
+      type: "cash" | "product" | "gift" | "vehicle" | "tour" | "electronics" | "other";
+      value: number;
+      description: string;
+    };
+    salary?: {
+      amount: number;
+      durationMonths: number;
+      minMonthlySales: number;
+      requiredPersonalShares: number;
+      requiredPersonalPurchaseAmount: number;
+    };
+  }[];
   // Branches
   branches: string[];
   // Investment config
@@ -90,7 +108,25 @@ const SettingsSchema = new Schema<ISettings>({
     }),
   },
   managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
-  ranks: [{ name: { type: String }, minDirectSales: { type: Number, default: 0 }, minTeamSales: { type: Number, default: 0 }, order: { type: Number, default: 0 } }],
+  ranks: [{
+    name: { type: String },
+    order: { type: Number, default: 0 },
+    requiredGeneration: { type: Number, default: 1 },
+    requiredApprovedSales: { type: Number, default: 0 },
+    reward: {
+      name: { type: String, default: "" },
+      type: { type: String, enum: ["cash", "product", "gift", "vehicle", "tour", "electronics", "other"], default: "gift" },
+      value: { type: Number, default: 0 },
+      description: { type: String, default: "" },
+    },
+    salary: {
+      amount: { type: Number, default: 0 },
+      durationMonths: { type: Number, default: 0 },
+      minMonthlySales: { type: Number, default: 0 },
+      requiredPersonalShares: { type: Number, default: 0 },
+      requiredPersonalPurchaseAmount: { type: Number, default: 0 },
+    },
+  }],
   branches: [{ type: String }],
   investmentConfig: {
     type: {

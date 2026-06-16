@@ -2,13 +2,14 @@ import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
 import { Share } from "../share/model";
 import { User } from "../user/model";
+import { Settings } from "../settings/model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 
 // POST /purchase  — logged-in user submits a purchase request
 export const createPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { shareId, quantity, paymentType, selectedInstallments, senderAccount, transactionId, buyerInfo } = req.body;
+    const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo } = req.body;
 
     const share = await Share.findById(shareId);
     if (!share)
@@ -23,15 +24,22 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     } : null);
 
     const qty = Number(quantity);
-    const downPaymentAmount = Math.min(share.maxDownPayment, share.cashDownPaymentLimit);
-    const amountPaid =
-      paymentType === "cash"
-        ? share.cashPrice * qty
-        : downPaymentAmount * qty;
+    const totalPayable = share.cashPrice * qty;
 
-    // Build snapshot — locks all commission/config at time of purchase
+    // Cash: fixed DP = cashDownPaymentLimit, 1 installment for remainder
+    // Installment: user-provided DP and installmentCount
+    const resolvedDP =
+      paymentType === "cash" ? share.cashDownPaymentLimit * qty : Number(downPayment) * qty;
+    const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
+    const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
+    const amountPaid = resolvedDP;
+
+    // Build snapshot — locks all commission/config + rank/salary rules at time of purchase
+    const settings = await Settings.findOne().lean();
+    const ranks = (settings?.ranks ?? []) as any[];
     const snapshot = {
       shareTitle: share.title,
+      shareImage: share.image,
       cashPrice: share.cashPrice,
       minDownPayment: share.minDownPayment,
       maxDownPayment: share.maxDownPayment,
@@ -42,6 +50,22 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       directSaleCommissionValue: share.directSaleCommissionValue,
       downPaymentGenerationRates: share.downPaymentGenerationRates,
       installmentCommissionRate: share.installmentCommissionRate,
+      rankQualification: ranks.map((r: any) => ({
+        rankName: r.name,
+        order: r.order,
+        requiredGeneration: r.requiredGeneration ?? 1,
+        requiredApprovedSales: r.requiredApprovedSales ?? 0,
+      })),
+      salaryRules: ranks
+        .filter((r: any) => r.salary?.amount > 0)
+        .map((r: any) => ({
+          rankName: r.name,
+          amount: r.salary.amount,
+          durationMonths: r.salary.durationMonths,
+          minMonthlySales: r.salary.minMonthlySales,
+          requiredPersonalShares: r.salary.requiredPersonalShares,
+          requiredPersonalPurchaseAmount: r.salary.requiredPersonalPurchaseAmount,
+        })),
     };
 
     const purchase = await Purchase.create({
@@ -49,8 +73,10 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       shareId,
       quantity: qty,
       paymentType,
+      downPayment: resolvedDP,
+      installmentCount: resolvedCount,
+      installmentAmount: resolvedInstallmentAmount,
       amountPaid,
-      selectedInstallments: paymentType === "installment" ? Number(selectedInstallments) : undefined,
       senderAccount,
       transactionId,
       buyerInfo: resolvedBuyerInfo,

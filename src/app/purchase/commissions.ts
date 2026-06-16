@@ -43,9 +43,9 @@ export const distributeCommissions = async (purchaseId: string) => {
     let installmentPortion: number;
 
     if (purchase.paymentType === "cash") {
-      // Cash purchase: split at cashDownPaymentLimit
-      downPaymentPortion = Math.min(snap.cashDownPaymentLimit, totalAmount) * purchase.quantity;
-      installmentPortion = Math.max(0, totalAmount - snap.cashDownPaymentLimit) * purchase.quantity;
+      // Cash: DP portion = cashDownPaymentLimit × qty; remainder = installment portion
+      downPaymentPortion = Math.min(snap.cashDownPaymentLimit, snap.cashPrice) * purchase.quantity;
+      installmentPortion = Math.max(0, snap.cashPrice - snap.cashDownPaymentLimit) * purchase.quantity;
     } else {
       // Installment purchase: only the down payment is being approved now
       downPaymentPortion = purchase.amountPaid; // already = maxDownPayment × qty
