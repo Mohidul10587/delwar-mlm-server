@@ -5,7 +5,6 @@ interface TreeNode {
   _id: string;
   username: string;
   name: string;
-  placementSide: string | null;
   children: TreeNode[];
 }
 
@@ -16,7 +15,6 @@ const buildTreeFromFlat = (nodes: any[], parentId: string): TreeNode[] =>
       _id: n._id.toString(),
       username: n.username,
       name: n.name,
-      placementSide: n.placementAncestors?.[0]?.side ?? null,
       children: buildTreeFromFlat(nodes, n._id.toString()),
     }));
 
@@ -36,7 +34,7 @@ export const getUpline = async (req: Request, res: Response, next: NextFunction)
     if (!level1) return res.json({ upline: null });
     const parent = await User.findById(level1.userId).select("_id username name").lean();
     if (!parent) return res.json({ upline: null });
-    res.json({ upline: { _id: parent._id.toString(), username: parent.username, name: parent.name, placementSide: level1.side ?? null } });
+    res.json({ upline: { _id: parent._id.toString(), username: parent.username, name: parent.name } });
   } catch (err) { next(err); }
 };
 

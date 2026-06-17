@@ -9,136 +9,164 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.distributeCommissions = void 0;
+exports.distributeInstallmentPaymentCommission = exports.distributeCommissions = void 0;
 const model_1 = require("./model");
 const commissionDebug_model_1 = require("./commissionDebug.model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../user/model");
-const model_4 = require("../settings/model");
 const controller_1 = require("../rank/controller");
 /**
- * একটি purchase অনুমোদিত হলে সমস্ত কমিশন বিতরণ করে।
+ * Commission distribution using per-purchase snapshot config.
  *
- * এই ফাংশনটি তিনটি কাজ করে:
+ * Cash purchase: split into down-payment portion (≤ cashDownPaymentLimit)
+ *   and installment portion (remainder). Each uses different commission rules.
  *
- * ১. ডাইরেক্ট সেলস কমিশন:
- *    ক্রেতার referrer (যিনি তাকে রেফার করেছেন) তাৎক্ষণিকভাবে
- *    তার মূল ওয়ালেটে (balance) কমিশন পান।
- *    নগদ ক্রয়ে নগদ রেট, কিস্তিতে কিস্তির রেট প্রযোজ্য।
- *    referrer-এর directSalesCount-ও বাড়ানো হয় (র্যাংক হিসাবের জন্য)।
+ * Installment purchase: down-payment portion = amountPaid (first payment).
+ *   Subsequent installment payments trigger installment commission separately.
  *
- * ২. ম্যানেজারিয়াল (জেনারেশন) কমিশন:
- *    ক্রেতার placementParent থেকে শুরু করে উপরের দিকে
- *    সর্বোচ্চ maxGenerations পর্যন্ত প্রতিটি ancestor-কে
- *    তাদের commissionBalance-এ কমিশন জমা হয়।
- *    (এই ব্যালেন্স সরাসরি উইথড্র করা যায় না — admin সাপ্তাহিক পোস্ট করেন।)
- *    প্রতিটি ancestor-এর teamSalesCount-ও বাড়ানো হয় (র্যাংক হিসাবের জন্য)।
+ * Direct Sale Commission: goes to the buyer's direct referrer (gen ancestor[0])
+ *   immediately into wallet.balance.
  *
- * ৩. টিম ম্যানেজমেন্ট কমিশনের জন্য Side ভলিউম আপডেট:
- *    প্রতিটি ancestor-এর parent-এর ওয়ালেটে sideA বা sideB ভলিউম
- *    যোগ করা হয়, যাতে পরে cron job সঠিকভাবে টিম কমিশন হিসাব করতে পারে।
- *
- * সব শেষে purchase.commissionProcessed = true করা হয়
- * যাতে একই purchase-এ দ্বিতীয়বার কমিশন না যায়।
- *
- * @param purchaseId - যে purchase-এর জন্য কমিশন বিতরণ করতে হবে তার ID
+ * Managerial Commission (Down Payment portion): generation-specific rates from snapshot.
+ * Managerial Commission (Installment portion): same rate for all generations from snapshot.
  */
 const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     try {
-        // purchase ও তার share তথ্য একসাথে লোড করা হচ্ছে
         const purchase = yield model_1.Purchase.findById(purchaseId).populate("shareId");
-        // যদি purchase না পাওয়া যায় অথবা আগেই কমিশন দেওয়া হয়ে থাকে, তাহলে বন্ধ করো
         if (!purchase || purchase.commissionProcessed)
             return;
-        const share = purchase.shareId;
-        // ক্রেতার referrer ও placementParent জানার জন্য buyer লোড করা হচ্ছে
+        const snap = purchase.snapshot;
+        if (!snap)
+            return; // no snapshot means pre-migration purchase; skip
         const buyer = yield model_3.User.findById(purchase.userId).select("generationAncestors placementAncestors name username");
         if (!buyer)
             return;
-        // ancestor arrays থেকে direct parent/referrer derive করা হচ্ছে
         const referrerId = (_b = (_a = buyer.generationAncestors[0]) === null || _a === void 0 ? void 0 : _a.userId) !== null && _b !== void 0 ? _b : null;
         const placementParentId = (_d = (_c = buyer.placementAncestors[0]) === null || _c === void 0 ? void 0 : _c.userId) !== null && _d !== void 0 ? _d : null;
-        // সিস্টেম সেটিংস থেকে সর্বোচ্চ জেনারেশন সংখ্যা ও প্রতিটি জেনারেশনের রেট নেওয়া হচ্ছে
-        const settings = yield model_4.Settings.findOne();
-        const maxGen = (_e = settings === null || settings === void 0 ? void 0 : settings.maxGenerations) !== null && _e !== void 0 ? _e : 5;
-        const genRates = (_f = settings === null || settings === void 0 ? void 0 : settings.generationCommission) !== null && _f !== void 0 ? _f : [];
         const debugEntries = [];
-        // ── ১. ডাইরেক্ট সেলস কমিশন ──────────────────────────────────────────────
+        // ── Determine down-payment portion and installment portion ────────────────
+        const totalAmount = snap.cashPrice * purchase.quantity;
+        let downPaymentPortion;
+        let installmentPortion;
+        if (purchase.paymentType === "cash") {
+            // Cash: DP portion = cashDownPaymentLimit × qty; remainder = installment portion
+            downPaymentPortion = Math.min(snap.cashDownPaymentLimit, snap.cashPrice) * purchase.quantity;
+            installmentPortion = Math.max(0, snap.cashPrice - snap.cashDownPaymentLimit) * purchase.quantity;
+        }
+        else {
+            // Installment purchase: only the down payment is being approved now
+            downPaymentPortion = purchase.amountPaid; // already = maxDownPayment × qty
+            installmentPortion = 0; // installment portions handled per installment payment
+        }
+        // ── 1. Direct Sale Commission ─────────────────────────────────────────────
         if (referrerId) {
-            const referrer = yield model_3.User.findById(referrerId).select("name username");
-            const referrerLabel = referrer ? `${referrer.name} (${referrer.username})` : referrerId.toString();
-            const rate = purchase.paymentType === "cash"
-                ? share.directSalesCommissionForCashSell
-                : share.directSalesCommissionForInstallmentSell;
-            const base = purchase.paymentType === "cash"
-                ? share.cashPrice * purchase.quantity
-                : share.installment.downPayment * purchase.quantity;
-            const commission = (rate / 100) * base;
+            const base = purchase.paymentType === "cash" ? totalAmount : downPaymentPortion;
+            const commission = (snap.directSaleCommissionValue / 100) * base;
             if (commission > 0) {
-                // referrer-এর ওয়ালেটে সরাসরি balance-এ যোগ (তাৎক্ষণিক)
                 const wallet = yield model_2.Wallet.findOne({ userId: referrerId });
-                if (!wallet)
-                    return;
-                const before = wallet.balance;
-                wallet.balance += commission;
-                yield wallet.save();
-                debugEntries.push({ userId: referrerId, role: "referrer_direct", field: "balance", before, added: commission, after: wallet.balance, description: `ডাইরেক্ট সেলস কমিশন (${rate}%): purchase #${purchase._id} থেকে referrer ${referrerLabel}-এর balance-এ ৳${commission} যোগ হয়েছে। আগে ছিল ৳${before}, এখন ৳${wallet.balance}।` });
-                yield model_2.TransactionLog.create({
-                    userId: referrerId,
-                    type: "direct_commission",
-                    amount: commission,
-                    balanceAfter: wallet.balance,
-                    relatedPurchaseId: purchase._id,
-                    note: `Direct commission from purchase`,
-                });
+                if (wallet) {
+                    const before = wallet.balance;
+                    wallet.balance += commission;
+                    yield wallet.save();
+                    const referrer = yield model_3.User.findById(referrerId).select("name username");
+                    debugEntries.push({
+                        userId: referrerId,
+                        role: "referrer_direct",
+                        field: "balance",
+                        before,
+                        added: commission,
+                        after: wallet.balance,
+                        description: `Direct sale commission (${snap.directSaleCommissionValue}%): ৳${commission}`,
+                    });
+                    yield model_2.TransactionLog.create({
+                        userId: referrerId,
+                        type: "direct_commission",
+                        amount: commission,
+                        balanceAfter: wallet.balance,
+                        relatedPurchaseId: purchase._id,
+                        note: `Direct commission from purchase`,
+                    });
+                }
             }
             yield model_3.User.findByIdAndUpdate(referrerId, { $inc: { directSalesCount: purchase.quantity } });
             yield (0, controller_1.recalcUserRank)(referrerId.toString());
         }
-        // ── ২. ম্যানেজারিয়াল কমিশন + ৩. Side ভলিউম আপডেট ──────────────────────
-        let currentId = placementParentId === null || placementParentId === void 0 ? void 0 : placementParentId.toString();
-        // managerial commission pool: share-এর নির্ধারিত % থেকে মোট পরিমাণ
-        const managerialBase = purchase.paymentType === "cash"
-            ? share.cashPrice * purchase.quantity
-            : share.installment.downPayment * purchase.quantity;
-        const managerialPool = (purchase.paymentType === "cash"
-            ? share.managerialCommissionForCashSell
-            : share.managerialCommissionForInstallmentSell) / 100 * managerialBase;
-        for (let gen = 1; gen <= maxGen && currentId; gen++) {
-            // এই জেনারেশনের জন্য কনফিগার করা রেট খোঁজো
-            const genConfig = genRates.find((g) => g.generation === gen);
-            if (genConfig && genConfig.rate > 0) {
-                // pool থেকে এই জেনারেশনের % নেওয়া হচ্ছে
-                const commission = (genConfig.rate / 100) * managerialPool;
-                // pendingManagerialCommissionBalance-এ জমা হয় — সরাসরি উইথড্র করা যায় না
-                const wallet = yield model_2.Wallet.findOne({ userId: currentId });
-                if (!wallet)
-                    continue;
-                const before = wallet.pendingManagerialCommissionBalance;
-                wallet.pendingManagerialCommissionBalance += commission;
-                yield wallet.save();
-                const currentUser = yield model_3.User.findById(currentId).select("name username");
-                const currentLabel = currentUser ? `${currentUser.name} (${currentUser.username})` : currentId;
-                debugEntries.push({ userId: wallet.userId, role: "managerial_gen", generation: gen, field: "pendingManagerialCommissionBalance", before, added: commission, after: wallet.pendingManagerialCommissionBalance, description: `ম্যানেজারিয়াল কমিশন (জেনারেশন ${gen}, ${genConfig.rate}% of pool ৳${managerialPool}): purchase #${purchase._id} থেকে ${currentLabel}-এর pendingManagerialCommissionBalance-এ ৳${commission} যোগ হয়েছে। আগে ছিল ৳${before}, এখন ৳${wallet.pendingManagerialCommissionBalance}।` });
-                yield model_2.TransactionLog.create({
-                    userId: currentId,
-                    type: "managerial_commission",
-                    amount: commission,
-                    balanceAfter: wallet.balance,
-                    relatedPurchaseId: purchase._id,
-                    note: `Gen ${gen} commission from pool ${managerialPool}`,
-                });
+        // ── 2. Down Payment Managerial Commission (generation-specific rates) ─────
+        if (downPaymentPortion > 0) {
+            let currentId = placementParentId === null || placementParentId === void 0 ? void 0 : placementParentId.toString();
+            const maxGen = snap.downPaymentGenerationRates.length;
+            for (let gen = 1; gen <= maxGen && currentId; gen++) {
+                const genConfig = snap.downPaymentGenerationRates.find((g) => g.generation === gen);
+                if (genConfig && genConfig.rate > 0) {
+                    const commission = (genConfig.rate / 100) * downPaymentPortion;
+                    const wallet = yield model_2.Wallet.findOne({ userId: currentId });
+                    if (wallet) {
+                        const before = wallet.pendingManagerialCommissionBalance;
+                        wallet.pendingManagerialCommissionBalance += commission;
+                        yield wallet.save();
+                        debugEntries.push({
+                            userId: wallet.userId,
+                            role: "managerial_gen",
+                            generation: gen,
+                            field: "pendingManagerialCommissionBalance",
+                            before,
+                            added: commission,
+                            after: wallet.pendingManagerialCommissionBalance,
+                            description: `DP managerial gen ${gen} (${genConfig.rate}%): ৳${commission}`,
+                        });
+                        yield model_2.TransactionLog.create({
+                            userId: currentId,
+                            type: "managerial_commission",
+                            amount: commission,
+                            balanceAfter: wallet.balance,
+                            relatedPurchaseId: purchase._id,
+                            note: `Gen ${gen} DP commission`,
+                        });
+                    }
+                }
+                yield model_3.User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: purchase.quantity } });
+                yield (0, controller_1.recalcUserRank)(currentId);
+                const ancestor = yield model_3.User.findById(currentId).select("placementAncestors");
+                currentId = (_g = (_f = (_e = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _e === void 0 ? void 0 : _e[0]) === null || _f === void 0 ? void 0 : _f.userId) === null || _g === void 0 ? void 0 : _g.toString();
             }
-            // র্যাংক হিসাবের জন্য এই ancestor-এর টিম সেলস কাউন্ট বাড়ানো হচ্ছে
-            yield model_3.User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: purchase.quantity } });
-            yield (0, controller_1.recalcUserRank)(currentId);
-            // পরবর্তী জেনারেশনের জন্য আরও উপরে উঠো — placementAncestors[0] থেকে derive করো
-            const ancestor = yield model_3.User.findById(currentId).select("placementAncestors name username");
-            const level1 = (_g = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _g === void 0 ? void 0 : _g[0];
-            currentId = (_h = level1 === null || level1 === void 0 ? void 0 : level1.userId) === null || _h === void 0 ? void 0 : _h.toString();
         }
-        // দ্বিতীয়বার কমিশন যাওয়া ঠেকাতে flag সেট করো
+        // ── 3. Installment Portion Managerial Commission (same rate for all gens) ─
+        if (installmentPortion > 0 && snap.installmentCommissionRate > 0) {
+            let currentId = placementParentId === null || placementParentId === void 0 ? void 0 : placementParentId.toString();
+            const maxGen = snap.downPaymentGenerationRates.length || 5;
+            for (let gen = 1; gen <= maxGen && currentId; gen++) {
+                const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
+                if (commission > 0) {
+                    const wallet = yield model_2.Wallet.findOne({ userId: currentId });
+                    if (wallet) {
+                        const before = wallet.pendingManagerialCommissionBalance;
+                        wallet.pendingManagerialCommissionBalance += commission;
+                        yield wallet.save();
+                        debugEntries.push({
+                            userId: wallet.userId,
+                            role: "managerial_installment",
+                            generation: gen,
+                            field: "pendingManagerialCommissionBalance",
+                            before,
+                            added: commission,
+                            after: wallet.pendingManagerialCommissionBalance,
+                            description: `Installment portion commission (${snap.installmentCommissionRate}%): ৳${commission}`,
+                        });
+                        yield model_2.TransactionLog.create({
+                            userId: currentId,
+                            type: "managerial_installment_commission",
+                            amount: commission,
+                            balanceAfter: wallet.balance,
+                            relatedPurchaseId: purchase._id,
+                            note: `Installment portion commission gen ${gen}`,
+                        });
+                    }
+                }
+                const ancestor = yield model_3.User.findById(currentId).select("placementAncestors");
+                currentId = (_k = (_j = (_h = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _h === void 0 ? void 0 : _h[0]) === null || _j === void 0 ? void 0 : _j.userId) === null || _k === void 0 ? void 0 : _k.toString();
+            }
+        }
         purchase.commissionProcessed = true;
         yield purchase.save();
         yield commissionDebug_model_1.CommissionDebug.create({
@@ -146,9 +174,9 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
             buyerId: purchase.userId,
             buyerName: buyer.name,
             buyerUsername: buyer.username,
-            shareTitle: (_j = share.title) !== null && _j !== void 0 ? _j : "",
+            shareTitle: snap.shareTitle,
             paymentType: purchase.paymentType,
-            approvedAmount: managerialBase,
+            approvedAmount: purchase.amountPaid,
             entries: debugEntries,
         });
     }
@@ -157,3 +185,47 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
     }
 });
 exports.distributeCommissions = distributeCommissions;
+/**
+ * Distribute installment commission when a single installment payment is approved.
+ * Same rate for all generations from snapshot.
+ */
+const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e, _f;
+    try {
+        const purchase = yield model_1.Purchase.findById(purchaseId);
+        if (!purchase)
+            return;
+        const snap = purchase.snapshot;
+        if (!snap || snap.installmentCommissionRate <= 0)
+            return;
+        const buyer = yield model_3.User.findById(purchase.userId).select("placementAncestors");
+        if (!buyer)
+            return;
+        let currentId = (_c = (_b = (_a = buyer.placementAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString();
+        const maxGen = snap.downPaymentGenerationRates.length || 5;
+        for (let gen = 1; gen <= maxGen && currentId; gen++) {
+            const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
+            if (commission > 0) {
+                const wallet = yield model_2.Wallet.findOne({ userId: currentId });
+                if (wallet) {
+                    wallet.pendingManagerialCommissionBalance += commission;
+                    yield wallet.save();
+                    yield model_2.TransactionLog.create({
+                        userId: currentId,
+                        type: "managerial_installment_commission",
+                        amount: commission,
+                        balanceAfter: wallet.balance,
+                        relatedPurchaseId: purchase._id,
+                        note: `Installment payment commission gen ${gen}`,
+                    });
+                }
+            }
+            const ancestor = yield model_3.User.findById(currentId).select("placementAncestors");
+            currentId = (_f = (_e = (_d = ancestor === null || ancestor === void 0 ? void 0 : ancestor.placementAncestors) === null || _d === void 0 ? void 0 : _d[0]) === null || _e === void 0 ? void 0 : _e.userId) === null || _f === void 0 ? void 0 : _f.toString();
+        }
+    }
+    catch (err) {
+        console.error("Installment payment commission error:", err);
+    }
+});
+exports.distributeInstallmentPaymentCommission = distributeInstallmentPaymentCommission;

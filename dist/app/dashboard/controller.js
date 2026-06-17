@@ -18,16 +18,12 @@ const model_5 = require("../share/model");
 const model_6 = require("../event/model");
 const buildTree = (nodes, parentId) => nodes
     .filter((n) => { var _a, _b, _c; return ((_c = (_b = (_a = n.placementAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
-    .map((n) => {
-    var _a, _b, _c;
-    return ({
-        _id: n._id.toString(),
-        username: n.username,
-        name: n.name,
-        placementSide: (_c = (_b = (_a = n.placementAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.side) !== null && _c !== void 0 ? _c : null,
-        children: buildTree(nodes, n._id.toString()),
-    });
-});
+    .map((n) => ({
+    _id: n._id.toString(),
+    username: n.username,
+    name: n.name,
+    children: buildTree(nodes, n._id.toString()),
+}));
 // GET /dashboard/user
 const getUserDashboard = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f, _g;

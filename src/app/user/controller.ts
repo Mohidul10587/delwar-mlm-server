@@ -44,25 +44,7 @@ async function buildGenerationAncestors(
   return [{ level: 1, userId: referrerId }, ...parentAncestors];
 }
 
-/** Build placement ancestor list — each entry carries the side this subtree is on relative to that ancestor. */
-async function buildPlacementAncestors(
-  placementParentId: mongoose.Types.ObjectId | null,
-  placementSide: "A" | "B" | null
-): Promise<{ level: number; userId: mongoose.Types.ObjectId; side?: "A" | "B" }[]> {
-  if (!placementParentId || !placementSide) return [];
-  const parent = await Model.findById(placementParentId).select("placementAncestors").lean();
-  if (!parent) return [];
-  // level-1 entry: direct parent, side = placementSide of the new user
-  // higher levels: inherit the side from the parent's own level-1 entry (which side the parent is on relative to grandparent)
-  const parentAncestors = ((parent as any).placementAncestors ?? []).map(
-    (a: { level: number; userId: mongoose.Types.ObjectId; side?: "A" | "B" }) => ({
-      level: a.level + 1,
-      userId: a.userId,
-      side: a.side,
-    })
-  );
-  return [{ level: 1, userId: placementParentId, side: placementSide }, ...parentAncestors];
-}
+
 
 /**
  * Cascade generation ancestor updates to all referral descendants (BFS).
@@ -84,31 +66,11 @@ async function cascadeGenerationAncestors(rootId: mongoose.Types.ObjectId): Prom
   }
 }
 
-/**
- * Cascade placement ancestor updates to all placement descendants (BFS).
- * Finds children by placementAncestors[0].userId === rootId.
- */
-async function cascadePlacementAncestors(rootId: mongoose.Types.ObjectId): Promise<void> {
-  let queue: mongoose.Types.ObjectId[] = [rootId];
-  while (queue.length > 0) {
-    const children = await Model.find({ "placementAncestors.0.userId": { $in: queue } })
-      .select("_id placementAncestors")
-      .lean();
-    if (children.length === 0) break;
-    await Promise.all(children.map(async (child) => {
-      const level1 = (child as any).placementAncestors?.[0];
-      const parentId = level1?.userId as mongoose.Types.ObjectId;
-      const side = level1?.side as "A" | "B" | null;
-      const newAncestors = await buildPlacementAncestors(parentId, side);
-      return Model.updateOne({ _id: child._id }, { $set: { placementAncestors: newAncestors } });
-    }));
-    queue = children.map((c) => c._id as mongoose.Types.ObjectId);
-  }
-}
+
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, username, phone, password, referrerUsername, placementParentUsername } =
+    const { name, username, phone, password, referrerUsername } =
       registerSchema.parse(req.body);
 
     const existingUsername = await Model.findOne({ username });
@@ -123,22 +85,11 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       referrerId = referrer._id;
     }
 
-    let placementParentId: mongoose.Types.ObjectId | null = null;
-    if (placementParentUsername) {
-      const parent = await Model.findOne({ username: placementParentUsername }).select("_id");
-      if (!parent)
-        return res.status(400).json({ message: "Placement parent not found" });
-      placementParentId = parent._id;
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
-    const [generationAncestors, placementAncestors] = await Promise.all([
-      buildGenerationAncestors(referrerId),
-      buildPlacementAncestors(placementParentId, null),
-    ]);
+    const generationAncestors = await buildGenerationAncestors(referrerId);
     const user = await Model.create({
       name, username, phone, password: hashedPassword,
-      generationAncestors, placementAncestors,
+      generationAncestors,
     });
 
     await Wallet.create({ userId: user._id });
@@ -174,7 +125,7 @@ const resolveUsername = async (username: string | undefined, label: string, res:
 
 export const adminRegister = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, username, phone, password, referrerUsername, placementParentUsername, role } =
+    const { name, username, phone, password, referrerUsername, role } =
       adminRegisterSchema.parse(req.body);
 
     const existingUsername = await Model.findOne({ username });
@@ -184,21 +135,14 @@ export const adminRegister = async (req: Request, res: Response, next: NextFunct
     const { id: referrerId, error: refErr } = await resolveUsername(referrerUsername, "Referrer", res);
     if (refErr) return;
 
-    const { id: placementParentId, error: plErr } = await resolveUsername(placementParentUsername, "Placement parent", res);
-    if (plErr) return;
-
     const hashedPassword = await bcrypt.hash(password, 10);
-    const [generationAncestors, placementAncestors] = await Promise.all([
-      buildGenerationAncestors(referrerId),
-      buildPlacementAncestors(placementParentId, null),
-    ]);
+    const generationAncestors = await buildGenerationAncestors(referrerId);
     const user = await Model.create({
       name, username, phone,
       password: hashedPassword,
       role,
       permissions: defaultPermissionsByRole[role] ?? [],
       generationAncestors,
-      placementAncestors,
     });
 
     await Wallet.create({ userId: user._id });
@@ -422,16 +366,14 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
 
 export const adminUpdateRelations = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { referrerUsername, placementParentUsername, placementSide } = req.body as {
-      referrerUsername?: string; placementParentUsername?: string; placementSide?: "A" | "B" | null;
+    const { referrerUsername } = req.body as {
+      referrerUsername?: string;
     };
 
     const user = await Model.findById(req.params.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     let newReferrerId: mongoose.Types.ObjectId | null = user.generationAncestors[0]?.userId ?? null;
-    let newPlacementParentId: mongoose.Types.ObjectId | null = user.placementAncestors[0]?.userId ?? null;
-    let newPlacementSide: "A" | "B" | null = (user.placementAncestors[0]?.side as "A" | "B") ?? null;
 
     if (referrerUsername !== undefined) {
       if (referrerUsername === "") {
@@ -443,33 +385,12 @@ export const adminUpdateRelations = async (req: Request, res: Response, next: Ne
       }
     }
 
-    if (placementParentUsername !== undefined) {
-      if (placementParentUsername === "") {
-        newPlacementParentId = null;
-        newPlacementSide = null;
-      } else {
-        if (!placementSide) return res.status(400).json({ message: "placementSide required" });
-        const parent = await Model.findOne({ username: placementParentUsername }).select("_id");
-        if (!parent) return res.status(400).json({ message: "Placement parent not found" });
-        const sideOccupied = await Model.findOne({ "placementAncestors.0.userId": parent._id, "placementAncestors.0.side": placementSide, _id: { $ne: req.params.id } });
-        if (sideOccupied)
-          return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
-        newPlacementParentId = parent._id;
-        newPlacementSide = placementSide;
-      }
-    }
-
-    const [generationAncestors, placementAncestors] = await Promise.all([
-      buildGenerationAncestors(newReferrerId),
-      buildPlacementAncestors(newPlacementParentId, newPlacementSide),
-    ]);
+    const generationAncestors = await buildGenerationAncestors(newReferrerId);
     user.generationAncestors = generationAncestors as any;
-    user.placementAncestors = placementAncestors as any;
     await user.save();
 
     await Promise.all([
       referrerUsername !== undefined ? cascadeGenerationAncestors(user._id) : Promise.resolve(),
-      placementParentUsername !== undefined ? cascadePlacementAncestors(user._id) : Promise.resolve(),
     ]);
 
     res.json({ message: "Updated successfully", user });

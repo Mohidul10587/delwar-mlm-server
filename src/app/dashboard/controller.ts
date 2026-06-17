@@ -13,7 +13,6 @@ const buildTree = (nodes: any[], parentId: string): any[] =>
       _id: n._id.toString(),
       username: n.username,
       name: n.name,
-      placementSide: n.placementAncestors?.[0]?.side ?? null,
       children: buildTree(nodes, n._id.toString()),
     }));
 

@@ -6,12 +6,25 @@ const WalletSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     balance: { type: Number, default: 0 },
     pendingManagerialCommissionBalance: { type: Number, default: 0 },
+    salaryBalance: { type: Number, default: 0 },
+    rewardBalance: { type: Number, default: 0 },
 }, { timestamps: true });
 const TransactionLogSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     type: {
         type: String,
-        enum: ["direct_commission", "installment_commission", "managerial_commission", "withdrawal", "withdrawal_rejected", "admin_credit", "admin_debit"],
+        enum: [
+            "direct_commission",
+            "installment_commission",
+            "managerial_commission",
+            "managerial_installment_commission",
+            "salary",
+            "reward",
+            "withdrawal",
+            "withdrawal_rejected",
+            "admin_credit",
+            "admin_debit",
+        ],
         required: true,
     },
     amount: { type: Number, required: true },

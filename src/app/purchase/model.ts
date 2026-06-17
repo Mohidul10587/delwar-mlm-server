@@ -27,12 +27,7 @@ export interface IPurchaseSnapshot {
   shareTitle: string;
   shareImage: string;
   cashPrice: number;
-  minDownPayment: number;
-  maxDownPayment: number;
   cashDownPaymentLimit: number;
-  installmentOptions: number[];
-  minInstallments: number;
-  maxInstallments: number;
   directSaleCommissionValue: number;
   downPaymentGenerationRates: { generation: number; rate: number }[];
   installmentCommissionRate: number;
@@ -101,12 +96,7 @@ const SnapshotSchema = new Schema(
     shareTitle: { type: String },
     shareImage: { type: String },
     cashPrice: { type: Number },
-    minDownPayment: { type: Number },
-    maxDownPayment: { type: Number },
     cashDownPaymentLimit: { type: Number },
-    installmentOptions: [{ type: Number }],
-    minInstallments: { type: Number },
-    maxInstallments: { type: Number },
     directSaleCommissionValue: { type: Number },
     downPaymentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
     installmentCommissionRate: { type: Number },

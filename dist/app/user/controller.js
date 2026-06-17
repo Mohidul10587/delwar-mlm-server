@@ -47,25 +47,6 @@ function buildGenerationAncestors(referrerId) {
         return [{ level: 1, userId: referrerId }, ...parentAncestors];
     });
 }
-/** Build placement ancestor list — each entry carries the side this subtree is on relative to that ancestor. */
-function buildPlacementAncestors(placementParentId, placementSide) {
-    return __awaiter(this, void 0, void 0, function* () {
-        var _a;
-        if (!placementParentId || !placementSide)
-            return [];
-        const parent = yield model_1.User.findById(placementParentId).select("placementAncestors").lean();
-        if (!parent)
-            return [];
-        // level-1 entry: direct parent, side = placementSide of the new user
-        // higher levels: inherit the side from the parent's own level-1 entry (which side the parent is on relative to grandparent)
-        const parentAncestors = ((_a = parent.placementAncestors) !== null && _a !== void 0 ? _a : []).map((a) => ({
-            level: a.level + 1,
-            userId: a.userId,
-            side: a.side,
-        }));
-        return [{ level: 1, userId: placementParentId, side: placementSide }, ...parentAncestors];
-    });
-}
 /**
  * Cascade generation ancestor updates to all referral descendants (BFS).
  * Finds children by generationAncestors[0].userId === rootId.
@@ -89,34 +70,9 @@ function cascadeGenerationAncestors(rootId) {
         }
     });
 }
-/**
- * Cascade placement ancestor updates to all placement descendants (BFS).
- * Finds children by placementAncestors[0].userId === rootId.
- */
-function cascadePlacementAncestors(rootId) {
-    return __awaiter(this, void 0, void 0, function* () {
-        let queue = [rootId];
-        while (queue.length > 0) {
-            const children = yield model_1.User.find({ "placementAncestors.0.userId": { $in: queue } })
-                .select("_id placementAncestors")
-                .lean();
-            if (children.length === 0)
-                break;
-            yield Promise.all(children.map((child) => __awaiter(this, void 0, void 0, function* () {
-                var _a;
-                const level1 = (_a = child.placementAncestors) === null || _a === void 0 ? void 0 : _a[0];
-                const parentId = level1 === null || level1 === void 0 ? void 0 : level1.userId;
-                const side = level1 === null || level1 === void 0 ? void 0 : level1.side;
-                const newAncestors = yield buildPlacementAncestors(parentId, side);
-                return model_1.User.updateOne({ _id: child._id }, { $set: { placementAncestors: newAncestors } });
-            })));
-            queue = children.map((c) => c._id);
-        }
-    });
-}
 const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, username, phone, password, referrerUsername, placementParentUsername } = validation_1.registerSchema.parse(req.body);
+        const { name, username, phone, password, referrerUsername } = validation_1.registerSchema.parse(req.body);
         const existingUsername = yield model_1.User.findOne({ username });
         if (existingUsername)
             return res.status(400).json({ message: "Username already taken" });
@@ -127,21 +83,11 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
                 return res.status(400).json({ message: "Referrer not found" });
             referrerId = referrer._id;
         }
-        let placementParentId = null;
-        if (placementParentUsername) {
-            const parent = yield model_1.User.findOne({ username: placementParentUsername }).select("_id");
-            if (!parent)
-                return res.status(400).json({ message: "Placement parent not found" });
-            placementParentId = parent._id;
-        }
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
-        const [generationAncestors, placementAncestors] = yield Promise.all([
-            buildGenerationAncestors(referrerId),
-            buildPlacementAncestors(placementParentId, null),
-        ]);
+        const generationAncestors = yield buildGenerationAncestors(referrerId);
         const user = yield model_1.User.create({
             name, username, phone, password: hashedPassword,
-            generationAncestors, placementAncestors,
+            generationAncestors,
         });
         yield model_2.Wallet.create({ userId: user._id });
         const siblings = yield model_1.User.find({ phone, _id: { $ne: user._id } }).select("_id");
@@ -175,28 +121,21 @@ const resolveUsername = (username, label, res) => __awaiter(void 0, void 0, void
 const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
-        const { name, username, phone, password, referrerUsername, placementParentUsername, role } = validation_1.adminRegisterSchema.parse(req.body);
+        const { name, username, phone, password, referrerUsername, role } = validation_1.adminRegisterSchema.parse(req.body);
         const existingUsername = yield model_1.User.findOne({ username });
         if (existingUsername)
             return res.status(400).json({ message: "Username already taken" });
         const { id: referrerId, error: refErr } = yield resolveUsername(referrerUsername, "Referrer", res);
         if (refErr)
             return;
-        const { id: placementParentId, error: plErr } = yield resolveUsername(placementParentUsername, "Placement parent", res);
-        if (plErr)
-            return;
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
-        const [generationAncestors, placementAncestors] = yield Promise.all([
-            buildGenerationAncestors(referrerId),
-            buildPlacementAncestors(placementParentId, null),
-        ]);
+        const generationAncestors = yield buildGenerationAncestors(referrerId);
         const user = yield model_1.User.create({
             name, username, phone,
             password: hashedPassword,
             role,
             permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [],
             generationAncestors,
-            placementAncestors,
         });
         yield model_2.Wallet.create({ userId: user._id });
         const siblings = yield model_1.User.find({ phone, _id: { $ne: user._id } }).select("_id");
@@ -440,15 +379,13 @@ const deleteUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
 });
 exports.deleteUser = deleteUser;
 const adminUpdateRelations = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b;
     try {
-        const { referrerUsername, placementParentUsername, placementSide } = req.body;
+        const { referrerUsername } = req.body;
         const user = yield model_1.User.findById(req.params.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
         let newReferrerId = (_b = (_a = user.generationAncestors[0]) === null || _a === void 0 ? void 0 : _a.userId) !== null && _b !== void 0 ? _b : null;
-        let newPlacementParentId = (_d = (_c = user.placementAncestors[0]) === null || _c === void 0 ? void 0 : _c.userId) !== null && _d !== void 0 ? _d : null;
-        let newPlacementSide = (_f = (_e = user.placementAncestors[0]) === null || _e === void 0 ? void 0 : _e.side) !== null && _f !== void 0 ? _f : null;
         if (referrerUsername !== undefined) {
             if (referrerUsername === "") {
                 newReferrerId = null;
@@ -460,34 +397,11 @@ const adminUpdateRelations = (req, res, next) => __awaiter(void 0, void 0, void 
                 newReferrerId = ref._id;
             }
         }
-        if (placementParentUsername !== undefined) {
-            if (placementParentUsername === "") {
-                newPlacementParentId = null;
-                newPlacementSide = null;
-            }
-            else {
-                if (!placementSide)
-                    return res.status(400).json({ message: "placementSide required" });
-                const parent = yield model_1.User.findOne({ username: placementParentUsername }).select("_id");
-                if (!parent)
-                    return res.status(400).json({ message: "Placement parent not found" });
-                const sideOccupied = yield model_1.User.findOne({ "placementAncestors.0.userId": parent._id, "placementAncestors.0.side": placementSide, _id: { $ne: req.params.id } });
-                if (sideOccupied)
-                    return res.status(400).json({ message: `Side ${placementSide} is already occupied` });
-                newPlacementParentId = parent._id;
-                newPlacementSide = placementSide;
-            }
-        }
-        const [generationAncestors, placementAncestors] = yield Promise.all([
-            buildGenerationAncestors(newReferrerId),
-            buildPlacementAncestors(newPlacementParentId, newPlacementSide),
-        ]);
+        const generationAncestors = yield buildGenerationAncestors(newReferrerId);
         user.generationAncestors = generationAncestors;
-        user.placementAncestors = placementAncestors;
         yield user.save();
         yield Promise.all([
             referrerUsername !== undefined ? cascadeGenerationAncestors(user._id) : Promise.resolve(),
-            placementParentUsername !== undefined ? cascadePlacementAncestors(user._id) : Promise.resolve(),
         ]);
         res.json({ message: "Updated successfully", user });
     }

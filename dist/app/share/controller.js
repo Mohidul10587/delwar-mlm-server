@@ -16,13 +16,8 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     var _a;
     try {
         const settings = yield model_2.Settings.findOne();
-        const defaultCommissions = (_a = settings === null || settings === void 0 ? void 0 : settings.defaultCommissions) !== null && _a !== void 0 ? _a : {
-            directSalesCommissionForCashSell: 0,
-            directSalesCommissionForInstallmentSell: 0,
-            managerialCommissionForCashSell: 0,
-            managerialCommissionForInstallmentSell: 0,
-        };
-        const pkg = yield model_1.Share.create(Object.assign({ directSalesCommissionForCashSell: defaultCommissions.directSalesCommissionForCashSell, directSalesCommissionForInstallmentSell: defaultCommissions.directSalesCommissionForInstallmentSell, managerialCommissionForCashSell: defaultCommissions.managerialCommissionForCashSell, managerialCommissionForInstallmentSell: defaultCommissions.managerialCommissionForInstallmentSell }, req.body));
+        const defaults = (_a = settings === null || settings === void 0 ? void 0 : settings.defaultShareConfig) !== null && _a !== void 0 ? _a : {};
+        const pkg = yield model_1.Share.create(Object.assign(Object.assign({}, defaults), req.body));
         res.status(201).json({ message: "Share created", pkg });
     }
     catch (err) {

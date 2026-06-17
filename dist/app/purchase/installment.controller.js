@@ -15,7 +15,7 @@ const installment_model_1 = require("./installment.model");
 const service_1 = require("./service");
 const model_2 = require("../certificate/model");
 const model_3 = require("../wallet/model");
-const model_4 = require("../user/model");
+const commissions_1 = require("./commissions");
 const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     return yield model_3.Wallet.findOne({ userId });
 });
@@ -53,33 +53,30 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
 });
 exports.createInstallmentPayment = createInstallmentPayment;
 const getInstallmentSummary = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     try {
-        const purchase = yield model_1.Purchase.findById(req.params.purchaseId)
-            .populate("shareId", "installment cashPrice")
-            .lean();
+        const purchase = yield model_1.Purchase.findById(req.params.purchaseId).lean();
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
         if (purchase.userId.toString() !== req.user._id.toString())
             return res.status(403).json({ message: "Forbidden" });
         if (purchase.paymentType !== "installment")
             return res.status(400).json({ message: "Not an installment purchase" });
-        const share = purchase.shareId;
-        const totalInstallments = (_b = (_a = share === null || share === void 0 ? void 0 : share.installment) === null || _a === void 0 ? void 0 : _a.totalInstallments) !== null && _b !== void 0 ? _b : 0;
-        const perInstallment = (_d = (_c = share === null || share === void 0 ? void 0 : share.installment) === null || _c === void 0 ? void 0 : _c.perInstallment) !== null && _d !== void 0 ? _d : 0;
-        const approvedPayments = yield installment_model_1.InstallmentPayment.find({
-            purchaseId: purchase._id,
-            status: "approved",
-        }).sort({ installmentNo: 1 }).lean();
-        const completed = approvedPayments.length;
-        const remaining = Math.max(0, totalInstallments - completed);
+        const totalInstallments = (_a = purchase.installmentCount) !== null && _a !== void 0 ? _a : 0;
+        const perInstallment = (_b = purchase.installmentAmount) !== null && _b !== void 0 ? _b : 0;
+        const allPayments = yield installment_model_1.InstallmentPayment.find({ purchaseId: purchase._id })
+            .sort({ installmentNo: 1, createdAt: 1 }).lean();
+        const approvedCount = allPayments.filter((p) => p.status === "approved").length;
+        const totalPayable = ((_c = purchase.downPayment) !== null && _c !== void 0 ? _c : 0) + totalInstallments * perInstallment;
+        const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
         res.json({
             totalInstallments,
-            completed,
-            remaining,
+            completed: approvedCount,
+            remaining: Math.max(0, totalInstallments - approvedCount),
             perInstallment,
             amountPaid: purchase.amountPaid,
-            payments: approvedPayments,
+            amountRemaining,
+            payments: allPayments,
         });
     }
     catch (err) {
@@ -109,7 +106,7 @@ const getInstallmentsByPurchase = (req, res, next) => __awaiter(void 0, void 0, 
 });
 exports.getInstallmentsByPurchase = getInstallmentsByPurchase;
 const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status)) {
@@ -147,22 +144,9 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                     totalPayable,
                 });
                 yield model_2.Certificate.findOneAndUpdate({ purchaseId: purchase._id }, { status: certificateStatus, issuedAt: certificateStatus === "issued" ? new Date() : undefined }, { upsert: true, new: true });
-                // Installment commission to referrer
+                // Installment commission via snapshot
                 try {
-                    const buyer = yield model_4.User.findById(purchase.userId).select("generationAncestors");
-                    const referrerId = (_c = (_b = buyer === null || buyer === void 0 ? void 0 : buyer.generationAncestors) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.userId;
-                    if (referrerId && (share === null || share === void 0 ? void 0 : share.directSalesCommissionForInstallmentSell)) {
-                        const rate = share.directSalesCommissionForInstallmentSell;
-                        const commission = (rate / 100) * payment.amount;
-                        if (commission > 0) {
-                            const wallet = yield findOrCreateWallet(referrerId.toString());
-                            if (wallet) {
-                                wallet.balance += commission;
-                                yield wallet.save();
-                                yield model_3.TransactionLog.create({ userId: referrerId, type: "installment_commission", amount: commission, balanceAfter: wallet.balance, relatedPurchaseId: purchase._id, note: `Installment #${payment.installmentNo} commission` });
-                            }
-                        }
-                    }
+                    yield (0, commissions_1.distributeInstallmentPaymentCommission)(purchase._id.toString(), payment.amount);
                 }
                 catch (e) {
                     console.error("Installment commission error:", e);

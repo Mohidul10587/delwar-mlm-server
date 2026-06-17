@@ -8,15 +8,13 @@ const baseSchema = zod_1.z.object({
     phone: zod_1.z.string().min(10),
     password: zod_1.z.string().min(6),
 });
-// Public registration: referrer + placement required
+// Public registration: referrer required
 exports.registerSchema = baseSchema.extend({
     referrerUsername: zod_1.z.string().min(1),
-    placementParentUsername: zod_1.z.string().min(1),
 });
-// Superadmin registration: referrer + placement optional, role assignable (no superadmin)
+// Superadmin registration: referrer optional, role assignable (no superadmin)
 exports.adminRegisterSchema = baseSchema.extend({
     referrerUsername: zod_1.z.string().optional(),
-    placementParentUsername: zod_1.z.string().optional(),
     role: zod_1.z.enum(["admin", "staff", "user"]).optional().default("user"),
 });
 exports.loginSchema = zod_1.z.object({

@@ -7,6 +7,7 @@ const router = (0, express_1.Router)();
 router.get("/my", auth_1.verifyUser, controller_1.getMyRank);
 router.get("/", controller_1.getRanks);
 router.post("/", auth_1.verifySuperAdmin, controller_1.createRank);
+router.post("/release-salaries", auth_1.verifySuperAdmin, controller_1.releaseMonthlySalaries);
 router.put("/:id", auth_1.verifySuperAdmin, controller_1.updateRank);
 router.delete("/:id", auth_1.verifySuperAdmin, controller_1.deleteRank);
 exports.default = router;

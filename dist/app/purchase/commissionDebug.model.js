@@ -4,7 +4,7 @@ exports.CommissionDebug = void 0;
 const mongoose_1 = require("mongoose");
 const EntrySchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
-    role: { type: String, enum: ["referrer_direct", "managerial_gen"], required: true },
+    role: { type: String, enum: ["referrer_direct", "managerial_gen", "managerial_installment"], required: true },
     generation: { type: Number },
     field: { type: String, required: true },
     before: { type: Number, required: true },

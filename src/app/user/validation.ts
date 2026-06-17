@@ -7,16 +7,14 @@ const baseSchema = z.object({
   password: z.string().min(6),
 });
 
-// Public registration: referrer + placement required
+// Public registration: referrer required
 export const registerSchema = baseSchema.extend({
   referrerUsername: z.string().min(1),
-  placementParentUsername: z.string().min(1),
 });
 
-// Superadmin registration: referrer + placement optional, role assignable (no superadmin)
+// Superadmin registration: referrer optional, role assignable (no superadmin)
 export const adminRegisterSchema = baseSchema.extend({
   referrerUsername: z.string().optional(),
-  placementParentUsername: z.string().optional(),
   role: z.enum(["admin", "staff", "user"]).optional().default("user"),
 });
 

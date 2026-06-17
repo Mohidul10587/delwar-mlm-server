@@ -22,6 +22,10 @@ const UserSchema = new mongoose_1.Schema({
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
     currentRank: { type: String, default: null },
+    currentRankAchievedAt: { type: Date, default: null },
+    earnedRanks: [{ type: String }],
+    personalSharesCount: { type: Number, default: 0 },
+    totalPersonalPurchaseAmount: { type: Number, default: 0 },
     nominee: {
         type: {
             name: String,

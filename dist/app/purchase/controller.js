@@ -13,17 +13,17 @@ exports.getMyPurchases = exports.getPurchases = exports.createPurchase = void 0;
 const model_1 = require("./model");
 const model_2 = require("../share/model");
 const model_3 = require("../user/model");
+const model_4 = require("../settings/model");
 const service_1 = require("./service");
-const model_4 = require("../certificate/model");
+const model_5 = require("../certificate/model");
 // POST /purchase  — logged-in user submits a purchase request
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c;
     try {
-        const { shareId, quantity, paymentType, senderAccount, transactionId, buyerInfo } = req.body;
+        const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo } = req.body;
         const share = yield model_2.Share.findById(shareId);
         if (!share)
             return res.status(404).json({ message: "Share not found" });
-        // Auto-load nominee from user profile if not provided in buyerInfo
         const buyer = yield model_3.User.findById(req.user._id).select("name phone nominee nominee2");
         const resolvedBuyerInfo = buyerInfo !== null && buyerInfo !== void 0 ? buyerInfo : (buyer ? {
             name: buyer.name,
@@ -32,20 +32,59 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             nominee2: (_b = buyer.nominee2) !== null && _b !== void 0 ? _b : undefined,
         } : null);
         const qty = Number(quantity);
-        const amountPaid = paymentType === "cash"
-            ? share.cashPrice * qty
-            : share.installment.downPayment * qty;
+        const totalPayable = share.cashPrice * qty;
+        // Cash: fixed DP = cashDownPaymentLimit, 1 installment for remainder
+        // Installment: user-provided DP and installmentCount
+        const resolvedDP = paymentType === "cash" ? share.cashDownPaymentLimit * qty : Number(downPayment) * qty;
+        const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
+        const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
+        const amountPaid = resolvedDP;
+        // Build snapshot — locks all commission/config + rank/salary rules at time of purchase
+        const settings = yield model_4.Settings.findOne().lean();
+        const ranks = ((_c = settings === null || settings === void 0 ? void 0 : settings.ranks) !== null && _c !== void 0 ? _c : []);
+        const snapshot = {
+            shareTitle: share.title,
+            shareImage: share.image,
+            cashPrice: share.cashPrice,
+            cashDownPaymentLimit: share.cashDownPaymentLimit,
+            directSaleCommissionValue: share.directSaleCommissionValue,
+            downPaymentGenerationRates: share.downPaymentGenerationRates,
+            installmentCommissionRate: share.installmentCommissionRate,
+            rankQualification: ranks.map((r) => {
+                var _a, _b;
+                return ({
+                    rankName: r.name,
+                    order: r.order,
+                    requiredGeneration: (_a = r.requiredGeneration) !== null && _a !== void 0 ? _a : 1,
+                    requiredApprovedSales: (_b = r.requiredApprovedSales) !== null && _b !== void 0 ? _b : 0,
+                });
+            }),
+            salaryRules: ranks
+                .filter((r) => { var _a; return ((_a = r.salary) === null || _a === void 0 ? void 0 : _a.amount) > 0; })
+                .map((r) => ({
+                rankName: r.name,
+                amount: r.salary.amount,
+                durationMonths: r.salary.durationMonths,
+                minMonthlySales: r.salary.minMonthlySales,
+                requiredPersonalShares: r.salary.requiredPersonalShares,
+                requiredPersonalPurchaseAmount: r.salary.requiredPersonalPurchaseAmount,
+            })),
+        };
         const purchase = yield model_1.Purchase.create({
             userId: req.user._id,
             shareId,
             quantity: qty,
             paymentType,
+            downPayment: resolvedDP,
+            installmentCount: resolvedCount,
+            installmentAmount: resolvedInstallmentAmount,
             amountPaid,
             senderAccount,
             transactionId,
             buyerInfo: resolvedBuyerInfo,
+            snapshot,
         });
-        yield model_4.Certificate.create({
+        yield model_5.Certificate.create({
             userId: req.user._id,
             purchaseId: purchase._id,
             shareId,

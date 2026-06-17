@@ -25,7 +25,6 @@ export interface ISettings extends Document {
     minDownPayment: number;
     maxDownPayment: number;
     cashDownPaymentLimit: number;
-    installmentOptions: number[];
     minInstallments: number;
     maxInstallments: number;
     directSaleCommissionValue: number;
@@ -88,7 +87,6 @@ const SettingsSchema = new Schema<ISettings>({
       minDownPayment:       { type: Number, default: 15000 },
       maxDownPayment:       { type: Number, default: 50000 },
       cashDownPaymentLimit: { type: Number, default: 50000 },
-      installmentOptions:   [{ type: Number }],
       minInstallments:      { type: Number, default: 5 },
       maxInstallments:      { type: Number, default: 60 },
       directSaleCommissionValue: { type: Number, default: 0 },
@@ -99,7 +97,6 @@ const SettingsSchema = new Schema<ISettings>({
       minDownPayment: 15000,
       maxDownPayment: 50000,
       cashDownPaymentLimit: 50000,
-      installmentOptions: [5, 12, 24, 36, 60],
       minInstallments: 5,
       maxInstallments: 60,
       directSaleCommissionValue: 0,

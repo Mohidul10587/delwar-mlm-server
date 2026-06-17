@@ -16,7 +16,6 @@ export interface IShare extends Document {
   maxDownPayment: number;
 
   // Installment config
-  installmentOptions: number[]; // e.g. [5, 12, 24, 36, 60]
   minInstallments: number;
   maxInstallments: number;
 
@@ -51,7 +50,6 @@ const ShareSchema = new Schema<IShare>(
     minDownPayment: { type: Number, default: 15000 },
     maxDownPayment: { type: Number, default: 50000 },
 
-    installmentOptions: [{ type: Number }],
     minInstallments: { type: Number, default: 5 },
     maxInstallments: { type: Number, default: 60 },
 
