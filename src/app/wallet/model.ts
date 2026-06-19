@@ -4,7 +4,8 @@ export interface IWallet extends Document {
   userId: Types.ObjectId;
   balance: number;
   directCommissionBalance: number;
-  managerialCommissionBalance: number;
+  manCommFromDownPayment: number;
+  manCommFromInstallment: number;
   salaryBalance: number;
   rewardBalance: number;
 }
@@ -33,7 +34,8 @@ const WalletSchema = new Schema<IWallet>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     balance: { type: Number, default: 0 },
     directCommissionBalance: { type: Number, default: 0 },
-    managerialCommissionBalance: { type: Number, default: 0 },
+    manCommFromDownPayment: { type: Number, default: 0 },
+    manCommFromInstallment: { type: Number, default: 0 },
     salaryBalance: { type: Number, default: 0 },
     rewardBalance: { type: Number, default: 0 },
   },

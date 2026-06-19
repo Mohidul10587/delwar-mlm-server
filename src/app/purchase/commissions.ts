@@ -10,7 +10,8 @@ const findOrCreateWallet = async (userId: string) => {
       userId,
       balance: 0,
       directCommissionBalance: 0,
-      managerialCommissionBalance: 0,
+      manCommFromDownPayment: 0,
+      manCommFromInstallment: 0,
       salaryBalance: 0,
       rewardBalance: 0,
     });
@@ -106,14 +107,14 @@ export const distributeCommissions = async (purchaseId: string) => {
         if (genConfig && genConfig.rate > 0) {
           const commission = (genConfig.rate / 100) * downPaymentPortion;
           const wallet = await findOrCreateWallet(currentId);
-          wallet.managerialCommissionBalance += commission;
+          wallet.manCommFromDownPayment += commission;
           await wallet.save();
 
           await TransactionLog.create({
             userId: currentId,
             type: "managerial_commission",
             amount: commission,
-            balanceAfter: wallet.balance,
+            balanceAfter: wallet.manCommFromDownPayment,
             relatedPurchaseId: purchase._id,
             note: `Gen ${gen} DP managerial commission`,
           });
@@ -140,15 +141,15 @@ export const distributeCommissions = async (purchaseId: string) => {
           (snap.installmentCommissionRate / 100) * installmentPortion;
         if (commission > 0) {
           const wallet = await findOrCreateWallet(currentId);
-          const before = wallet.managerialCommissionBalance;
-          wallet.managerialCommissionBalance += commission;
+          const before = wallet.manCommFromInstallment;
+          wallet.manCommFromInstallment += commission;
           await wallet.save();
 
           await TransactionLog.create({
             userId: currentId,
             type: "managerial_installment_commission",
             amount: commission,
-            balanceAfter: wallet.balance,
+            balanceAfter: wallet.manCommFromInstallment,
             relatedPurchaseId: purchase._id,
             note: `Gen ${gen} installment portion commission`,
           });
@@ -195,14 +196,14 @@ export const distributeInstallmentPaymentCommission = async (
         (snap.installmentCommissionRate / 100) * installmentAmount;
       if (commission > 0) {
         const wallet = await findOrCreateWallet(currentId);
-        wallet.managerialCommissionBalance += commission;
+        wallet.manCommFromInstallment += commission;
         await wallet.save();
 
         await TransactionLog.create({
           userId: currentId,
           type: "managerial_installment_commission",
           amount: commission,
-          balanceAfter: wallet.balance,
+          balanceAfter: wallet.manCommFromInstallment,
           relatedPurchaseId: purchase._id,
           note: `Gen ${gen} installment payment commission`,
         });

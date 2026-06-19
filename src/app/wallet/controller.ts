@@ -2,7 +2,18 @@ import { Request, Response, NextFunction } from "express";
 import { Wallet, TransactionLog } from "./model";
 
 const findOrCreate = async (userId: string) => {
-  return await Wallet.findOne({ userId });
+  let wallet = await Wallet.findOne({ userId });
+  if (!wallet)
+    wallet = await Wallet.create({
+      userId,
+      balance: 0,
+      directCommissionBalance: 0,
+      manCommFromDownPayment: 0,
+      manCommFromInstallment: 0,
+      salaryBalance: 0,
+      rewardBalance: 0,
+    });
+  return wallet;
 };
 
 export const getMyWallet = async (req: Request, res: Response, next: NextFunction) => {

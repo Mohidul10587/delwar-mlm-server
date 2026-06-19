@@ -31,7 +31,8 @@ const mockPurchase = (overrides = {}) => ({
 
 const mockWallet = (balance = 0) => ({
   balance,
-  managerialCommissionBalance: 0,
+  manCommFromDownPayment: 0,
+  manCommFromInstallment: 0,
   save: jest.fn(),
 });
 
@@ -140,7 +141,7 @@ describe("distributeCommissions", () => {
     await distributeCommissions("purchase1");
 
     // managerialPool = 10% of 100000 = 10000; gen1 = 5% of 10000 = 500
-    expect(parentWallet.managerialCommissionBalance).toBe(500);
+    expect(parentWallet.manCommFromDownPayment).toBe(500);
     expect(TransactionLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ type: "managerial_commission", amount: 500 })
     );
@@ -205,6 +206,6 @@ describe("distributeCommissions", () => {
     await distributeCommissions("purchase1");
 
     // gen2 wallet should NOT receive managerial commission (maxGenerations: 1)
-    expect(gen2Wallet.managerialCommissionBalance).toBe(0);
+    expect(gen2Wallet.manCommFromDownPayment).toBe(0);
   });
 });

@@ -19,7 +19,8 @@ router.get("/full", async (_req: Request, res: Response) => {
       {},
       {
         balance: 0,
-        managerialCommissionBalance: 0,
+        manCommFromDownPayment: 0,
+        manCommFromInstallment: 0,
         directCommissionBalance: 0,
         salaryBalance: 0,
         rewardBalance: 0,
