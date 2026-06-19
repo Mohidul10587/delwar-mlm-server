@@ -33,9 +33,9 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         } : null);
         const qty = Number(quantity);
         const totalPayable = share.cashPrice * qty;
-        // Cash: fixed DP = cashDownPaymentLimit, 1 installment for remainder
+        // Cash: fixed DP = maxDownPayment, 1 installment for remainder
         // Installment: user-provided DP and installmentCount
-        const resolvedDP = paymentType === "cash" ? share.cashDownPaymentLimit * qty : Number(downPayment) * qty;
+        const resolvedDP = paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
         const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
         const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
         const amountPaid = resolvedDP;
@@ -46,17 +46,17 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             shareTitle: share.title,
             shareImage: share.image,
             cashPrice: share.cashPrice,
-            cashDownPaymentLimit: share.cashDownPaymentLimit,
+            minDownPayment: share.minDownPayment,
+            maxDownPayment: share.maxDownPayment,
             directSaleCommissionValue: share.directSaleCommissionValue,
             downPaymentGenerationRates: share.downPaymentGenerationRates,
             installmentCommissionRate: share.installmentCommissionRate,
             rankQualification: ranks.map((r) => {
-                var _a, _b;
+                var _a;
                 return ({
                     rankName: r.name,
                     order: r.order,
-                    requiredGeneration: (_a = r.requiredGeneration) !== null && _a !== void 0 ? _a : 1,
-                    requiredApprovedSales: (_b = r.requiredApprovedSales) !== null && _b !== void 0 ? _b : 0,
+                    requiredApprovedSales: (_a = r.requiredApprovedSales) !== null && _a !== void 0 ? _a : 0,
                 });
             }),
             salaryRules: ranks
@@ -67,7 +67,6 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
                 durationMonths: r.salary.durationMonths,
                 minMonthlySales: r.salary.minMonthlySales,
                 requiredPersonalShares: r.salary.requiredPersonalShares,
-                requiredPersonalPurchaseAmount: r.salary.requiredPersonalPurchaseAmount,
             })),
         };
         const purchase = yield model_1.Purchase.create({

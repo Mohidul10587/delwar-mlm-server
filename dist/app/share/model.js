@@ -20,7 +20,6 @@ const ShareSchema = new mongoose_1.Schema({
         },
     ],
     installmentCommissionRate: { type: Number, default: 0 },
-    cashDownPaymentLimit: { type: Number, default: 50000 },
     isActive: { type: Boolean, default: true },
     projectType: { type: String, default: "" },
     location: { type: String, default: "" },

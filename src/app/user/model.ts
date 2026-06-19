@@ -40,7 +40,6 @@ export interface IUser extends Document {
   currentRankAchievedAt?: Date;
   earnedRanks: string[];
   personalSharesCount: number;
-  totalPersonalPurchaseAmount: number;
   nominee?: INominee;
   nominee2?: INominee;
   district?: string;
@@ -64,7 +63,11 @@ const UserSchema = new Schema<IUser>(
     name: { type: String, required: true },
     phone: { type: String, required: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ["superadmin", "admin", "staff", "user"], default: "user" },
+    role: {
+      type: String,
+      enum: ["superadmin", "admin", "staff", "user"],
+      default: "user",
+    },
     isActive: { type: Boolean, default: true },
     image: { type: String, default: null },
     linkedPhoneAccounts: [{ type: Schema.Types.ObjectId, ref: "User" }],
@@ -77,7 +80,7 @@ const UserSchema = new Schema<IUser>(
     currentRankAchievedAt: { type: Date, default: null },
     earnedRanks: [{ type: String }],
     personalSharesCount: { type: Number, default: 0 },
-    totalPersonalPurchaseAmount: { type: Number, default: 0 },
+
     nominee: {
       type: {
         name: String,

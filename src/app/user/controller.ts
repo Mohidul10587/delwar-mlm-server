@@ -327,6 +327,22 @@ export const adminUpdatePassword = async (req: Request, res: Response, next: Nex
   } catch (err) { next(err); }
 };
 
+export const getUserDetails = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await Model.findById(req.params.id).select("-password").lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const referrerId = (user as any).generationAncestors?.[0]?.userId;
+    const referrer = referrerId
+      ? await Model.findById(referrerId).select("name username phone").lean()
+      : null;
+
+    const wallet = await Wallet.findOne({ userId: user._id }).lean();
+
+    res.json({ user: { ...user, referrer }, wallet });
+  } catch (err) { next(err); }
+};
+
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;

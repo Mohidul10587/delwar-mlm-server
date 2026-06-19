@@ -3,8 +3,13 @@ import { Purchase } from "./model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 import { distributeCommissions } from "./commissions";
+import { User } from "../user/model";
 
-export const updatePurchaseStatus = async (req: Request, res: Response, next: NextFunction) => {
+export const updatePurchaseStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { status, reviewNote } = req.body;
     if (!["approved", "rejected"].includes(status))
@@ -14,16 +19,48 @@ export const updatePurchaseStatus = async (req: Request, res: Response, next: Ne
 
     const purchase = await Purchase.findByIdAndUpdate(
       req.params.id,
-      { status, reviewNote: String(reviewNote ?? "").trim(), reviewedBy: req.user!._id, reviewedAt: new Date() },
+      {
+        status,
+        reviewNote: String(reviewNote ?? "").trim(),
+        reviewedBy: req.user!._id,
+        reviewedAt: new Date(),
+      },
       { new: true }
     );
-    if (!purchase)
+    if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
+    }
 
-    const purchaseWithShare = await Purchase.findById(purchase._id).populate("shareId", "cashPrice").lean();
+    if (status === "approved" && !purchase.commissionProcessed) {
+      // For cash: mark full amount as paid (downPayment + remainder)
+      if (purchase.paymentType === "cash") {
+        const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
+        if (fullAmount > purchase.amountPaid) {
+          purchase.amountPaid = fullAmount;
+          await purchase.save();
+        }
+      }
+
+      distributeCommissions((purchase._id as any).toString());
+
+      await User.findByIdAndUpdate(purchase.userId, {
+        $inc: {
+          personalSharesCount: purchase.quantity,
+        },
+      });
+    }
+
+    const purchaseWithShare = await Purchase.findById(purchase._id)
+      .populate("shareId", "cashPrice")
+      .lean();
     if (purchaseWithShare) {
-      const sharePrice = Number((purchaseWithShare as any)?.shareId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(sharePrice, purchaseWithShare.quantity);
+      const sharePrice = Number(
+        (purchaseWithShare as any)?.shareId?.cashPrice ?? 0
+      );
+      const totalPayable = calculateTotalPayable(
+        sharePrice,
+        purchaseWithShare.quantity
+      );
       const certificateStatus = calculateCertificateStatus({
         status: purchaseWithShare.status,
         paymentType: purchaseWithShare.paymentType,
@@ -32,25 +69,16 @@ export const updatePurchaseStatus = async (req: Request, res: Response, next: Ne
       });
       await Certificate.findOneAndUpdate(
         { purchaseId: purchase._id },
-        { status: certificateStatus, issuedAt: certificateStatus === "issued" ? new Date() : undefined },
+        {
+          status: certificateStatus,
+          issuedAt: certificateStatus === "issued" ? new Date() : undefined,
+        },
         { upsert: true, new: true }
       );
     }
 
-    if (status === "approved" && !purchase.commissionProcessed) {
-      distributeCommissions((purchase._id as any).toString());
-      // Update buyer's personal purchase stats
-      await (await import("../user/model")).User.findByIdAndUpdate(purchase.userId, {
-        $inc: {
-          personalSharesCount: purchase.quantity,
-          totalPersonalPurchaseAmount: purchase.amountPaid,
-        },
-      });
-    }
-
-    res.json({
-      message: `Purchase ${status}`,
-      purchase,
-    });
-  } catch (err) { next(err); }
+    res.json({ message: `Purchase ${status}`, purchase });
+  } catch (err) {
+    next(err);
+  }
 };

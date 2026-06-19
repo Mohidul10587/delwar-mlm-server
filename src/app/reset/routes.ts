@@ -3,33 +3,40 @@ import { Purchase } from "../purchase/model";
 import { InstallmentPayment } from "../purchase/installment.model";
 import { Certificate } from "../certificate/model";
 import { Wallet, TransactionLog } from "../wallet/model";
-import { CommissionDebug } from "../purchase/commissionDebug.model";
+import { User } from "../user/model";
+import { RankSalaryLog } from "../rank/salary-log.model";
 
 const router = Router();
 
-router.get("/commission-debug", async (_req: Request, res: Response) => {
-  const logs = await CommissionDebug.find().sort({ createdAt: -1 }).lean();
-  res.json({ logs });
-});
-
-router.delete("/commission-debug", async (_req: Request, res: Response) => {
-  await CommissionDebug.deleteMany({});
-  res.json({ message: "Commission debug logs cleared" });
-});
-
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/full", async (_req: Request, res: Response) => {
   await Promise.all([
     Purchase.deleteMany({}),
     InstallmentPayment.deleteMany({}),
     Certificate.deleteMany({}),
     TransactionLog.deleteMany({}),
-    CommissionDebug.deleteMany({}),
-    Wallet.updateMany({}, {
-      balance: 0,
-      pendingManagerialCommissionBalance: 0,
-    }),
+    RankSalaryLog.deleteMany({}),
+    Wallet.updateMany(
+      {},
+      {
+        balance: 0,
+        managerialCommissionBalance: 0,
+        salaryBalance: 0,
+        rewardBalance: 0,
+      }
+    ),
+    User.updateMany(
+      {},
+      {
+        currentRank: null,
+        currentRankAchievedAt: null,
+        earnedRanks: [],
+        directSalesCount: 0,
+        teamSalesCount: 0,
+        personalSharesCount: 0,
+      }
+    ),
   ]);
-  res.json({ message: "Reset complete" });
+  res.json({ message: "Full reset complete" });
 });
 
 export default router;

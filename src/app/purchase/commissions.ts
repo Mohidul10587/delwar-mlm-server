@@ -1,13 +1,26 @@
 import { Purchase } from "./model";
-import { CommissionDebug, ICommissionDebugEntry } from "./commissionDebug.model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { recalcUserRank } from "../rank/controller";
 
+const findOrCreateWallet = async (userId: string) => {
+  let wallet = await Wallet.findOne({ userId });
+  if (!wallet)
+    wallet = await Wallet.create({
+      userId,
+      balance: 0,
+      directCommissionBalance: 0,
+      managerialCommissionBalance: 0,
+      salaryBalance: 0,
+      rewardBalance: 0,
+    });
+  return wallet;
+};
+
 /**
  * Commission distribution using per-purchase snapshot config.
  *
- * Cash purchase: split into down-payment portion (≤ cashDownPaymentLimit)
+ * Cash purchase: split into down-payment portion (≤ maxDownPayment)
  *   and installment portion (remainder). Each uses different commission rules.
  *
  * Installment purchase: down-payment portion = amountPaid (first payment).
@@ -28,14 +41,11 @@ export const distributeCommissions = async (purchaseId: string) => {
     if (!snap) return; // no snapshot means pre-migration purchase; skip
 
     const buyer = await User.findById(purchase.userId).select(
-      "generationAncestors placementAncestors name username"
+      "generationAncestors name username"
     );
     if (!buyer) return;
 
     const referrerId = buyer.generationAncestors[0]?.userId ?? null;
-    const placementParentId = buyer.placementAncestors[0]?.userId ?? null;
-
-    const debugEntries: ICommissionDebugEntry[] = [];
 
     // ── Determine down-payment portion and installment portion ────────────────
     const totalAmount = snap.cashPrice * purchase.quantity;
@@ -43,154 +53,111 @@ export const distributeCommissions = async (purchaseId: string) => {
     let installmentPortion: number;
 
     if (purchase.paymentType === "cash") {
-      // Cash: DP portion = cashDownPaymentLimit × qty; remainder = installment portion
-      downPaymentPortion = Math.min(snap.cashDownPaymentLimit, snap.cashPrice) * purchase.quantity;
-      installmentPortion = Math.max(0, snap.cashPrice - snap.cashDownPaymentLimit) * purchase.quantity;
+      downPaymentPortion =
+        Math.min(snap.maxDownPayment, snap.cashPrice) * purchase.quantity;
+      installmentPortion =
+        Math.max(0, snap.cashPrice - snap.maxDownPayment) * purchase.quantity;
     } else {
-      // Installment purchase: only the down payment is being approved now
-      downPaymentPortion = purchase.amountPaid; // already = maxDownPayment × qty
-      installmentPortion = 0; // installment portions handled per installment payment
+      downPaymentPortion = purchase.amountPaid;
+      installmentPortion = 0;
     }
 
     // ── 1. Direct Sale Commission ─────────────────────────────────────────────
     if (referrerId) {
-      const base = purchase.paymentType === "cash" ? totalAmount : downPaymentPortion;
+      const base =
+        purchase.paymentType === "cash" ? totalAmount : downPaymentPortion;
       const commission = (snap.directSaleCommissionValue / 100) * base;
 
       if (commission > 0) {
-        const wallet = await Wallet.findOne({ userId: referrerId });
-        if (wallet) {
-          const before = wallet.balance;
-          wallet.balance += commission;
-          await wallet.save();
+        const wallet = await findOrCreateWallet(referrerId.toString());
+        wallet.directCommissionBalance += commission;
+        await wallet.save();
 
-          const referrer = await User.findById(referrerId).select("name username");
-          debugEntries.push({
-            userId: referrerId,
-            role: "referrer_direct",
-            field: "balance",
-            before,
-            added: commission,
-            after: wallet.balance,
-          description: `Direct sale commission (${snap.directSaleCommissionValue}%): ৳${commission}`,
-          });
-
-          await TransactionLog.create({
-            userId: referrerId,
-            type: "direct_commission",
-            amount: commission,
-            balanceAfter: wallet.balance,
-            relatedPurchaseId: purchase._id,
-            note: `Direct commission from purchase`,
-          });
-        }
+        await TransactionLog.create({
+          userId: referrerId,
+          type: "direct_commission",
+          amount: commission,
+          balanceAfter: wallet.directCommissionBalance,
+          relatedPurchaseId: purchase._id,
+          note: `Direct commission from purchase`,
+        });
       }
 
-      await User.findByIdAndUpdate(referrerId, { $inc: { directSalesCount: purchase.quantity } });
+      await User.findByIdAndUpdate(referrerId, {
+        $inc: { directSalesCount: purchase.quantity },
+      });
       await recalcUserRank(referrerId.toString());
     }
 
     // ── 2. Down Payment Managerial Commission (generation-specific rates) ─────
+    // Walk up generationAncestors: level 1 = direct referrer, level 2 = their referrer, etc.
     if (downPaymentPortion > 0) {
-      let currentId = placementParentId?.toString();
       const maxGen = snap.downPaymentGenerationRates.length;
+      for (let gen = 1; gen <= maxGen; gen++) {
+        const ancestor = buyer.generationAncestors.find(
+          (a: any) => a.level === gen
+        );
+        if (!ancestor) break;
+        const currentId = ancestor.userId.toString();
 
-      for (let gen = 1; gen <= maxGen && currentId; gen++) {
-        const genConfig = snap.downPaymentGenerationRates.find((g) => g.generation === gen);
+        const genConfig = snap.downPaymentGenerationRates.find(
+          (g) => g.generation === gen
+        );
         if (genConfig && genConfig.rate > 0) {
           const commission = (genConfig.rate / 100) * downPaymentPortion;
+          const wallet = await findOrCreateWallet(currentId);
+          wallet.managerialCommissionBalance += commission;
+          await wallet.save();
 
-          const wallet = await Wallet.findOne({ userId: currentId });
-          if (wallet) {
-            const before = wallet.pendingManagerialCommissionBalance;
-            wallet.pendingManagerialCommissionBalance += commission;
-            await wallet.save();
-
-            debugEntries.push({
-              userId: wallet.userId,
-              role: "managerial_gen",
-              generation: gen,
-              field: "pendingManagerialCommissionBalance",
-              before,
-              added: commission,
-              after: wallet.pendingManagerialCommissionBalance,
-              description: `DP managerial gen ${gen} (${genConfig.rate}%): ৳${commission}`,
-            });
-
-            await TransactionLog.create({
-              userId: currentId,
-              type: "managerial_commission",
-              amount: commission,
-              balanceAfter: wallet.balance,
-              relatedPurchaseId: purchase._id,
-              note: `Gen ${gen} DP commission`,
-            });
-          }
+          await TransactionLog.create({
+            userId: currentId,
+            type: "managerial_commission",
+            amount: commission,
+            balanceAfter: wallet.balance,
+            relatedPurchaseId: purchase._id,
+            note: `Gen ${gen} DP managerial commission`,
+          });
         }
 
-        await User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: purchase.quantity } });
+        await User.findByIdAndUpdate(currentId, {
+          $inc: { teamSalesCount: purchase.quantity },
+        });
         await recalcUserRank(currentId);
-
-        const ancestor = await User.findById(currentId).select("placementAncestors");
-        currentId = (ancestor as any)?.placementAncestors?.[0]?.userId?.toString();
       }
     }
 
     // ── 3. Installment Portion Managerial Commission (same rate for all gens) ─
     if (installmentPortion > 0 && snap.installmentCommissionRate > 0) {
-      let currentId = placementParentId?.toString();
       const maxGen = snap.downPaymentGenerationRates.length || 5;
+      for (let gen = 1; gen <= maxGen; gen++) {
+        const ancestor = buyer.generationAncestors.find(
+          (a: any) => a.level === gen
+        );
+        if (!ancestor) break;
+        const currentId = ancestor.userId.toString();
 
-      for (let gen = 1; gen <= maxGen && currentId; gen++) {
-        const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
-
+        const commission =
+          (snap.installmentCommissionRate / 100) * installmentPortion;
         if (commission > 0) {
-          const wallet = await Wallet.findOne({ userId: currentId });
-          if (wallet) {
-            const before = wallet.pendingManagerialCommissionBalance;
-            wallet.pendingManagerialCommissionBalance += commission;
-            await wallet.save();
+          const wallet = await findOrCreateWallet(currentId);
+          const before = wallet.managerialCommissionBalance;
+          wallet.managerialCommissionBalance += commission;
+          await wallet.save();
 
-            debugEntries.push({
-              userId: wallet.userId,
-              role: "managerial_installment",
-              generation: gen,
-              field: "pendingManagerialCommissionBalance",
-              before,
-              added: commission,
-              after: wallet.pendingManagerialCommissionBalance,
-              description: `Installment portion commission (${snap.installmentCommissionRate}%): ৳${commission}`,
-            });
-
-            await TransactionLog.create({
-              userId: currentId,
-              type: "managerial_installment_commission",
-              amount: commission,
-              balanceAfter: wallet.balance,
-              relatedPurchaseId: purchase._id,
-              note: `Installment portion commission gen ${gen}`,
-            });
-          }
+          await TransactionLog.create({
+            userId: currentId,
+            type: "managerial_installment_commission",
+            amount: commission,
+            balanceAfter: wallet.balance,
+            relatedPurchaseId: purchase._id,
+            note: `Gen ${gen} installment portion commission`,
+          });
         }
-
-        const ancestor = await User.findById(currentId).select("placementAncestors");
-        currentId = (ancestor as any)?.placementAncestors?.[0]?.userId?.toString();
       }
     }
 
     purchase.commissionProcessed = true;
     await purchase.save();
-
-    await CommissionDebug.create({
-      purchaseId: purchase._id,
-      buyerId: purchase.userId,
-      buyerName: buyer.name,
-      buyerUsername: buyer.username,
-      shareTitle: snap.shareTitle,
-      paymentType: purchase.paymentType,
-      approvedAmount: purchase.amountPaid,
-      entries: debugEntries,
-    });
   } catch (err) {
     console.error("Commission distribution error:", err);
   }
@@ -211,34 +178,35 @@ export const distributeInstallmentPaymentCommission = async (
     const snap = purchase.snapshot;
     if (!snap || snap.installmentCommissionRate <= 0) return;
 
-    const buyer = await User.findById(purchase.userId).select("placementAncestors");
+    const buyer = await User.findById(purchase.userId).select(
+      "generationAncestors"
+    );
     if (!buyer) return;
 
-    let currentId = buyer.placementAncestors?.[0]?.userId?.toString();
     const maxGen = snap.downPaymentGenerationRates.length || 5;
+    for (let gen = 1; gen <= maxGen; gen++) {
+      const ancestor = buyer.generationAncestors.find(
+        (a: any) => a.level === gen
+      );
+      if (!ancestor) break;
+      const currentId = ancestor.userId.toString();
 
-    for (let gen = 1; gen <= maxGen && currentId; gen++) {
-      const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
-
+      const commission =
+        (snap.installmentCommissionRate / 100) * installmentAmount;
       if (commission > 0) {
-        const wallet = await Wallet.findOne({ userId: currentId });
-        if (wallet) {
-          wallet.pendingManagerialCommissionBalance += commission;
-          await wallet.save();
+        const wallet = await findOrCreateWallet(currentId);
+        wallet.managerialCommissionBalance += commission;
+        await wallet.save();
 
-          await TransactionLog.create({
-            userId: currentId,
-            type: "managerial_installment_commission",
-            amount: commission,
-            balanceAfter: wallet.balance,
-            relatedPurchaseId: purchase._id,
-            note: `Installment payment commission gen ${gen}`,
-          });
-        }
+        await TransactionLog.create({
+          userId: currentId,
+          type: "managerial_installment_commission",
+          amount: commission,
+          balanceAfter: wallet.balance,
+          relatedPurchaseId: purchase._id,
+          note: `Gen ${gen} installment payment commission`,
+        });
       }
-
-      const ancestor = await User.findById(currentId).select("placementAncestors");
-      currentId = (ancestor as any)?.placementAncestors?.[0]?.userId?.toString();
     }
   } catch (err) {
     console.error("Installment payment commission error:", err);

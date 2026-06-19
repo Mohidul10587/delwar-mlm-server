@@ -26,10 +26,10 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     const qty = Number(quantity);
     const totalPayable = share.cashPrice * qty;
 
-    // Cash: fixed DP = cashDownPaymentLimit, 1 installment for remainder
+    // Cash: fixed DP = maxDownPayment, 1 installment for remainder
     // Installment: user-provided DP and installmentCount
     const resolvedDP =
-      paymentType === "cash" ? share.cashDownPaymentLimit * qty : Number(downPayment) * qty;
+      paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
     const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
     const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
     const amountPaid = resolvedDP;
@@ -41,14 +41,14 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       shareTitle: share.title,
       shareImage: share.image,
       cashPrice: share.cashPrice,
-      cashDownPaymentLimit: share.cashDownPaymentLimit,
+      minDownPayment: share.minDownPayment,
+      maxDownPayment: share.maxDownPayment,
       directSaleCommissionValue: share.directSaleCommissionValue,
       downPaymentGenerationRates: share.downPaymentGenerationRates,
       installmentCommissionRate: share.installmentCommissionRate,
       rankQualification: ranks.map((r: any) => ({
         rankName: r.name,
         order: r.order,
-        requiredGeneration: r.requiredGeneration ?? 1,
         requiredApprovedSales: r.requiredApprovedSales ?? 0,
       })),
       salaryRules: ranks
@@ -59,7 +59,6 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
           durationMonths: r.salary.durationMonths,
           minMonthlySales: r.salary.minMonthlySales,
           requiredPersonalShares: r.salary.requiredPersonalShares,
-          requiredPersonalPurchaseAmount: r.salary.requiredPersonalPurchaseAmount,
         })),
     };
 

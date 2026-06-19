@@ -28,9 +28,6 @@ export interface IShare extends Document {
   // Installment managerial commission (same rate for all generations)
   installmentCommissionRate: number; // %
 
-  // Cash purchase: max amount treated as down payment portion
-  cashDownPaymentLimit: number; // default 50000
-
   isActive: boolean;
   projectType?: string;
   location?: string;
@@ -64,8 +61,6 @@ const ShareSchema = new Schema<IShare>(
     ],
 
     installmentCommissionRate: { type: Number, default: 0 },
-
-    cashDownPaymentLimit: { type: Number, default: 50000 },
 
     isActive: { type: Boolean, default: true },
     projectType: { type: String, default: "" },

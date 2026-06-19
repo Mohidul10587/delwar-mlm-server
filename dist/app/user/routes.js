@@ -13,6 +13,7 @@ router.post("/refresh", controller_1.refresh);
 router.post("/logout", auth_1.verifyUser, controller_1.logout);
 router.post("/switch/:targetUserId", auth_1.verifyUser, controller_1.switchAccount);
 router.get("/stats", auth_1.verifySuperAdmin, stats_controller_1.getSuperAdminStats);
+router.get("/details/:id", auth_1.verifyAdmin, controller_1.getUserDetails);
 router.get("/list", auth_1.verifyAdmin, controller_1.getUsers);
 router.delete("/admin/delete/:id", auth_1.verifySuperAdmin, controller_1.deleteUser);
 router.patch("/admin/toggle/:id", auth_1.verifyAdmin, controller_1.toggleUserActive);

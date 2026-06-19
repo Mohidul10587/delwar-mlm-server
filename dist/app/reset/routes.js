@@ -14,28 +14,31 @@ const model_1 = require("../purchase/model");
 const installment_model_1 = require("../purchase/installment.model");
 const model_2 = require("../certificate/model");
 const model_3 = require("../wallet/model");
-const commissionDebug_model_1 = require("../purchase/commissionDebug.model");
+const model_4 = require("../user/model");
+const salary_log_model_1 = require("../rank/salary-log.model");
 const router = (0, express_1.Router)();
-router.get("/commission-debug", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const logs = yield commissionDebug_model_1.CommissionDebug.find().sort({ createdAt: -1 }).lean();
-    res.json({ logs });
-}));
-router.delete("/commission-debug", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    yield commissionDebug_model_1.CommissionDebug.deleteMany({});
-    res.json({ message: "Commission debug logs cleared" });
-}));
-router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     yield Promise.all([
         model_1.Purchase.deleteMany({}),
         installment_model_1.InstallmentPayment.deleteMany({}),
         model_2.Certificate.deleteMany({}),
         model_3.TransactionLog.deleteMany({}),
-        commissionDebug_model_1.CommissionDebug.deleteMany({}),
+        salary_log_model_1.RankSalaryLog.deleteMany({}),
         model_3.Wallet.updateMany({}, {
             balance: 0,
-            pendingManagerialCommissionBalance: 0,
+            managerialCommissionBalance: 0,
+            salaryBalance: 0,
+            rewardBalance: 0,
+        }),
+        model_4.User.updateMany({}, {
+            currentRank: null,
+            currentRankAchievedAt: null,
+            earnedRanks: [],
+            directSalesCount: 0,
+            teamSalesCount: 0,
+            personalSharesCount: 0,
         }),
     ]);
-    res.json({ message: "Reset complete" });
+    res.json({ message: "Full reset complete" });
 }));
 exports.default = router;

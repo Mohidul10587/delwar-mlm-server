@@ -30,7 +30,7 @@ const mockPurchase = (overrides = {}) => (Object.assign({ _id: "purchase1", user
     }, save: jest.fn() }, overrides));
 const mockWallet = (balance = 0) => ({
     balance,
-    pendingManagerialCommissionBalance: 0,
+    managerialCommissionBalance: 0,
     save: jest.fn(),
 });
 beforeEach(() => {
@@ -114,7 +114,7 @@ describe("distributeCommissions", () => {
             .mockResolvedValueOnce(parentWallet); // gen1 managerial commission
         yield (0, commissions_1.distributeCommissions)("purchase1");
         // managerialPool = 10% of 100000 = 10000; gen1 = 5% of 10000 = 500
-        expect(parentWallet.pendingManagerialCommissionBalance).toBe(500);
+        expect(parentWallet.managerialCommissionBalance).toBe(500);
         expect(model_2.TransactionLog.create).toHaveBeenCalledWith(expect.objectContaining({ type: "managerial_commission", amount: 500 }));
     }));
     test("sets commissionProcessed to true after distribution", () => __awaiter(void 0, void 0, void 0, function* () {
@@ -162,6 +162,6 @@ describe("distributeCommissions", () => {
             .mockResolvedValueOnce(gen2Wallet);
         yield (0, commissions_1.distributeCommissions)("purchase1");
         // gen2 wallet should NOT receive managerial commission (maxGenerations: 1)
-        expect(gen2Wallet.pendingManagerialCommissionBalance).toBe(0);
+        expect(gen2Wallet.managerialCommissionBalance).toBe(0);
     }));
 });

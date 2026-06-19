@@ -24,7 +24,6 @@ export interface ISettings extends Document {
   defaultShareConfig: {
     minDownPayment: number;
     maxDownPayment: number;
-    cashDownPaymentLimit: number;
     minInstallments: number;
     maxInstallments: number;
     directSaleCommissionValue: number;
@@ -36,12 +35,9 @@ export interface ISettings extends Document {
   ranks: {
     name: string;
     order: number;
-    requiredGeneration: number;
     requiredApprovedSales: number;
     reward?: {
       name: string;
-      type: "cash" | "product" | "gift" | "vehicle" | "tour" | "electronics" | "other";
-      value: number;
       description: string;
     };
     salary?: {
@@ -49,7 +45,6 @@ export interface ISettings extends Document {
       durationMonths: number;
       minMonthlySales: number;
       requiredPersonalShares: number;
-      requiredPersonalPurchaseAmount: number;
     };
   }[];
   // Branches
@@ -86,7 +81,6 @@ const SettingsSchema = new Schema<ISettings>({
     type: {
       minDownPayment:       { type: Number, default: 15000 },
       maxDownPayment:       { type: Number, default: 50000 },
-      cashDownPaymentLimit: { type: Number, default: 50000 },
       minInstallments:      { type: Number, default: 5 },
       maxInstallments:      { type: Number, default: 60 },
       directSaleCommissionValue: { type: Number, default: 0 },
@@ -96,7 +90,6 @@ const SettingsSchema = new Schema<ISettings>({
     default: () => ({
       minDownPayment: 15000,
       maxDownPayment: 50000,
-      cashDownPaymentLimit: 50000,
       minInstallments: 5,
       maxInstallments: 60,
       directSaleCommissionValue: 0,
@@ -108,12 +101,9 @@ const SettingsSchema = new Schema<ISettings>({
   ranks: [{
     name: { type: String },
     order: { type: Number, default: 0 },
-    requiredGeneration: { type: Number, default: 1 },
     requiredApprovedSales: { type: Number, default: 0 },
     reward: {
       name: { type: String, default: "" },
-      type: { type: String, enum: ["cash", "product", "gift", "vehicle", "tour", "electronics", "other"], default: "gift" },
-      value: { type: Number, default: 0 },
       description: { type: String, default: "" },
     },
     salary: {
@@ -121,7 +111,6 @@ const SettingsSchema = new Schema<ISettings>({
       durationMonths: { type: Number, default: 0 },
       minMonthlySales: { type: Number, default: 0 },
       requiredPersonalShares: { type: Number, default: 0 },
-      requiredPersonalPurchaseAmount: { type: Number, default: 0 },
     },
   }],
   branches: [{ type: String }],

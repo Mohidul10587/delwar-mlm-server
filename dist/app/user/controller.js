@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePermissions = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
+exports.updatePermissions = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -338,6 +338,24 @@ const adminUpdatePassword = (req, res, next) => __awaiter(void 0, void 0, void 0
     }
 });
 exports.adminUpdatePassword = adminUpdatePassword;
+const getUserDetails = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    try {
+        const user = yield model_1.User.findById(req.params.id).select("-password").lean();
+        if (!user)
+            return res.status(404).json({ message: "User not found" });
+        const referrerId = (_b = (_a = user.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId;
+        const referrer = referrerId
+            ? yield model_1.User.findById(referrerId).select("name username phone").lean()
+            : null;
+        const wallet = yield model_2.Wallet.findOne({ userId: user._id }).lean();
+        res.json({ user: Object.assign(Object.assign({}, user), { referrer }), wallet });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getUserDetails = getUserDetails;
 const getUsers = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const page = parseInt(req.query.page) || 1;

@@ -5,7 +5,8 @@ const mongoose_1 = require("mongoose");
 const WalletSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     balance: { type: Number, default: 0 },
-    pendingManagerialCommissionBalance: { type: Number, default: 0 },
+    directCommissionBalance: { type: Number, default: 0 },
+    managerialCommissionBalance: { type: Number, default: 0 },
     salaryBalance: { type: Number, default: 0 },
     rewardBalance: { type: Number, default: 0 },
 }, { timestamps: true });

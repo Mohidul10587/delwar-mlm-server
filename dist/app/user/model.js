@@ -12,7 +12,11 @@ const UserSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     phone: { type: String, required: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ["superadmin", "admin", "staff", "user"], default: "user" },
+    role: {
+        type: String,
+        enum: ["superadmin", "admin", "staff", "user"],
+        default: "user",
+    },
     isActive: { type: Boolean, default: true },
     image: { type: String, default: null },
     linkedPhoneAccounts: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
@@ -25,7 +29,6 @@ const UserSchema = new mongoose_1.Schema({
     currentRankAchievedAt: { type: Date, default: null },
     earnedRanks: [{ type: String }],
     personalSharesCount: { type: Number, default: 0 },
-    totalPersonalPurchaseAmount: { type: Number, default: 0 },
     nominee: {
         type: {
             name: String,

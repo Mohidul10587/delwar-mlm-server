@@ -26,7 +26,6 @@ const SettingsSchema = new mongoose_1.Schema({
         type: {
             minDownPayment: { type: Number, default: 15000 },
             maxDownPayment: { type: Number, default: 50000 },
-            cashDownPaymentLimit: { type: Number, default: 50000 },
             minInstallments: { type: Number, default: 5 },
             maxInstallments: { type: Number, default: 60 },
             directSaleCommissionValue: { type: Number, default: 0 },
@@ -36,7 +35,6 @@ const SettingsSchema = new mongoose_1.Schema({
         default: () => ({
             minDownPayment: 15000,
             maxDownPayment: 50000,
-            cashDownPaymentLimit: 50000,
             minInstallments: 5,
             maxInstallments: 60,
             directSaleCommissionValue: 0,
@@ -48,12 +46,9 @@ const SettingsSchema = new mongoose_1.Schema({
     ranks: [{
             name: { type: String },
             order: { type: Number, default: 0 },
-            requiredGeneration: { type: Number, default: 1 },
             requiredApprovedSales: { type: Number, default: 0 },
             reward: {
                 name: { type: String, default: "" },
-                type: { type: String, enum: ["cash", "product", "gift", "vehicle", "tour", "electronics", "other"], default: "gift" },
-                value: { type: Number, default: 0 },
                 description: { type: String, default: "" },
             },
             salary: {
@@ -61,7 +56,6 @@ const SettingsSchema = new mongoose_1.Schema({
                 durationMonths: { type: Number, default: 0 },
                 minMonthlySales: { type: Number, default: 0 },
                 requiredPersonalShares: { type: Number, default: 0 },
-                requiredPersonalPurchaseAmount: { type: Number, default: 0 },
             },
         }],
     branches: [{ type: String }],

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
   register, adminRegister, login, verify, logout, refresh,
-  switchAccount, toggleUserActive, getUsers, deleteUser,
+  switchAccount, toggleUserActive, getUsers, deleteUser, getUserDetails,
   adminUpdatePhone, adminUpdatePassword, adminUpdateRelations,
   updatePhone, updateImage, changePassword, updatePermissions, updateInfo,
 } from "./controller";
@@ -20,6 +20,7 @@ router.post("/logout", verifyUser, logout);
 router.post("/switch/:targetUserId", verifyUser, switchAccount);
 
 router.get("/stats", verifySuperAdmin, getSuperAdminStats);
+router.get("/details/:id", verifyAdmin, getUserDetails);
 router.get("/list", verifyAdmin, getUsers);
 router.delete("/admin/delete/:id", verifySuperAdmin, deleteUser);
 router.patch("/admin/toggle/:id", verifyAdmin, toggleUserActive);

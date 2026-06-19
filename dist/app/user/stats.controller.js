@@ -26,7 +26,7 @@ const getSuperAdminStats = (_req, res) => __awaiter(void 0, void 0, void 0, func
         model_3.Purchase.countDocuments({ status: "approved" }),
         model_4.Withdrawal.countDocuments({ status: "pending" }),
         model_4.Withdrawal.countDocuments({ status: "approved" }),
-        model_5.Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: "$balance" }, totalManagerialCommission: { $sum: "$pendingManagerialCommissionBalance" } } }]),
+        model_5.Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: "$balance" }, totalManagerialCommission: { $sum: "$managerialCommissionBalance" } } }]),
     ]);
     res.json({
         totalUsers,
