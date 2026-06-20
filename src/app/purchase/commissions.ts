@@ -8,7 +8,7 @@ const findOrCreateWallet = async (userId: string) => {
   if (!wallet)
     wallet = await Wallet.create({
       userId,
-      balance: 0,
+      totalBalance: 0,
       directCommissionBalance: 0,
       manCommFromDownPayment: 0,
       manCommFromInstallment: 0,
@@ -28,7 +28,7 @@ const findOrCreateWallet = async (userId: string) => {
  *   Subsequent installment payments trigger installment commission separately.
  *
  * Direct Sale Commission: goes to the buyer's direct referrer (gen ancestor[0])
- *   immediately into wallet.balance.
+ *   immediately into wallet.directCommissionBalance.
  *
  * Managerial Commission (Down Payment portion): generation-specific rates from snapshot.
  * Managerial Commission (Installment portion): same rate for all generations from snapshot.
@@ -65,9 +65,7 @@ export const distributeCommissions = async (purchaseId: string) => {
 
     // ── 1. Direct Sale Commission ─────────────────────────────────────────────
     if (referrerId) {
-      const base =
-        purchase.paymentType === "cash" ? totalAmount : downPaymentPortion;
-      const commission = (snap.directSaleCommissionValue / 100) * base;
+      const commission = (snap.directSaleCommissionValue / 100) * downPaymentPortion;
 
       if (commission > 0) {
         const wallet = await findOrCreateWallet(referrerId.toString());

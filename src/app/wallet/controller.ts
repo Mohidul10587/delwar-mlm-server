@@ -6,7 +6,7 @@ const findOrCreate = async (userId: string) => {
   if (!wallet)
     wallet = await Wallet.create({
       userId,
-      balance: 0,
+      totalBalance: 0,
       directCommissionBalance: 0,
       manCommFromDownPayment: 0,
       manCommFromInstallment: 0,
@@ -39,9 +39,9 @@ export const adminCredit = async (req: Request, res: Response, next: NextFunctio
     const { amount, note } = req.body;
     const wallet = await findOrCreate(req.params.userId);
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
-    wallet.balance += Number(amount);
+    wallet.directCommissionBalance += Number(amount);
     await wallet.save();
-    await TransactionLog.create({ userId: req.params.userId, type: "admin_credit", amount, balanceAfter: wallet.balance, note: note || "" });
+    await TransactionLog.create({ userId: req.params.userId, type: "admin_credit", amount, balanceAfter: wallet.directCommissionBalance, note: note || "" });
     res.json({ message: "Credited", wallet });
   } catch (err) { next(err); }
 };
@@ -51,9 +51,9 @@ export const adminDebit = async (req: Request, res: Response, next: NextFunction
     const { amount, note } = req.body;
     const wallet = await findOrCreate(req.params.userId);
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
-    wallet.balance = Math.max(0, wallet.balance - Number(amount));
+    wallet.directCommissionBalance = Math.max(0, wallet.directCommissionBalance - Number(amount));
     await wallet.save();
-    await TransactionLog.create({ userId: req.params.userId, type: "admin_debit", amount, balanceAfter: wallet.balance, note: note || "" });
+    await TransactionLog.create({ userId: req.params.userId, type: "admin_debit", amount, balanceAfter: wallet.directCommissionBalance, note: note || "" });
     res.json({ message: "Debited", wallet });
   } catch (err) { next(err); }
 };

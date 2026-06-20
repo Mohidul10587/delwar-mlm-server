@@ -18,13 +18,22 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
 
     const wallet = await findOrCreateWallet(req.user!._id.toString());
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
-    if (wallet.balance < amt)
+    if (wallet.totalBalance < amt)
       return res.status(400).json({ message: "Insufficient balance" });
 
-    wallet.balance -= amt;
+    // Deduct sequentially from available balances
+    let remaining = amt;
+    const fields: (keyof typeof wallet)[] = ["directCommissionBalance", "manCommFromDownPayment", "manCommFromInstallment", "salaryBalance", "rewardBalance"];
+    for (const field of fields) {
+      if (remaining <= 0) break;
+      const available = wallet[field] as number;
+      const deduct = Math.min(available, remaining);
+      (wallet[field] as number) -= deduct;
+      remaining -= deduct;
+    }
     await wallet.save();
     const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method}: ${accountDetails}`;
-    await TransactionLog.create({ userId: req.user!._id, type: "withdrawal", amount: amt, balanceAfter: wallet.balance, note: noteDetail });
+    await TransactionLog.create({ userId: req.user!._id, type: "withdrawal", amount: amt, balanceAfter: wallet.totalBalance, note: noteDetail });
 
     const withdrawal = await Withdrawal.create({
       userId: req.user!._id, amount: amt, method,
@@ -66,9 +75,9 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
     if (status === "rejected") {
       const wallet = await findOrCreateWallet(withdrawal.userId.toString());
       if (wallet) {
-        wallet.balance += withdrawal.amount;
+        wallet.directCommissionBalance += withdrawal.amount;
         await wallet.save();
-        await TransactionLog.create({ userId: withdrawal.userId, type: "withdrawal_rejected", amount: withdrawal.amount, balanceAfter: wallet.balance, note: reviewNote || "Withdrawal rejected" });
+        await TransactionLog.create({ userId: withdrawal.userId, type: "withdrawal_rejected", amount: withdrawal.amount, balanceAfter: wallet.totalBalance, note: reviewNote || "Withdrawal rejected" });
       }
     }
 

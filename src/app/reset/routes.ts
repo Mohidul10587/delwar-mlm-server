@@ -18,10 +18,10 @@ router.get("/full", async (_req: Request, res: Response) => {
     Wallet.updateMany(
       {},
       {
-        balance: 0,
         manCommFromDownPayment: 0,
         manCommFromInstallment: 0,
-        directCommissionBalance: 0,
+        totalBalance: 0,
+      directCommissionBalance: 0,
         salaryBalance: 0,
         rewardBalance: 0,
       }

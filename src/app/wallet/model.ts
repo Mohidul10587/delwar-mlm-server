@@ -2,7 +2,7 @@ import { Schema, model, Document, Types } from "mongoose";
 
 export interface IWallet extends Document {
   userId: Types.ObjectId;
-  balance: number;
+  totalBalance: number; // virtual
   directCommissionBalance: number;
   manCommFromDownPayment: number;
   manCommFromInstallment: number;
@@ -32,7 +32,7 @@ export interface ITransactionLog extends Document {
 const WalletSchema = new Schema<IWallet>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
-    balance: { type: Number, default: 0 },
+    totalBalance: { type: Number, default: 0 },
     directCommissionBalance: { type: Number, default: 0 },
     manCommFromDownPayment: { type: Number, default: 0 },
     manCommFromInstallment: { type: Number, default: 0 },
@@ -41,6 +41,15 @@ const WalletSchema = new Schema<IWallet>(
   },
   { timestamps: true }
 );
+
+WalletSchema.pre("save", function () {
+  this.totalBalance =
+    (this.directCommissionBalance ?? 0) +
+    (this.manCommFromDownPayment ?? 0) +
+    (this.manCommFromInstallment ?? 0) +
+    (this.salaryBalance ?? 0) +
+    (this.rewardBalance ?? 0);
+});
 
 const TransactionLogSchema = new Schema<ITransactionLog>(
   {

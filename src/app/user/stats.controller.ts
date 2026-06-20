@@ -25,7 +25,7 @@ export const getSuperAdminStats = async (_req: Request, res: Response) => {
     Purchase.countDocuments({ status: "approved" }),
     Withdrawal.countDocuments({ status: "pending" }),
     Withdrawal.countDocuments({ status: "approved" }),
-    Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: "$balance" }, totalDPCommission: { $sum: "$manCommFromDownPayment" }, totalInstallmentCommission: { $sum: "$manCommFromInstallment" } } }]),
+    Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: { $add: ["$directCommissionBalance", "$manCommFromDownPayment", "$manCommFromInstallment", "$salaryBalance", "$rewardBalance"] } }, totalDPCommission: { $sum: "$manCommFromDownPayment" }, totalInstallmentCommission: { $sum: "$manCommFromInstallment" } } }]),
   ]);
 
   res.json({

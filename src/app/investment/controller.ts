@@ -108,12 +108,12 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
 
       const wallet = await Wallet.findOneAndUpdate(
         { userId: investment.userId },
-        { $inc: { balance: totalPayout } },
+        { $inc: { directCommissionBalance: totalPayout } },
         { new: true, upsert: true }
       );
       await TransactionLog.create({
         userId: investment.userId, type: "admin_credit", amount: totalPayout,
-        balanceAfter: wallet.balance, note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+        balanceAfter: wallet.directCommissionBalance, note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
       });
 
       investment.lastProfitPaidAt = now;
@@ -163,12 +163,12 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
 
     const wallet = await Wallet.findOneAndUpdate(
       { userId: investment.userId },
-      { $inc: { balance: profitAmount } },
+      { $inc: { directCommissionBalance: profitAmount } },
       { new: true, upsert: true }
     );
     await TransactionLog.create({
       userId: investment.userId, type: "admin_credit", amount: profitAmount,
-      balanceAfter: wallet.balance, note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+      balanceAfter: wallet.directCommissionBalance, note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
     });
 
     res.json({ message: "Profit distributed", profitAmount });
