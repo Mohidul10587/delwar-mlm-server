@@ -60,7 +60,7 @@ export const createInvestment = async (req: Request, res: Response, next: NextFu
       relatedId: investment._id,
       relatedModel: "Investment",
       userId: req.user!._id,
-      note: `Investment received — ${profitType} ৳${parsedAmount}`,
+      note: `Investment received — ${profitType} plan, ৳${parsedAmount.toLocaleString()}, TxID: ${transactionId}, Account: ${senderAccount}`,
     }).catch(() => {});
 
     res.status(201).json({ message: "Investment created", investment });
@@ -124,7 +124,8 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
       );
       await TransactionLog.create({
         userId: investment.userId, type: "admin_credit", amount: totalPayout,
-        balanceAfter: wallet.directCommissionBalance, note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+        balanceAfter: wallet.directCommissionBalance,
+        note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
       });
 
       await CompanyLedger.create({
@@ -134,7 +135,7 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
         relatedId: investment._id,
         relatedModel: "Investment",
         userId: investment.userId,
-        note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+        note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
       }).catch(() => {});
 
       investment.lastProfitPaidAt = now;
@@ -189,7 +190,8 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
     );
     await TransactionLog.create({
       userId: investment.userId, type: "admin_credit", amount: profitAmount,
-      balanceAfter: wallet.directCommissionBalance, note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+      balanceAfter: wallet.directCommissionBalance,
+      note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()} (original ৳${investment.originalAmount.toLocaleString()})`,
     });
 
     await CompanyLedger.create({
@@ -199,7 +201,7 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
       relatedId: investment._id,
       relatedModel: "Investment",
       userId: investment.userId,
-      note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+      note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()}`,
     }).catch(() => {});
 
     res.json({ message: "Profit distributed", profitAmount });

@@ -49,6 +49,9 @@ export const updatePurchaseStatus = async (
       });
 
       // Ledger: record inflow for this purchase approval
+      const buyer = await User.findById(purchase.userId).select("name username").lean();
+      const buyerName = (buyer as any)?.name ?? "";
+      const buyerUsername = (buyer as any)?.username ?? "";
       await CompanyLedger.create({
         date: new Date(),
         type: "purchase_received",
@@ -56,8 +59,8 @@ export const updatePurchaseStatus = async (
         relatedId: purchase._id,
         relatedModel: "Purchase",
         userId: purchase.userId,
-        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity}`,
-      }).catch(() => { /* duplicate guard — skip */ });
+        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+      }).catch(() => {});
     }
 
     const purchaseWithShare = await Purchase.findById(purchase._id)

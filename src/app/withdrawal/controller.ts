@@ -33,8 +33,8 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
       remaining -= deduct;
     }
     await wallet.save();
-    const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method}: ${accountDetails}`;
-    await TransactionLog.create({ userId: req.user!._id, type: "withdrawal", amount: amt, balanceAfter: wallet.totalBalance, note: noteDetail });
+    const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method.toUpperCase()}: ${accountDetails}`;
+    await TransactionLog.create({ userId: req.user!._id, type: "withdrawal", amount: amt, balanceAfter: wallet.totalBalance, note: `Withdrawal request — ৳${amt.toLocaleString()} via ${noteDetail}` });
 
     const withdrawal = await Withdrawal.create({
       userId: req.user!._id, amount: amt, method,
@@ -78,7 +78,7 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
       if (wallet) {
         wallet.directCommissionBalance += withdrawal.amount;
         await wallet.save();
-        await TransactionLog.create({ userId: withdrawal.userId, type: "withdrawal_rejected", amount: withdrawal.amount, balanceAfter: wallet.totalBalance, note: reviewNote || "Withdrawal rejected" });
+        await TransactionLog.create({ userId: withdrawal.userId, type: "withdrawal_rejected", amount: withdrawal.amount, balanceAfter: wallet.totalBalance, note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${withdrawal.method}${withdrawal.method === "branch" ? ` (${withdrawal.branch})` : ` (${withdrawal.accountDetails})`}. Reason: ${reviewNote || "No reason given"}` });
       }
     }
 
@@ -90,6 +90,10 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
 
     // Ledger: approved withdrawal = outflow
     if (status === "approved") {
+      const wUser = await Withdrawal.findById(withdrawal._id).populate("userId", "name username").lean() as any;
+      const uName = wUser?.userId?.name ?? "";
+      const uUsername = wUser?.userId?.username ?? "";
+      const dest = withdrawal.method === "branch" ? `Branch: ${withdrawal.branch}` : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
       await CompanyLedger.create({
         date: new Date(),
         type: "withdrawal_paid",
@@ -97,7 +101,7 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
         relatedId: withdrawal._id,
         relatedModel: "Withdrawal",
         userId: withdrawal.userId,
-        note: `Withdrawal approved — ${withdrawal.method}`,
+        note: `Withdrawal paid — ৳${withdrawal.amount.toLocaleString()} to ${uName} (@${uUsername}) via ${dest}`,
       }).catch(() => {});
     }
 

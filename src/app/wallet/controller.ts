@@ -34,6 +34,19 @@ export const getWalletByUser = async (req: Request, res: Response, next: NextFun
   } catch (err) { next(err); }
 };
 
+export const getMyTransactions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 30;
+    const skip = (page - 1) * limit;
+    const [transactions, total] = await Promise.all([
+      TransactionLog.find({ userId: req.user!._id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      TransactionLog.countDocuments({ userId: req.user!._id }),
+    ]);
+    res.json({ transactions, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) { next(err); }
+};
+
 export const adminCredit = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { amount, note } = req.body;

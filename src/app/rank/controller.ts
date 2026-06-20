@@ -216,12 +216,13 @@ async function issueRankReward(userId: string, rank: any) {
   wallet.rewardBalance += rank.reward.value;
   await wallet.save();
 
+  const note = `Rank reward — "${rank.name}" achieved: ${rank.reward.name} worth ৳${rank.reward.value.toLocaleString()} (${rank.reward.type})`;
   await TransactionLog.create({
     userId,
     type: "reward",
     amount: rank.reward.value,
     balanceAfter: wallet.rewardBalance,
-    note: `Rank reward: ${rank.name} — ${rank.reward.name} (${rank.reward.type})`,
+    note,
   });
 
   await CompanyLedger.create({
@@ -229,7 +230,7 @@ async function issueRankReward(userId: string, rank: any) {
     type: "reward_paid",
     amount: rank.reward.value,
     userId,
-    note: `Rank reward: ${rank.name}`,
+    note,
   }).catch(() => {});
 }
 
@@ -348,7 +349,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       type: "salary",
       amount: sal.amount,
       balanceAfter: wallet.salaryBalance,
-      note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
+      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
     });
 
     await CompanyLedger.create({
@@ -356,7 +357,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       type: "salary_paid",
       amount: sal.amount,
       userId: user._id,
-      note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
+      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
     }).catch(() => {});
 
     await RankSalaryLog.create({

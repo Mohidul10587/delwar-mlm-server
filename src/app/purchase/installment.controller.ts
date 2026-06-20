@@ -154,10 +154,13 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
 
         // Installment commission via snapshot
         try {
-          await distributeInstallmentPaymentCommission(purchase._id.toString(), payment.amount);
+          await distributeInstallmentPaymentCommission(purchase._id.toString(), payment.amount, payment.installmentNo);
         } catch (e) { console.error("Installment commission error:", e); }
 
         // Ledger: inflow for this installment payment
+        const buyer = await User.findById(purchase.userId).select("name username").lean();
+        const buyerName = (buyer as any)?.name ?? "";
+        const buyerUsername = (buyer as any)?.username ?? "";
         await CompanyLedger.create({
           date: new Date(),
           type: "installment_received",
@@ -165,7 +168,7 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
           relatedId: payment._id,
           relatedModel: "InstallmentPayment",
           userId: purchase.userId,
-          note: `Installment #${payment.installmentNo} approved — purchase ${purchase._id}`,
+          note: `Installment #${payment.installmentNo} received — ${purchase.snapshot?.shareTitle ?? ""} — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
         }).catch(() => {});
       }
     }
