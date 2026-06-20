@@ -4,6 +4,7 @@ import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 import { distributeCommissions } from "./commissions";
 import { User } from "../user/model";
+import { CompanyLedger } from "../ledger/model";
 
 export const updatePurchaseStatus = async (
   req: Request,
@@ -44,10 +45,19 @@ export const updatePurchaseStatus = async (
       distributeCommissions((purchase._id as any).toString());
 
       await User.findByIdAndUpdate(purchase.userId, {
-        $inc: {
-          personalSharesCount: purchase.quantity,
-        },
+        $inc: { personalSharesCount: purchase.quantity },
       });
+
+      // Ledger: record inflow for this purchase approval
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "purchase_received",
+        amount: purchase.amountPaid,
+        relatedId: purchase._id,
+        relatedModel: "Purchase",
+        userId: purchase.userId,
+        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity}`,
+      }).catch(() => { /* duplicate guard — skip */ });
     }
 
     const purchaseWithShare = await Purchase.findById(purchase._id)

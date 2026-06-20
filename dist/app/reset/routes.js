@@ -16,6 +16,7 @@ const model_2 = require("../certificate/model");
 const model_3 = require("../wallet/model");
 const model_4 = require("../user/model");
 const salary_log_model_1 = require("../rank/salary-log.model");
+const model_5 = require("../ledger/model");
 const router = (0, express_1.Router)();
 router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     yield Promise.all([
@@ -24,9 +25,12 @@ router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* (
         model_2.Certificate.deleteMany({}),
         model_3.TransactionLog.deleteMany({}),
         salary_log_model_1.RankSalaryLog.deleteMany({}),
+        model_5.CompanyLedger.deleteMany({}),
         model_3.Wallet.updateMany({}, {
-            balance: 0,
-            managerialCommissionBalance: 0,
+            manCommFromDownPayment: 0,
+            manCommFromInstallment: 0,
+            totalBalance: 0,
+            directCommissionBalance: 0,
             salaryBalance: 0,
             rewardBalance: 0,
         }),

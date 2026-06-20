@@ -5,6 +5,7 @@ import { User } from "../user/model";
 import { Purchase } from "../purchase/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { RankSalaryLog } from "./salary-log.model";
+import { CompanyLedger } from "../ledger/model";
 
 const getSettings = async () => {
   let s = await Settings.findOne();
@@ -222,6 +223,14 @@ async function issueRankReward(userId: string, rank: any) {
     balanceAfter: wallet.rewardBalance,
     note: `Rank reward: ${rank.name} — ${rank.reward.name} (${rank.reward.type})`,
   });
+
+  await CompanyLedger.create({
+    date: new Date(),
+    type: "reward_paid",
+    amount: rank.reward.value,
+    userId,
+    note: `Rank reward: ${rank.name}`,
+  }).catch(() => {});
 }
 
 // ── Monthly salary release ────────────────────────────────────────────────────
@@ -341,6 +350,14 @@ export const processMonthlySalaries = async (): Promise<number> => {
       balanceAfter: wallet.salaryBalance,
       note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
     });
+
+    await CompanyLedger.create({
+      date: new Date(),
+      type: "salary_paid",
+      amount: sal.amount,
+      userId: user._id,
+      note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
+    }).catch(() => {});
 
     await RankSalaryLog.create({
       userId: user._id,

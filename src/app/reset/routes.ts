@@ -5,6 +5,7 @@ import { Certificate } from "../certificate/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { RankSalaryLog } from "../rank/salary-log.model";
+import { CompanyLedger } from "../ledger/model";
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.get("/full", async (_req: Request, res: Response) => {
     Certificate.deleteMany({}),
     TransactionLog.deleteMany({}),
     RankSalaryLog.deleteMany({}),
+    CompanyLedger.deleteMany({}),
     Wallet.updateMany(
       {},
       {

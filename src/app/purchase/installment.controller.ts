@@ -7,6 +7,7 @@ import { Certificate } from "../certificate/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { distributeInstallmentPaymentCommission } from "./commissions";
+import { CompanyLedger } from "../ledger/model";
 
 const findOrCreateWallet = async (userId: string) => {
   return await Wallet.findOne({ userId });
@@ -155,6 +156,17 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
         try {
           await distributeInstallmentPaymentCommission(purchase._id.toString(), payment.amount);
         } catch (e) { console.error("Installment commission error:", e); }
+
+        // Ledger: inflow for this installment payment
+        await CompanyLedger.create({
+          date: new Date(),
+          type: "installment_received",
+          amount: payment.amount,
+          relatedId: payment._id,
+          relatedModel: "InstallmentPayment",
+          userId: purchase.userId,
+          note: `Installment #${payment.installmentNo} approved — purchase ${purchase._id}`,
+        }).catch(() => {});
       }
     }
 

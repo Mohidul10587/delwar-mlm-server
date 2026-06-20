@@ -16,6 +16,7 @@ const service_1 = require("./service");
 const model_2 = require("../certificate/model");
 const model_3 = require("../wallet/model");
 const commissions_1 = require("./commissions");
+const model_4 = require("../ledger/model");
 const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     return yield model_3.Wallet.findOne({ userId });
 });
@@ -151,6 +152,16 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                 catch (e) {
                     console.error("Installment commission error:", e);
                 }
+                // Ledger: inflow for this installment payment
+                yield model_4.CompanyLedger.create({
+                    date: new Date(),
+                    type: "installment_received",
+                    amount: payment.amount,
+                    relatedId: payment._id,
+                    relatedModel: "InstallmentPayment",
+                    userId: purchase.userId,
+                    note: `Installment #${payment.installmentNo} approved — purchase ${purchase._id}`,
+                }).catch(() => { });
             }
         }
         res.json({

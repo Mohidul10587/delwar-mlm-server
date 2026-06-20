@@ -15,8 +15,9 @@ const service_1 = require("./service");
 const model_2 = require("../certificate/model");
 const commissions_1 = require("./commissions");
 const model_3 = require("../user/model");
+const model_4 = require("../ledger/model");
 const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c, _d;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
@@ -43,16 +44,24 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             }
             (0, commissions_1.distributeCommissions)(purchase._id.toString());
             yield model_3.User.findByIdAndUpdate(purchase.userId, {
-                $inc: {
-                    personalSharesCount: purchase.quantity,
-                },
+                $inc: { personalSharesCount: purchase.quantity },
             });
+            // Ledger: record inflow for this purchase approval
+            yield model_4.CompanyLedger.create({
+                date: new Date(),
+                type: "purchase_received",
+                amount: purchase.amountPaid,
+                relatedId: purchase._id,
+                relatedModel: "Purchase",
+                userId: purchase.userId,
+                note: `Purchase approved — ${(_b = (_a = purchase.snapshot) === null || _a === void 0 ? void 0 : _a.shareTitle) !== null && _b !== void 0 ? _b : ""} x${purchase.quantity}`,
+            }).catch(() => { });
         }
         const purchaseWithShare = yield model_1.Purchase.findById(purchase._id)
             .populate("shareId", "cashPrice")
             .lean();
         if (purchaseWithShare) {
-            const sharePrice = Number((_b = (_a = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.shareId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
+            const sharePrice = Number((_d = (_c = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.shareId) === null || _c === void 0 ? void 0 : _c.cashPrice) !== null && _d !== void 0 ? _d : 0);
             const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchaseWithShare.quantity);
             const certificateStatus = (0, service_1.calculateCertificateStatus)({
                 status: purchaseWithShare.status,

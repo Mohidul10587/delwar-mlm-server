@@ -14,6 +14,7 @@ const model_1 = require("./model");
 const model_2 = require("../settings/model");
 const model_3 = require("../wallet/model");
 const isTransactionIdUsed_1 = require("../../utils/isTransactionIdUsed");
+const model_4 = require("../ledger/model");
 const getInvestmentConfig = () => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     const settings = yield model_2.Settings.findOne().lean();
@@ -54,6 +55,15 @@ const createInvestment = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             startDate,
             endDate,
         });
+        yield model_4.CompanyLedger.create({
+            date: new Date(),
+            type: "investment_received",
+            amount: parsedAmount,
+            relatedId: investment._id,
+            relatedModel: "Investment",
+            userId: req.user._id,
+            note: `Investment received — ${profitType} ৳${parsedAmount}`,
+        }).catch(() => { });
         res.status(201).json({ message: "Investment created", investment });
     }
     catch (err) {
@@ -114,11 +124,20 @@ const distributeProfit = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             const totalProfit = (investment.amount / 60) * (profitConfig.profitPercentage / 100) * 60;
             const defaultPayout = investment.amount + totalProfit;
             const totalPayout = customAmount != null && customAmount > 0 ? customAmount : defaultPayout;
-            const wallet = yield model_3.Wallet.findOneAndUpdate({ userId: investment.userId }, { $inc: { balance: totalPayout } }, { new: true, upsert: true });
+            const wallet = yield model_3.Wallet.findOneAndUpdate({ userId: investment.userId }, { $inc: { directCommissionBalance: totalPayout } }, { new: true, upsert: true });
             yield model_3.TransactionLog.create({
                 userId: investment.userId, type: "admin_credit", amount: totalPayout,
-                balanceAfter: wallet.balance, note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+                balanceAfter: wallet.directCommissionBalance, note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
             });
+            yield model_4.CompanyLedger.create({
+                date: now,
+                type: "investment_profit_paid",
+                amount: totalPayout,
+                relatedId: investment._id,
+                relatedModel: "Investment",
+                userId: investment.userId,
+                note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+            }).catch(() => { });
             investment.lastProfitPaidAt = now;
             investment.lastProfitPaidMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
             investment.status = "completed";
@@ -156,11 +175,20 @@ const distributeProfit = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const claimed = yield model_1.Investment.findOneAndUpdate({ _id: investment._id, lastProfitPaidMonth: { $ne: currentMonth }, status: { $ne: "completed" } }, { $set: investmentUpdates }, { new: true });
         if (!claimed)
             return res.status(400).json({ message: "Profit already paid this month" });
-        const wallet = yield model_3.Wallet.findOneAndUpdate({ userId: investment.userId }, { $inc: { balance: profitAmount } }, { new: true, upsert: true });
+        const wallet = yield model_3.Wallet.findOneAndUpdate({ userId: investment.userId }, { $inc: { directCommissionBalance: profitAmount } }, { new: true, upsert: true });
         yield model_3.TransactionLog.create({
             userId: investment.userId, type: "admin_credit", amount: profitAmount,
-            balanceAfter: wallet.balance, note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+            balanceAfter: wallet.directCommissionBalance, note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
         });
+        yield model_4.CompanyLedger.create({
+            date: now,
+            type: "investment_profit_paid",
+            amount: profitAmount,
+            relatedId: investment._id,
+            relatedModel: "Investment",
+            userId: investment.userId,
+            note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+        }).catch(() => { });
         res.json({ message: "Profit distributed", profitAmount });
     }
     catch (err) {

@@ -4,12 +4,22 @@ exports.TransactionLog = exports.Wallet = void 0;
 const mongoose_1 = require("mongoose");
 const WalletSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
-    balance: { type: Number, default: 0 },
+    totalBalance: { type: Number, default: 0 },
     directCommissionBalance: { type: Number, default: 0 },
-    managerialCommissionBalance: { type: Number, default: 0 },
+    manCommFromDownPayment: { type: Number, default: 0 },
+    manCommFromInstallment: { type: Number, default: 0 },
     salaryBalance: { type: Number, default: 0 },
     rewardBalance: { type: Number, default: 0 },
 }, { timestamps: true });
+WalletSchema.pre("save", function () {
+    var _a, _b, _c, _d, _e;
+    this.totalBalance =
+        ((_a = this.directCommissionBalance) !== null && _a !== void 0 ? _a : 0) +
+            ((_b = this.manCommFromDownPayment) !== null && _b !== void 0 ? _b : 0) +
+            ((_c = this.manCommFromInstallment) !== null && _c !== void 0 ? _c : 0) +
+            ((_d = this.salaryBalance) !== null && _d !== void 0 ? _d : 0) +
+            ((_e = this.rewardBalance) !== null && _e !== void 0 ? _e : 0);
+});
 const TransactionLogSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     type: {

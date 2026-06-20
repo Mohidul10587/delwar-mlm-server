@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Withdrawal } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
+import { CompanyLedger } from "../ledger/model";
 
 const findOrCreateWallet = async (userId: string) => {
   return await Wallet.findOne({ userId });
@@ -86,6 +87,19 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
     withdrawal.reviewedBy = req.user!._id;
     withdrawal.reviewedAt = new Date();
     await withdrawal.save();
+
+    // Ledger: approved withdrawal = outflow
+    if (status === "approved") {
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "withdrawal_paid",
+        amount: withdrawal.amount,
+        relatedId: withdrawal._id,
+        relatedModel: "Withdrawal",
+        userId: withdrawal.userId,
+        note: `Withdrawal approved — ${withdrawal.method}`,
+      }).catch(() => {});
+    }
 
     res.json({ message: `Withdrawal ${status}`, withdrawal });
   } catch (err) { next(err); }

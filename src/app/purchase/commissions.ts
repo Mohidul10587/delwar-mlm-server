@@ -2,6 +2,7 @@ import { Purchase } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { recalcUserRank } from "../rank/controller";
+import { CompanyLedger } from "../ledger/model";
 
 const findOrCreateWallet = async (userId: string) => {
   let wallet = await Wallet.findOne({ userId });
@@ -80,6 +81,16 @@ export const distributeCommissions = async (purchaseId: string) => {
           relatedPurchaseId: purchase._id,
           note: `Direct commission from purchase`,
         });
+
+        await CompanyLedger.create({
+          date: new Date(),
+          type: "commission_paid",
+          amount: commission,
+          relatedId: purchase._id,
+          relatedModel: "Purchase",
+          userId: referrerId,
+          note: `Direct commission — purchase ${purchase._id}`,
+        }).catch(() => {});
       }
 
       await User.findByIdAndUpdate(referrerId, {
@@ -116,6 +127,15 @@ export const distributeCommissions = async (purchaseId: string) => {
             relatedPurchaseId: purchase._id,
             note: `Gen ${gen} DP managerial commission`,
           });
+
+          await CompanyLedger.create({
+            date: new Date(),
+            type: "commission_paid",
+            amount: commission,
+            relatedModel: "Purchase",
+            userId: currentId,
+            note: `Gen ${gen} DP managerial commission — purchase ${purchase._id}`,
+          }).catch(() => {});
         }
 
         await User.findByIdAndUpdate(currentId, {
@@ -151,6 +171,15 @@ export const distributeCommissions = async (purchaseId: string) => {
             relatedPurchaseId: purchase._id,
             note: `Gen ${gen} installment portion commission`,
           });
+
+          await CompanyLedger.create({
+            date: new Date(),
+            type: "commission_paid",
+            amount: commission,
+            relatedModel: "Purchase",
+            userId: currentId,
+            note: `Gen ${gen} installment portion commission — purchase ${purchase._id}`,
+          }).catch(() => {});
         }
       }
     }
@@ -205,6 +234,15 @@ export const distributeInstallmentPaymentCommission = async (
           relatedPurchaseId: purchase._id,
           note: `Gen ${gen} installment payment commission`,
         });
+
+        await CompanyLedger.create({
+          date: new Date(),
+          type: "commission_paid",
+          amount: commission,
+          relatedModel: "Purchase",
+          userId: currentId,
+          note: `Gen ${gen} installment payment commission — purchase ${purchase._id}`,
+        }).catch(() => {});
       }
     }
   } catch (err) {

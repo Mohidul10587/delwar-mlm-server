@@ -24,6 +24,7 @@ import resetRoutes from "./app/reset/routes";
 import investmentRoutes from "./app/investment/routes";
 import dashboardRoutes from "./app/dashboard/routes";
 import categoryRoutes from "./app/category/routes";
+import ledgerRoutes from "./app/ledger/routes";
 import noticeRoutes from "./app/notice/routes";
 import { setSocketIO } from "./app/notice/controller";
 dotenv.config();
@@ -74,6 +75,7 @@ app.use("/reset", resetRoutes);
 app.use("/investment", investmentRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/category", categoryRoutes);
+app.use("/ledger", ledgerRoutes);
 app.use("/notice", noticeRoutes);
 app.use(errorHandler);
 

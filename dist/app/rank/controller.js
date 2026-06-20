@@ -19,6 +19,7 @@ const model_2 = require("../user/model");
 const model_3 = require("../purchase/model");
 const model_4 = require("../wallet/model");
 const salary_log_model_1 = require("./salary-log.model");
+const model_5 = require("../ledger/model");
 const getSettings = () => __awaiter(void 0, void 0, void 0, function* () {
     let s = yield model_1.Settings.findOne();
     if (!s)
@@ -190,6 +191,13 @@ function issueRankReward(userId, rank) {
             balanceAfter: wallet.rewardBalance,
             note: `Rank reward: ${rank.name} — ${rank.reward.name} (${rank.reward.type})`,
         });
+        yield model_5.CompanyLedger.create({
+            date: new Date(),
+            type: "reward_paid",
+            amount: rank.reward.value,
+            userId,
+            note: `Rank reward: ${rank.name}`,
+        }).catch(() => { });
     });
 }
 // ── Monthly salary release ────────────────────────────────────────────────────
@@ -297,6 +305,13 @@ const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function*
             balanceAfter: wallet.salaryBalance,
             note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
         });
+        yield model_5.CompanyLedger.create({
+            date: new Date(),
+            type: "salary_paid",
+            amount: sal.amount,
+            userId: user._id,
+            note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
+        }).catch(() => { });
         yield salary_log_model_1.RankSalaryLog.create({
             userId: user._id,
             rankName: rank.name,

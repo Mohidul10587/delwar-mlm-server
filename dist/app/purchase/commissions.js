@@ -14,14 +14,16 @@ const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../user/model");
 const controller_1 = require("../rank/controller");
+const model_4 = require("../ledger/model");
 const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     let wallet = yield model_2.Wallet.findOne({ userId });
     if (!wallet)
         wallet = yield model_2.Wallet.create({
             userId,
-            balance: 0,
+            totalBalance: 0,
             directCommissionBalance: 0,
-            managerialCommissionBalance: 0,
+            manCommFromDownPayment: 0,
+            manCommFromInstallment: 0,
             salaryBalance: 0,
             rewardBalance: 0,
         });
@@ -37,7 +39,7 @@ const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, functio
  *   Subsequent installment payments trigger installment commission separately.
  *
  * Direct Sale Commission: goes to the buyer's direct referrer (gen ancestor[0])
- *   immediately into wallet.balance.
+ *   immediately into wallet.directCommissionBalance.
  *
  * Managerial Commission (Down Payment portion): generation-specific rates from snapshot.
  * Managerial Commission (Installment portion): same rate for all generations from snapshot.
@@ -71,8 +73,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         }
         // ── 1. Direct Sale Commission ─────────────────────────────────────────────
         if (referrerId) {
-            const base = purchase.paymentType === "cash" ? totalAmount : downPaymentPortion;
-            const commission = (snap.directSaleCommissionValue / 100) * base;
+            const commission = (snap.directSaleCommissionValue / 100) * downPaymentPortion;
             if (commission > 0) {
                 const wallet = yield findOrCreateWallet(referrerId.toString());
                 wallet.directCommissionBalance += commission;
@@ -85,6 +86,15 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                     relatedPurchaseId: purchase._id,
                     note: `Direct commission from purchase`,
                 });
+                yield model_4.CompanyLedger.create({
+                    date: new Date(),
+                    type: "commission_paid",
+                    amount: commission,
+                    relatedId: purchase._id,
+                    relatedModel: "Purchase",
+                    userId: referrerId,
+                    note: `Direct commission — purchase ${purchase._id}`,
+                }).catch(() => { });
             }
             yield model_3.User.findByIdAndUpdate(referrerId, {
                 $inc: { directSalesCount: purchase.quantity },
@@ -104,16 +114,24 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 if (genConfig && genConfig.rate > 0) {
                     const commission = (genConfig.rate / 100) * downPaymentPortion;
                     const wallet = yield findOrCreateWallet(currentId);
-                    wallet.managerialCommissionBalance += commission;
+                    wallet.manCommFromDownPayment += commission;
                     yield wallet.save();
                     yield model_2.TransactionLog.create({
                         userId: currentId,
                         type: "managerial_commission",
                         amount: commission,
-                        balanceAfter: wallet.balance,
+                        balanceAfter: wallet.manCommFromDownPayment,
                         relatedPurchaseId: purchase._id,
                         note: `Gen ${gen} DP managerial commission`,
                     });
+                    yield model_4.CompanyLedger.create({
+                        date: new Date(),
+                        type: "commission_paid",
+                        amount: commission,
+                        relatedModel: "Purchase",
+                        userId: currentId,
+                        note: `Gen ${gen} DP managerial commission — purchase ${purchase._id}`,
+                    }).catch(() => { });
                 }
                 yield model_3.User.findByIdAndUpdate(currentId, {
                     $inc: { teamSalesCount: purchase.quantity },
@@ -132,17 +150,25 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
                 if (commission > 0) {
                     const wallet = yield findOrCreateWallet(currentId);
-                    const before = wallet.managerialCommissionBalance;
-                    wallet.managerialCommissionBalance += commission;
+                    const before = wallet.manCommFromInstallment;
+                    wallet.manCommFromInstallment += commission;
                     yield wallet.save();
                     yield model_2.TransactionLog.create({
                         userId: currentId,
                         type: "managerial_installment_commission",
                         amount: commission,
-                        balanceAfter: wallet.balance,
+                        balanceAfter: wallet.manCommFromInstallment,
                         relatedPurchaseId: purchase._id,
                         note: `Gen ${gen} installment portion commission`,
                     });
+                    yield model_4.CompanyLedger.create({
+                        date: new Date(),
+                        type: "commission_paid",
+                        amount: commission,
+                        relatedModel: "Purchase",
+                        userId: currentId,
+                        note: `Gen ${gen} installment portion commission — purchase ${purchase._id}`,
+                    }).catch(() => { });
                 }
             }
         }
@@ -178,16 +204,24 @@ const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount) =
             const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
             if (commission > 0) {
                 const wallet = yield findOrCreateWallet(currentId);
-                wallet.managerialCommissionBalance += commission;
+                wallet.manCommFromInstallment += commission;
                 yield wallet.save();
                 yield model_2.TransactionLog.create({
                     userId: currentId,
                     type: "managerial_installment_commission",
                     amount: commission,
-                    balanceAfter: wallet.balance,
+                    balanceAfter: wallet.manCommFromInstallment,
                     relatedPurchaseId: purchase._id,
                     note: `Gen ${gen} installment payment commission`,
                 });
+                yield model_4.CompanyLedger.create({
+                    date: new Date(),
+                    type: "commission_paid",
+                    amount: commission,
+                    relatedModel: "Purchase",
+                    userId: currentId,
+                    note: `Gen ${gen} installment payment commission — purchase ${purchase._id}`,
+                }).catch(() => { });
             }
         }
     }

@@ -16,7 +16,7 @@ const model_3 = require("../purchase/model");
 const model_4 = require("../withdrawal/model");
 const model_5 = require("../wallet/model");
 const getSuperAdminStats = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     const [totalUsers, activeUsers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
         model_1.User.countDocuments({ role: "user" }),
         model_1.User.countDocuments({ role: "user", isActive: true }),
@@ -26,7 +26,7 @@ const getSuperAdminStats = (_req, res) => __awaiter(void 0, void 0, void 0, func
         model_3.Purchase.countDocuments({ status: "approved" }),
         model_4.Withdrawal.countDocuments({ status: "pending" }),
         model_4.Withdrawal.countDocuments({ status: "approved" }),
-        model_5.Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: "$balance" }, totalManagerialCommission: { $sum: "$managerialCommissionBalance" } } }]),
+        model_5.Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: { $add: ["$directCommissionBalance", "$manCommFromDownPayment", "$manCommFromInstallment", "$salaryBalance", "$rewardBalance"] } }, totalDPCommission: { $sum: "$manCommFromDownPayment" }, totalInstallmentCommission: { $sum: "$manCommFromInstallment" } } }]),
     ]);
     res.json({
         totalUsers,
@@ -38,7 +38,8 @@ const getSuperAdminStats = (_req, res) => __awaiter(void 0, void 0, void 0, func
         pendingWithdrawals,
         approvedWithdrawals,
         totalWalletBalance: (_b = (_a = walletAgg[0]) === null || _a === void 0 ? void 0 : _a.totalBalance) !== null && _b !== void 0 ? _b : 0,
-        totalManagerialCommissionBalance: (_d = (_c = walletAgg[0]) === null || _c === void 0 ? void 0 : _c.totalManagerialCommission) !== null && _d !== void 0 ? _d : 0,
+        totalManCommFromDownPayment: (_d = (_c = walletAgg[0]) === null || _c === void 0 ? void 0 : _c.totalDPCommission) !== null && _d !== void 0 ? _d : 0,
+        totalManCommFromInstallment: (_f = (_e = walletAgg[0]) === null || _e === void 0 ? void 0 : _e.totalInstallmentCommission) !== null && _f !== void 0 ? _f : 0,
     });
 });
 exports.getSuperAdminStats = getSuperAdminStats;
