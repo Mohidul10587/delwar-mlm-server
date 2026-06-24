@@ -166,39 +166,23 @@ async function getTotalApprovedSalesByGeneration(
 ): Promise<number> {
   const uid = new mongoose.Types.ObjectId(userId.toString());
 
-  // Find users in specific generation
+  // Find users whose ancestor at exactly this generation level is the given user
   const networkUsers = await User.find({
-    "generationAncestors.userId": uid,
-    "generationAncestors.generation": generation,
+    generationAncestors: {
+      $elemMatch: { userId: uid, level: generation },
+    },
   })
     .select("_id")
     .lean();
 
   if (!networkUsers.length) return 0;
 
-  // Count unique shares (not installments)
-  const result = await Purchase.aggregate([
-    {
-      $match: {
-        userId: { $in: networkUsers.map((u) => u._id) },
-        status: "approved",
-      },
-    },
-    {
-      $group: {
-        _id: "$shareId", // Group by shareId to count unique shares only
-        userId: { $first: "$userId" },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        totalShares: { $sum: 1 }, // Count unique shares
-      },
-    },
-  ]);
+  const count = await Purchase.countDocuments({
+    userId: { $in: networkUsers.map((u) => u._id) },
+    status: "approved",
+  });
 
-  return result[0]?.totalShares ?? 0;
+  return count;
 }
 
 // ── Recalculate and update user rank ─────────────────────────────────────────
@@ -211,7 +195,7 @@ export const recalcUserRank = async (userId: string) => {
     if (!user) return;
 
     const s = await Settings.findOne();
-    const ranks = ((s?.ranks ?? []) as any[]).sort((a, b) => (a.requiredApprovedSales || 0) - (b.requiredApprovedSales || 0));
+    const ranks = (s?.ranks ?? []) as any[];
     if (!ranks.length) return;
 
     let newRank: any = null;
