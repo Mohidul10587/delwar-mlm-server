@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processMonthlySalaries = exports.releaseMonthlySalaries = exports.recalcUserRank = exports.getMyRank = exports.deleteRank = exports.updateRank = exports.createRank = exports.getRanks = void 0;
+exports.processMonthlySalaries = exports.releaseMonthlySalaries = exports.recalcUserRank = exports.getMyRank = exports.deleteRank = exports.replaceAllRanks = exports.updateRank = exports.createRank = exports.getRanks = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const model_1 = require("../settings/model");
 const model_2 = require("../user/model");
@@ -31,7 +31,7 @@ const getRanks = (_req, res, next) => __awaiter(void 0, void 0, void 0, function
     var _a;
     try {
         const s = yield getSettings();
-        const ranks = ((_a = s.ranks) !== null && _a !== void 0 ? _a : []).sort((a, b) => a.order - b.order);
+        const ranks = ((_a = s.ranks) !== null && _a !== void 0 ? _a : []);
         res.json({ ranks });
     }
     catch (err) {
@@ -42,10 +42,9 @@ exports.getRanks = getRanks;
 const createRank = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const s = yield getSettings();
-        const { name, order = 0, requiredGeneration = 1, requiredApprovedSales = 0, reward, salary, } = req.body;
+        const { name, requiredGeneration = 1, requiredApprovedSales = 0, reward, salary, } = req.body;
         s.ranks.push({
             name,
-            order,
             requiredGeneration,
             requiredApprovedSales,
             reward,
@@ -66,17 +65,11 @@ const updateRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         const idx = s.ranks.findIndex((r) => r._id.toString() === req.params.id);
         if (idx === -1)
             return res.status(404).json({ message: "Rank not found" });
-        const rank = s.ranks[idx];
-        const { name, order, requiredGeneration, requiredApprovedSales, reward, salary, } = req.body;
-        rank.set({
-            name,
-            order,
-            requiredGeneration,
+        const { name, requiredApprovedSales, reward, salary, } = req.body;
+        s.ranks[idx] = Object.assign(Object.assign({}, s.ranks[idx]), { name,
             requiredApprovedSales,
             reward,
-            salary,
-        });
-        s.markModified("ranks");
+            salary });
         yield s.save();
         res.json({ message: "Rank updated", ranks: s.ranks });
     }
@@ -85,10 +78,30 @@ const updateRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.updateRank = updateRank;
+const replaceAllRanks = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const s = yield model_1.Settings.findOne();
+        if (!s)
+            return res.status(404).json({ message: "Settings not found" });
+        s.ranks = req.body.ranks;
+        yield s.save();
+        res.json({ message: "Ranks replaced successfully", ranks: s.ranks });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.replaceAllRanks = replaceAllRanks;
 const deleteRank = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const s = yield getSettings();
+        const s = yield model_1.Settings.findOne();
+        if (!s)
+            return res.status(404).json({ message: "Settings not found" });
+        const originalLength = s.ranks.length;
         s.ranks = s.ranks.filter((r) => r._id.toString() !== req.params.id);
+        if (s.ranks.length === originalLength) {
+            return res.status(404).json({ message: "Rank not found" });
+        }
         yield s.save();
         res.json({ message: "Rank deleted" });
     }
@@ -99,16 +112,16 @@ const deleteRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
 exports.deleteRank = deleteRank;
 // ── User rank info ────────────────────────────────────────────────────────────
 const getMyRank = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     try {
         const user = yield model_2.User.findById(req.user._id)
             .select("currentRank currentRankAchievedAt earnedRanks")
             .lean();
         const s = yield getSettings();
-        const allRanks = ((_a = s.ranks) !== null && _a !== void 0 ? _a : []).sort((a, b) => a.order - b.order);
+        const allRanks = ((_a = s.ranks) !== null && _a !== void 0 ? _a : []);
         const currentRankName = (_b = user === null || user === void 0 ? void 0 : user.currentRank) !== null && _b !== void 0 ? _b : null;
         const currentRank = (_c = allRanks.find((r) => r.name === currentRankName)) !== null && _c !== void 0 ? _c : null;
-        const nextRank = (_d = allRanks.find((r) => { var _a; return r.order > ((_a = currentRank === null || currentRank === void 0 ? void 0 : currentRank.order) !== null && _a !== void 0 ? _a : -1); })) !== null && _d !== void 0 ? _d : null;
+        const nextRank = null; // Remove rank progression logic since no order field
         res.json({ currentRank, nextRank, allRanks });
     }
     catch (err) {
@@ -117,27 +130,24 @@ const getMyRank = (req, res, next) => __awaiter(void 0, void 0, void 0, function
 });
 exports.getMyRank = getMyRank;
 // ── Core: get total approved sales amount for all network members of a user ───
-function getTotalApprovedSales(userId) {
+function getTotalApprovedSalesByGeneration(userId, generation) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b;
         const uid = new mongoose_1.default.Types.ObjectId(userId.toString());
+        // Find users whose ancestor at exactly this generation level is the given user
         const networkUsers = yield model_2.User.find({
-            "generationAncestors.userId": uid,
+            generationAncestors: {
+                $elemMatch: { userId: uid, level: generation },
+            },
         })
             .select("_id")
             .lean();
         if (!networkUsers.length)
             return 0;
-        const result = yield model_3.Purchase.aggregate([
-            {
-                $match: {
-                    userId: { $in: networkUsers.map((u) => u._id) },
-                    status: "approved",
-                },
-            },
-            { $group: { _id: null, total: { $sum: "$amountPaid" } } },
-        ]);
-        return (_b = (_a = result[0]) === null || _a === void 0 ? void 0 : _a.total) !== null && _b !== void 0 ? _b : 0;
+        const count = yield model_3.Purchase.countDocuments({
+            userId: { $in: networkUsers.map((u) => u._id) },
+            status: "approved",
+        });
+        return count;
     });
 }
 // ── Recalculate and update user rank ─────────────────────────────────────────
@@ -148,15 +158,34 @@ const recalcUserRank = (userId) => __awaiter(void 0, void 0, void 0, function* (
         if (!user)
             return;
         const s = yield model_1.Settings.findOne();
-        const ranks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []).sort((a, b) => a.order - b.order);
+        const ranks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []);
         if (!ranks.length)
             return;
-        const total = yield getTotalApprovedSales(userId);
         let newRank = null;
-        for (const rank of ranks) {
+        let currentEarnedRanks = user.earnedRanks || [];
+        // Check each rank sequentially
+        for (let i = 0; i < ranks.length; i++) {
+            const rank = ranks[i];
+            const generation = i + 1; // Rank 1 = Generation 1, Rank 2 = Generation 2, etc.
             const threshold = (_b = rank.requiredApprovedSales) !== null && _b !== void 0 ? _b : 0;
-            if (threshold > 0 && total >= threshold) {
-                newRank = rank;
+            // Skip if previous rank not earned (sequential progression)
+            if (i > 0 && !currentEarnedRanks.includes(ranks[i - 1].name)) {
+                break;
+            }
+            // Skip if current rank already earned
+            if (currentEarnedRanks.includes(rank.name)) {
+                newRank = rank; // Keep track of highest earned rank
+                continue;
+            }
+            if (threshold > 0) {
+                const totalShares = yield getTotalApprovedSalesByGeneration(userId, generation);
+                if (totalShares >= threshold) {
+                    newRank = rank;
+                    currentEarnedRanks.push(rank.name);
+                }
+                else {
+                    break; // Can't achieve this rank, stop checking higher ranks
+                }
             }
         }
         const newRankName = (_c = newRank === null || newRank === void 0 ? void 0 : newRank.name) !== null && _c !== void 0 ? _c : null;
@@ -164,7 +193,7 @@ const recalcUserRank = (userId) => __awaiter(void 0, void 0, void 0, function* (
             yield model_2.User.findByIdAndUpdate(userId, {
                 currentRank: newRankName,
                 currentRankAchievedAt: new Date(),
-                $addToSet: { earnedRanks: newRankName },
+                earnedRanks: currentEarnedRanks,
             });
             yield issueRankReward(userId, newRank);
         }

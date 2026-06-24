@@ -45,7 +45,6 @@ const SettingsSchema = new mongoose_1.Schema({
     managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
     ranks: [{
             name: { type: String },
-            order: { type: Number, default: 0 },
             requiredApprovedSales: { type: Number, default: 0 },
             reward: {
                 name: { type: String, default: "" },

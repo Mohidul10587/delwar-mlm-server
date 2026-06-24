@@ -35,6 +35,7 @@ const TransactionLogSchema = new mongoose_1.Schema({
             "withdrawal_rejected",
             "admin_credit",
             "admin_debit",
+            "installment_received",
         ],
         required: true,
     },

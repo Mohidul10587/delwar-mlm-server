@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateInstallmentStatus = exports.getInstallmentsByPurchase = exports.getInstallmentSummary = exports.createInstallmentPayment = void 0;
+exports.updateInstallmentStatus = exports.getInstallmentsByPurchase = exports.getPendingInstallments = exports.getInstallmentSummary = exports.createInstallmentPayment = void 0;
 const model_1 = require("./model");
 const installment_model_1 = require("./installment.model");
 const service_1 = require("./service");
@@ -60,7 +60,9 @@ const getInstallmentSummary = (req, res, next) => __awaiter(void 0, void 0, void
         const purchase = yield model_1.Purchase.findById(req.params.purchaseId).lean();
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
-        if (purchase.userId.toString() !== req.user._id.toString())
+        const isOwner = purchase.userId.toString() === req.user._id.toString();
+        const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
+        if (!isOwner && !isStaff)
             return res.status(403).json({ message: "Forbidden" });
         if (purchase.paymentType !== "installment")
             return res.status(400).json({ message: "Not an installment purchase" });
@@ -89,6 +91,20 @@ const getInstallmentSummary = (req, res, next) => __awaiter(void 0, void 0, void
     }
 });
 exports.getInstallmentSummary = getInstallmentSummary;
+const getPendingInstallments = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const payments = yield installment_model_1.InstallmentPayment.find({ status: "pending" })
+            .sort({ createdAt: 1 })
+            .populate("userId", "name username phone")
+            .populate("purchaseId", "snapshot quantity")
+            .lean();
+        res.json({ payments });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getPendingInstallments = getPendingInstallments;
 const getInstallmentsByPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const purchase = yield model_1.Purchase.findById(req.params.purchaseId).select("userId");
@@ -111,7 +127,7 @@ const getInstallmentsByPurchase = (req, res, next) => __awaiter(void 0, void 0, 
 });
 exports.getInstallmentsByPurchase = getInstallmentsByPurchase;
 const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status)) {
@@ -173,6 +189,14 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                     relatedModel: "InstallmentPayment",
                     userId: purchase.userId,
                     note: `Installment #${payment.installmentNo} received — ${(_e = (_d = purchase.snapshot) === null || _d === void 0 ? void 0 : _d.shareTitle) !== null && _e !== void 0 ? _e : ""} — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
+                }).catch(() => { });
+                yield model_3.TransactionLog.create({
+                    userId: purchase.userId,
+                    type: "installment_received",
+                    amount: payment.amount,
+                    balanceAfter: 0,
+                    note: `Installment #${payment.installmentNo} approved — ${(_g = (_f = purchase.snapshot) === null || _f === void 0 ? void 0 : _f.shareTitle) !== null && _g !== void 0 ? _g : ""}, ৳${payment.amount.toLocaleString()}`,
+                    relatedPurchaseId: purchase._id,
                 }).catch(() => { });
             }
         }
