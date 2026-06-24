@@ -64,7 +64,9 @@ export const getInstallmentSummary = async (
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
 
-    if (purchase.userId.toString() !== req.user!._id.toString())
+    const isOwner = purchase.userId.toString() === req.user!._id.toString();
+    const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
+    if (!isOwner && !isStaff)
       return res.status(403).json({ message: "Forbidden" });
 
     if (purchase.paymentType !== "installment")
@@ -98,6 +100,21 @@ export const getInstallmentSummary = async (
   } catch (err) {
     next(err);
   }
+};
+
+export const getPendingInstallments = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const payments = await InstallmentPayment.find({ status: "pending" })
+      .sort({ createdAt: 1 })
+      .populate("userId", "name username phone")
+      .populate("purchaseId", "snapshot quantity")
+      .lean();
+    res.json({ payments });
+  } catch (err) { next(err); }
 };
 
 export const getInstallmentsByPurchase = async (

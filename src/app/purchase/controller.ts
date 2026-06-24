@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
+import { InstallmentPayment } from "./installment.model";
 import { Share } from "../share/model";
 import { User } from "../user/model";
 import { Settings } from "../settings/model";
@@ -101,10 +102,24 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
       .populate("shareId", "title cashPrice installment")
       .sort({ createdAt: -1 })
       .lean();
+
+    // fetch all installment payments for these purchases in one query
+    const installmentPurchaseIds = purchases
+      .filter((p) => p.paymentType === "installment" && p.status !== "pending")
+      .map((p) => p._id);
+    const allPayments = installmentPurchaseIds.length
+      ? await InstallmentPayment.find({ purchaseId: { $in: installmentPurchaseIds } }).lean()
+      : [];
+    const paymentsByPurchase: Record<string, typeof allPayments> = {};
+    for (const pay of allPayments) {
+      const key = pay.purchaseId.toString();
+      (paymentsByPurchase[key] ??= []).push(pay);
+    }
+
     const enriched = purchases.map((purchase) => {
       const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
       const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
-      return {
+      const base = {
         ...purchase,
         totalPayable,
         certificateStatus: calculateCertificateStatus({
@@ -114,8 +129,53 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
           totalPayable,
         }),
       };
+      if (purchase.paymentType !== "installment" || purchase.status === "pending") return base;
+      const payments = paymentsByPurchase[purchase._id.toString()] ?? [];
+      const perInstallment = purchase.installmentAmount ?? 0;
+      const totalInstallments = purchase.installmentCount ?? 0;
+      const completed = payments.filter((p) => p.status === "approved").length;
+      const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
+      return {
+        ...base,
+        installmentSummary: {
+          totalInstallments,
+          completed,
+          remaining: Math.max(0, totalInstallments - completed),
+          perInstallment,
+          amountPaid: purchase.amountPaid,
+          amountRemaining,
+          payments,
+        },
+      };
     });
     res.json({ purchases: enriched });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /purchase/:id  — staff gets a single purchase by id
+export const getPurchaseById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const purchase = await Purchase.findById(req.params.id)
+      .populate("userId", "name username phone")
+      .populate("shareId", "title cashPrice installment")
+      .lean();
+    if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+    const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
+    const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
+    res.json({
+      purchase: {
+        ...purchase,
+        totalPayable,
+        certificateStatus: calculateCertificateStatus({
+          status: purchase.status,
+          paymentType: purchase.paymentType,
+          amountPaid: purchase.amountPaid,
+          totalPayable,
+        }),
+      },
+    });
   } catch (err) {
     next(err);
   }
