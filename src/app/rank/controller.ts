@@ -22,7 +22,7 @@ export const getRanks = async (
 ) => {
   try {
     const s = await getSettings();
-    const ranks = (s.ranks ?? []).sort((a: any, b: any) => a.order - b.order);
+    const ranks = (s.ranks ?? []);
     res.json({ ranks });
   } catch (err) {
     next(err);
@@ -38,7 +38,6 @@ export const createRank = async (
     const s = await getSettings();
     const {
       name,
-      order = 0,
       requiredGeneration = 1,
       requiredApprovedSales = 0,
       reward,
@@ -46,7 +45,6 @@ export const createRank = async (
     } = req.body;
     (s.ranks as any[]).push({
       name,
-      order,
       requiredGeneration,
       requiredApprovedSales,
       reward,
@@ -71,26 +69,42 @@ export const updateRank = async (
       (r) => r._id.toString() === req.params.id
     );
     if (idx === -1) return res.status(404).json({ message: "Rank not found" });
-    const rank = s.ranks[idx] as any;
+    
     const {
       name,
-      order,
-      requiredGeneration,
       requiredApprovedSales,
       reward,
       salary,
     } = req.body;
-    rank.set({
+    
+    s.ranks[idx] = {
+      ...s.ranks[idx],
       name,
-      order,
-      requiredGeneration,
       requiredApprovedSales,
       reward,
       salary,
-    });
-    s.markModified("ranks");
+    };
+    
     await s.save();
     res.json({ message: "Rank updated", ranks: s.ranks });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const replaceAllRanks = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const s = await Settings.findOne();
+    if (!s) return res.status(404).json({ message: "Settings not found" });
+    
+    s.ranks = req.body.ranks;
+    await s.save();
+    
+    res.json({ message: "Ranks replaced successfully", ranks: s.ranks });
   } catch (err) {
     next(err);
   }
@@ -102,10 +116,18 @@ export const deleteRank = async (
   next: NextFunction
 ) => {
   try {
-    const s = await getSettings();
-    (s as any).ranks = (s.ranks as any[]).filter(
+    const s = await Settings.findOne();
+    if (!s) return res.status(404).json({ message: "Settings not found" });
+    
+    const originalLength = s.ranks.length;
+    s.ranks = (s.ranks as any[]).filter(
       (r) => r._id.toString() !== req.params.id
     );
+    
+    if (s.ranks.length === originalLength) {
+      return res.status(404).json({ message: "Rank not found" });
+    }
+    
     await s.save();
     res.json({ message: "Rank deleted" });
   } catch (err) {
@@ -125,14 +147,11 @@ export const getMyRank = async (
       .select("currentRank currentRankAchievedAt earnedRanks")
       .lean();
     const s = await getSettings();
-    const allRanks = (s.ranks ?? []).sort(
-      (a: any, b: any) => a.order - b.order
-    );
+    const allRanks = (s.ranks ?? []);
     const currentRankName = (user as any)?.currentRank ?? null;
     const currentRank =
       allRanks.find((r: any) => r.name === currentRankName) ?? null;
-    const nextRank =
-      allRanks.find((r: any) => r.order > (currentRank?.order ?? -1)) ?? null;
+    const nextRank = null; // Remove rank progression logic since no order field
     res.json({ currentRank, nextRank, allRanks });
   } catch (err) {
     next(err);
@@ -141,19 +160,23 @@ export const getMyRank = async (
 
 // ── Core: get total approved sales amount for all network members of a user ───
 
-async function getTotalApprovedSales(
-  userId: mongoose.Types.ObjectId | string
+async function getTotalApprovedSalesByGeneration(
+  userId: mongoose.Types.ObjectId | string,
+  generation: number
 ): Promise<number> {
   const uid = new mongoose.Types.ObjectId(userId.toString());
 
+  // Find users in specific generation
   const networkUsers = await User.find({
     "generationAncestors.userId": uid,
+    "generationAncestors.generation": generation,
   })
     .select("_id")
     .lean();
 
   if (!networkUsers.length) return 0;
 
+  // Count unique shares (not installments)
   const result = await Purchase.aggregate([
     {
       $match: {
@@ -161,10 +184,21 @@ async function getTotalApprovedSales(
         status: "approved",
       },
     },
-    { $group: { _id: null, total: { $sum: "$amountPaid" } } },
+    {
+      $group: {
+        _id: "$shareId", // Group by shareId to count unique shares only
+        userId: { $first: "$userId" },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalShares: { $sum: 1 }, // Count unique shares
+      },
+    },
   ]);
 
-  return result[0]?.total ?? 0;
+  return result[0]?.totalShares ?? 0;
 }
 
 // ── Recalculate and update user rank ─────────────────────────────────────────
@@ -177,18 +211,37 @@ export const recalcUserRank = async (userId: string) => {
     if (!user) return;
 
     const s = await Settings.findOne();
-    const ranks = ((s?.ranks ?? []) as any[]).sort(
-      (a: any, b: any) => a.order - b.order
-    );
+    const ranks = ((s?.ranks ?? []) as any[]).sort((a, b) => (a.requiredApprovedSales || 0) - (b.requiredApprovedSales || 0));
     if (!ranks.length) return;
 
-    const total = await getTotalApprovedSales(userId);
-
     let newRank: any = null;
-    for (const rank of ranks) {
+    let currentEarnedRanks = (user as any).earnedRanks || [];
+
+    // Check each rank sequentially
+    for (let i = 0; i < ranks.length; i++) {
+      const rank = ranks[i];
+      const generation = i + 1; // Rank 1 = Generation 1, Rank 2 = Generation 2, etc.
       const threshold: number = rank.requiredApprovedSales ?? 0;
-      if (threshold > 0 && total >= threshold) {
-        newRank = rank;
+      
+      // Skip if previous rank not earned (sequential progression)
+      if (i > 0 && !currentEarnedRanks.includes(ranks[i-1].name)) {
+        break;
+      }
+
+      // Skip if current rank already earned
+      if (currentEarnedRanks.includes(rank.name)) {
+        newRank = rank; // Keep track of highest earned rank
+        continue;
+      }
+
+      if (threshold > 0) {
+        const totalShares = await getTotalApprovedSalesByGeneration(userId, generation);
+        if (totalShares >= threshold) {
+          newRank = rank;
+          currentEarnedRanks.push(rank.name);
+        } else {
+          break; // Can't achieve this rank, stop checking higher ranks
+        }
       }
     }
 
@@ -198,7 +251,7 @@ export const recalcUserRank = async (userId: string) => {
       await User.findByIdAndUpdate(userId, {
         currentRank: newRankName,
         currentRankAchievedAt: new Date(),
-        $addToSet: { earnedRanks: newRankName },
+        earnedRanks: currentEarnedRanks,
       });
 
       await issueRankReward(userId, newRank);
