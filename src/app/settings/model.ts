@@ -34,7 +34,6 @@ export interface ISettings extends Document {
   // Rank definitions
   ranks: {
     name: string;
-    order: number;
     requiredApprovedSales: number;
     reward?: {
       name: string;
@@ -100,7 +99,6 @@ const SettingsSchema = new Schema<ISettings>({
   managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
   ranks: [{
     name: { type: String },
-    order: { type: Number, default: 0 },
     requiredApprovedSales: { type: Number, default: 0 },
     reward: {
       name: { type: String, default: "" },
