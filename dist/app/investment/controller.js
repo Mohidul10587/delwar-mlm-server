@@ -62,7 +62,7 @@ const createInvestment = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             relatedId: investment._id,
             relatedModel: "Investment",
             userId: req.user._id,
-            note: `Investment received — ${profitType} ৳${parsedAmount}`,
+            note: `Investment received — ${profitType} plan, ৳${parsedAmount.toLocaleString()}, TxID: ${transactionId}, Account: ${senderAccount}`,
         }).catch(() => { });
         res.status(201).json({ message: "Investment created", investment });
     }
@@ -127,7 +127,8 @@ const distributeProfit = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             const wallet = yield model_3.Wallet.findOneAndUpdate({ userId: investment.userId }, { $inc: { directCommissionBalance: totalPayout } }, { new: true, upsert: true });
             yield model_3.TransactionLog.create({
                 userId: investment.userId, type: "admin_credit", amount: totalPayout,
-                balanceAfter: wallet.directCommissionBalance, note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+                balanceAfter: wallet.directCommissionBalance,
+                note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
             });
             yield model_4.CompanyLedger.create({
                 date: now,
@@ -136,7 +137,7 @@ const distributeProfit = (req, res, next) => __awaiter(void 0, void 0, void 0, f
                 relatedId: investment._id,
                 relatedModel: "Investment",
                 userId: investment.userId,
-                note: `Maturity payout ৳${totalPayout.toFixed(2)}`,
+                note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
             }).catch(() => { });
             investment.lastProfitPaidAt = now;
             investment.lastProfitPaidMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -178,7 +179,8 @@ const distributeProfit = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const wallet = yield model_3.Wallet.findOneAndUpdate({ userId: investment.userId }, { $inc: { directCommissionBalance: profitAmount } }, { new: true, upsert: true });
         yield model_3.TransactionLog.create({
             userId: investment.userId, type: "admin_credit", amount: profitAmount,
-            balanceAfter: wallet.directCommissionBalance, note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+            balanceAfter: wallet.directCommissionBalance,
+            note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()} (original ৳${investment.originalAmount.toLocaleString()})`,
         });
         yield model_4.CompanyLedger.create({
             date: now,
@@ -187,7 +189,7 @@ const distributeProfit = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             relatedId: investment._id,
             relatedModel: "Investment",
             userId: investment.userId,
-            note: `Investment profit (${investment.profitType}) ৳${profitAmount.toFixed(2)}`,
+            note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()}`,
         }).catch(() => { });
         res.json({ message: "Profit distributed", profitAmount });
     }

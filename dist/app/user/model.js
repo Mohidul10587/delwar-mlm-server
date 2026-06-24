@@ -5,7 +5,6 @@ const mongoose_1 = require("mongoose");
 const AncestorEntrySchema = new mongoose_1.Schema({
     level: { type: Number, required: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
-    side: { type: String, enum: ["A", "B"] },
 }, { _id: false });
 const UserSchema = new mongoose_1.Schema({
     username: { type: String, required: true, unique: true },
@@ -22,7 +21,6 @@ const UserSchema = new mongoose_1.Schema({
     linkedPhoneAccounts: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
     permissions: [{ type: String }],
     generationAncestors: [AncestorEntrySchema],
-    placementAncestors: [AncestorEntrySchema],
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
     currentRank: { type: String, default: null },
@@ -62,5 +60,4 @@ const UserSchema = new mongoose_1.Schema({
         default: null,
     },
 }, { timestamps: true });
-UserSchema.index({ "placementAncestors.userId": 1 });
 exports.User = (0, mongoose_1.model)("User", UserSchema);

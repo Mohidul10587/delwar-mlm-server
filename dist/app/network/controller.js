@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getReferrals = exports.getUpline = exports.getDownline = void 0;
 const model_1 = require("../user/model");
 const buildTreeFromFlat = (nodes, parentId) => nodes
-    .filter(n => { var _a, _b, _c; return ((_c = (_b = (_a = n.placementAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
+    .filter(n => { var _a, _b, _c; return ((_c = (_b = (_a = n.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
     .map(n => ({
     _id: n._id.toString(),
     username: n.username,
@@ -21,8 +21,8 @@ const buildTreeFromFlat = (nodes, parentId) => nodes
 }));
 const getDownline = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const all = yield model_1.User.find({ "placementAncestors.userId": req.user._id })
-            .select("_id username name placementAncestors")
+        const all = yield model_1.User.find({ "generationAncestors.userId": req.user._id })
+            .select("_id username name generationAncestors")
             .lean();
         res.json({ tree: buildTreeFromFlat(all, req.user._id.toString()) });
     }
@@ -34,8 +34,8 @@ exports.getDownline = getDownline;
 const getUpline = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
-        const me = yield model_1.User.findById(req.user._id).select("placementAncestors").lean();
-        const level1 = (_a = me === null || me === void 0 ? void 0 : me.placementAncestors) === null || _a === void 0 ? void 0 : _a[0];
+        const me = yield model_1.User.findById(req.user._id).select("generationAncestors").lean();
+        const level1 = (_a = me === null || me === void 0 ? void 0 : me.generationAncestors) === null || _a === void 0 ? void 0 : _a[0];
         if (!level1)
             return res.json({ upline: null });
         const parent = yield model_1.User.findById(level1.userId).select("_id username name").lean();

@@ -184,19 +184,20 @@ function issueRankReward(userId, rank) {
             return;
         wallet.rewardBalance += rank.reward.value;
         yield wallet.save();
+        const note = `Rank reward — "${rank.name}" achieved: ${rank.reward.name} worth ৳${rank.reward.value.toLocaleString()} (${rank.reward.type})`;
         yield model_4.TransactionLog.create({
             userId,
             type: "reward",
             amount: rank.reward.value,
             balanceAfter: wallet.rewardBalance,
-            note: `Rank reward: ${rank.name} — ${rank.reward.name} (${rank.reward.type})`,
+            note,
         });
         yield model_5.CompanyLedger.create({
             date: new Date(),
             type: "reward_paid",
             amount: rank.reward.value,
             userId,
-            note: `Rank reward: ${rank.name}`,
+            note,
         }).catch(() => { });
     });
 }
@@ -212,7 +213,7 @@ const releaseMonthlySalaries = (_req, res, next) => __awaiter(void 0, void 0, vo
 });
 exports.releaseMonthlySalaries = releaseMonthlySalaries;
 const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const s = yield model_1.Settings.findOne();
     const ranks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []).filter((r) => { var _a; return ((_a = r.salary) === null || _a === void 0 ? void 0 : _a.amount) > 0; });
     if (!ranks.length)
@@ -303,14 +304,14 @@ const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function*
             type: "salary",
             amount: sal.amount,
             balanceAfter: wallet.salaryBalance,
-            note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
+            note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${(_g = sal.durationMonths) !== null && _g !== void 0 ? _g : 3})`,
         });
         yield model_5.CompanyLedger.create({
             date: new Date(),
             type: "salary_paid",
             amount: sal.amount,
             userId: user._id,
-            note: `Monthly salary — Rank: ${rank.name} (${currentYear}-${currentMonth})`,
+            note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${(_h = sal.durationMonths) !== null && _h !== void 0 ? _h : 3})`,
         }).catch(() => { });
         yield salary_log_model_1.RankSalaryLog.create({
             userId: user._id,

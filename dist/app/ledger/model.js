@@ -24,6 +24,6 @@ const CompanyLedgerSchema = new mongoose_1.Schema({
     note: { type: String, default: "" },
 }, { timestamps: true });
 CompanyLedgerSchema.index({ date: 1, type: 1 });
-// Prevent duplicate ledger entries for the same source document
-CompanyLedgerSchema.index({ relatedId: 1, type: 1 }, { unique: true, sparse: true });
+// Dedup guard only for inflow types (one ledger row per source document)
+CompanyLedgerSchema.index({ relatedId: 1, type: 1 }, { unique: true, sparse: true, partialFilterExpression: { type: { $in: ["purchase_received", "installment_received", "investment_received", "withdrawal_paid"] } } });
 exports.CompanyLedger = (0, mongoose_1.model)("CompanyLedger", CompanyLedgerSchema);

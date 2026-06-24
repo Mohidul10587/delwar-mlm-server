@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminDebit = exports.adminCredit = exports.getWalletByUser = exports.getMyWallet = void 0;
+exports.adminDebit = exports.adminCredit = exports.getMyTransactions = exports.getWalletByUser = exports.getMyWallet = void 0;
 const model_1 = require("./model");
 const findOrCreate = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     let wallet = yield model_1.Wallet.findOne({ userId });
@@ -49,6 +49,22 @@ const getWalletByUser = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.getWalletByUser = getWalletByUser;
+const getMyTransactions = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 30;
+        const skip = (page - 1) * limit;
+        const [transactions, total] = yield Promise.all([
+            model_1.TransactionLog.find({ userId: req.user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            model_1.TransactionLog.countDocuments({ userId: req.user._id }),
+        ]);
+        res.json({ transactions, total, page, pages: Math.ceil(total / limit) });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getMyTransactions = getMyTransactions;
 const adminCredit = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { amount, note } = req.body;

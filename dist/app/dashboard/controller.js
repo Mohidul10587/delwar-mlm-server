@@ -17,7 +17,7 @@ const model_4 = require("../user/model");
 const model_5 = require("../share/model");
 const model_6 = require("../event/model");
 const buildTree = (nodes, parentId) => nodes
-    .filter((n) => { var _a, _b, _c; return ((_c = (_b = (_a = n.placementAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
+    .filter((n) => { var _a, _b, _c; return ((_c = (_b = (_a = n.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
     .map((n) => ({
     _id: n._id.toString(),
     username: n.username,
@@ -33,7 +33,7 @@ const getUserDashboard = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             model_1.Wallet.findOne({ userId }).lean(),
             model_2.Purchase.find({ userId }).populate("shareId", "title cashPrice installment image").sort({ createdAt: -1 }).lean(),
             model_4.User.findById(userId).select("directSalesCount teamSalesCount currentRank").lean(),
-            model_4.User.find({ "placementAncestors.userId": userId }).select("_id username name placementAncestors").lean(),
+            model_4.User.find({ "generationAncestors.userId": userId }).select("_id username name generationAncestors").lean(),
             model_3.Settings.findOne().lean(),
             model_5.Share.find({ isActive: true }).lean(),
             model_6.Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),

@@ -15,8 +15,9 @@ const installment_model_1 = require("./installment.model");
 const service_1 = require("./service");
 const model_2 = require("../certificate/model");
 const model_3 = require("../wallet/model");
+const model_4 = require("../user/model");
 const commissions_1 = require("./commissions");
-const model_4 = require("../ledger/model");
+const model_5 = require("../ledger/model");
 const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     return yield model_3.Wallet.findOne({ userId });
 });
@@ -65,8 +66,11 @@ const getInstallmentSummary = (req, res, next) => __awaiter(void 0, void 0, void
             return res.status(400).json({ message: "Not an installment purchase" });
         const totalInstallments = (_a = purchase.installmentCount) !== null && _a !== void 0 ? _a : 0;
         const perInstallment = (_b = purchase.installmentAmount) !== null && _b !== void 0 ? _b : 0;
-        const allPayments = yield installment_model_1.InstallmentPayment.find({ purchaseId: purchase._id })
-            .sort({ installmentNo: 1, createdAt: 1 }).lean();
+        const allPayments = yield installment_model_1.InstallmentPayment.find({
+            purchaseId: purchase._id,
+        })
+            .sort({ installmentNo: 1, createdAt: 1 })
+            .lean();
         const approvedCount = allPayments.filter((p) => p.status === "approved").length;
         const totalPayable = ((_c = purchase.downPayment) !== null && _c !== void 0 ? _c : 0) + totalInstallments * perInstallment;
         const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
@@ -107,7 +111,7 @@ const getInstallmentsByPurchase = (req, res, next) => __awaiter(void 0, void 0, 
 });
 exports.getInstallmentsByPurchase = getInstallmentsByPurchase;
 const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, _b, _c, _d, _e;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status)) {
@@ -144,23 +148,31 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                     amountPaid: purchase.amountPaid,
                     totalPayable,
                 });
-                yield model_2.Certificate.findOneAndUpdate({ purchaseId: purchase._id }, { status: certificateStatus, issuedAt: certificateStatus === "issued" ? new Date() : undefined }, { upsert: true, new: true });
+                yield model_2.Certificate.findOneAndUpdate({ purchaseId: purchase._id }, {
+                    status: certificateStatus,
+                    issuedAt: certificateStatus === "issued" ? new Date() : undefined,
+                }, { upsert: true, new: true });
                 // Installment commission via snapshot
                 try {
-                    yield (0, commissions_1.distributeInstallmentPaymentCommission)(purchase._id.toString(), payment.amount);
+                    yield (0, commissions_1.distributeInstallmentPaymentCommission)(purchase._id.toString(), payment.amount, payment.installmentNo);
                 }
                 catch (e) {
                     console.error("Installment commission error:", e);
                 }
                 // Ledger: inflow for this installment payment
-                yield model_4.CompanyLedger.create({
+                const buyer = yield model_4.User.findById(purchase.userId)
+                    .select("name username")
+                    .lean();
+                const buyerName = (_b = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _b !== void 0 ? _b : "";
+                const buyerUsername = (_c = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _c !== void 0 ? _c : "";
+                yield model_5.CompanyLedger.create({
                     date: new Date(),
                     type: "installment_received",
                     amount: payment.amount,
                     relatedId: payment._id,
                     relatedModel: "InstallmentPayment",
                     userId: purchase.userId,
-                    note: `Installment #${payment.installmentNo} approved — purchase ${purchase._id}`,
+                    note: `Installment #${payment.installmentNo} received — ${(_e = (_d = purchase.snapshot) === null || _d === void 0 ? void 0 : _d.shareTitle) !== null && _e !== void 0 ? _e : ""} — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
                 }).catch(() => { });
             }
         }

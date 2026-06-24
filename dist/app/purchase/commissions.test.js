@@ -64,7 +64,7 @@ describe("distributeCommissions", () => {
         const wallet = mockWallet(0);
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById.mockReturnValue({
-            select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [] }),
+            select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }] }),
         });
         model_4.Settings.findOne.mockResolvedValue({ maxGenerations: 0, generationCommission: [] });
         model_2.Wallet.findOne.mockResolvedValue(wallet);
@@ -79,7 +79,7 @@ describe("distributeCommissions", () => {
         const wallet = mockWallet(0);
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById.mockReturnValue({
-            select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [] }),
+            select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }] }),
         });
         model_4.Settings.findOne.mockResolvedValue({ maxGenerations: 0, generationCommission: [] });
         model_2.Wallet.findOne.mockResolvedValue(wallet);
@@ -91,21 +91,21 @@ describe("distributeCommissions", () => {
         const purchase = mockPurchase();
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById.mockReturnValue({
-            select: jest.fn().mockResolvedValue({ generationAncestors: [], placementAncestors: [] }),
+            select: jest.fn().mockResolvedValue({ generationAncestors: [] }),
         });
         model_4.Settings.findOne.mockResolvedValue({ maxGenerations: 0, generationCommission: [] });
         yield (0, commissions_1.distributeCommissions)("purchase1");
         expect(model_2.Wallet.findOne).not.toHaveBeenCalled();
     }));
-    test("adds managerial commission to placement ancestors", () => __awaiter(void 0, void 0, void 0, function* () {
+    test("adds managerial commission to generation ancestors", () => __awaiter(void 0, void 0, void 0, function* () {
         const purchase = mockPurchase();
         const referrerWallet = mockWallet(0);
         const parentWallet = mockWallet(0);
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [{ userId: "parent1", side: "A" }] }) }) // buyer
+            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }] }) }) // buyer
             .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Referrer", username: "referrer1" }) }) // referrer label
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Parent", username: "parent1", placementAncestors: [] }) }); // gen1 ancestor
+            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Parent", username: "parent1", generationAncestors: [] }) }); // gen1 ancestor
         model_4.Settings.findOne.mockResolvedValue({
             maxGenerations: 1,
             generationCommission: [{ generation: 1, rate: 5 }],
@@ -122,7 +122,7 @@ describe("distributeCommissions", () => {
         const purchase = mockPurchase();
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById.mockReturnValue({
-            select: jest.fn().mockResolvedValue({ generationAncestors: [], placementAncestors: [] }),
+            select: jest.fn().mockResolvedValue({ generationAncestors: [] }),
         });
         model_4.Settings.findOne.mockResolvedValue({ maxGenerations: 0, generationCommission: [] });
         yield (0, commissions_1.distributeCommissions)("purchase1");
@@ -133,7 +133,7 @@ describe("distributeCommissions", () => {
         const purchase = mockPurchase();
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [] }) })
+            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }] }) })
             .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Referrer", username: "referrer1" }) });
         model_4.Settings.findOne.mockResolvedValue({ maxGenerations: 0, generationCommission: [] });
         model_2.Wallet.findOne.mockResolvedValue(null);
@@ -147,9 +147,9 @@ describe("distributeCommissions", () => {
         const gen2Wallet = mockWallet(0);
         model_1.Purchase.findById.mockReturnValue({ populate: jest.fn().mockResolvedValue(purchase) });
         model_3.User.findById
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }], placementAncestors: [{ userId: "gen1", side: "A" }] }) }) // buyer
+            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ generationAncestors: [{ userId: "referrer1" }] }) }) // buyer
             .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Referrer", username: "referrer1" }) }) // referrer label
-            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Gen1", username: "gen1", placementAncestors: [{ userId: "gen2", side: "B" }] }) }); // gen1 ancestor
+            .mockReturnValueOnce({ select: jest.fn().mockResolvedValue({ name: "Gen1", username: "gen1", generationAncestors: [{ userId: "gen2" }] }) }); // gen1 ancestor
         model_4.Settings.findOne.mockResolvedValue({
             maxGenerations: 1,
             generationCommission: [

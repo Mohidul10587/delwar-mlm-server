@@ -41,8 +41,8 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             remaining -= deduct;
         }
         yield wallet.save();
-        const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method}: ${accountDetails}`;
-        yield model_2.TransactionLog.create({ userId: req.user._id, type: "withdrawal", amount: amt, balanceAfter: wallet.totalBalance, note: noteDetail });
+        const noteDetail = method === "branch" ? `Branch: ${branch}` : `${method.toUpperCase()}: ${accountDetails}`;
+        yield model_2.TransactionLog.create({ userId: req.user._id, type: "withdrawal", amount: amt, balanceAfter: wallet.totalBalance, note: `Withdrawal request — ৳${amt.toLocaleString()} via ${noteDetail}` });
         const withdrawal = yield model_1.Withdrawal.create({
             userId: req.user._id, amount: amt, method,
             accountDetails: method === "branch" ? "" : accountDetails,
@@ -78,6 +78,7 @@ const getMyWithdrawals = (req, res, next) => __awaiter(void 0, void 0, void 0, f
 });
 exports.getMyWithdrawals = getMyWithdrawals;
 const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
@@ -92,7 +93,7 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
             if (wallet) {
                 wallet.directCommissionBalance += withdrawal.amount;
                 yield wallet.save();
-                yield model_2.TransactionLog.create({ userId: withdrawal.userId, type: "withdrawal_rejected", amount: withdrawal.amount, balanceAfter: wallet.totalBalance, note: reviewNote || "Withdrawal rejected" });
+                yield model_2.TransactionLog.create({ userId: withdrawal.userId, type: "withdrawal_rejected", amount: withdrawal.amount, balanceAfter: wallet.totalBalance, note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${withdrawal.method}${withdrawal.method === "branch" ? ` (${withdrawal.branch})` : ` (${withdrawal.accountDetails})`}. Reason: ${reviewNote || "No reason given"}` });
             }
         }
         withdrawal.status = status;
@@ -102,6 +103,10 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
         yield withdrawal.save();
         // Ledger: approved withdrawal = outflow
         if (status === "approved") {
+            const wUser = yield model_1.Withdrawal.findById(withdrawal._id).populate("userId", "name username").lean();
+            const uName = (_b = (_a = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _a === void 0 ? void 0 : _a.name) !== null && _b !== void 0 ? _b : "";
+            const uUsername = (_d = (_c = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _c === void 0 ? void 0 : _c.username) !== null && _d !== void 0 ? _d : "";
+            const dest = withdrawal.method === "branch" ? `Branch: ${withdrawal.branch}` : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
             yield model_3.CompanyLedger.create({
                 date: new Date(),
                 type: "withdrawal_paid",
@@ -109,7 +114,7 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
                 relatedId: withdrawal._id,
                 relatedModel: "Withdrawal",
                 userId: withdrawal.userId,
-                note: `Withdrawal approved — ${withdrawal.method}`,
+                note: `Withdrawal paid — ৳${withdrawal.amount.toLocaleString()} to ${uName} (@${uUsername}) via ${dest}`,
             }).catch(() => { });
         }
         res.json({ message: `Withdrawal ${status}`, withdrawal });
