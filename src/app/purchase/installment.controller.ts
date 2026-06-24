@@ -238,6 +238,15 @@ export const updateInstallmentStatus = async (
             purchase.snapshot?.shareTitle ?? ""
           } — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
         }).catch(() => {});
+
+        await TransactionLog.create({
+          userId: purchase.userId,
+          type: "installment_received",
+          amount: payment.amount,
+          balanceAfter: 0,
+          note: `Installment #${payment.installmentNo} approved — ${purchase.snapshot?.shareTitle ?? ""}, ৳${payment.amount.toLocaleString()}`,
+          relatedPurchaseId: purchase._id,
+        }).catch(() => {});
       }
     }
 

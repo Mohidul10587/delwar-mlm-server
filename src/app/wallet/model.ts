@@ -22,7 +22,8 @@ export interface ITransactionLog extends Document {
     | "withdrawal"
     | "withdrawal_rejected"
     | "admin_credit"
-    | "admin_debit";
+    | "admin_debit"
+    | "installment_received";
   amount: number;
   balanceAfter: number;
   note: string;
@@ -67,6 +68,7 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
         "withdrawal_rejected",
         "admin_credit",
         "admin_debit",
+        "installment_received",
       ],
       required: true,
     },
