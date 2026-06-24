@@ -8,7 +8,7 @@ import { Event } from "../event/model";
 
 const buildTree = (nodes: any[], parentId: string): any[] =>
   nodes
-    .filter((n) => n.placementAncestors?.[0]?.userId?.toString() === parentId)
+    .filter((n) => n.generationAncestors?.[0]?.userId?.toString() === parentId)
     .map((n) => ({
       _id: n._id.toString(),
       username: n.username,
@@ -25,7 +25,7 @@ export const getUserDashboard = async (req: Request, res: Response, next: NextFu
       Wallet.findOne({ userId }).lean(),
       Purchase.find({ userId }).populate("shareId", "title cashPrice installment image").sort({ createdAt: -1 }).lean(),
       User.findById(userId).select("directSalesCount teamSalesCount currentRank").lean(),
-      User.find({ "placementAncestors.userId": userId }).select("_id username name placementAncestors").lean(),
+      User.find({ "generationAncestors.userId": userId }).select("_id username name generationAncestors").lean(),
       Settings.findOne().lean(),
       Share.find({ isActive: true }).lean(),
       Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),

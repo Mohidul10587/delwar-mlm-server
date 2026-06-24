@@ -3,7 +3,6 @@ import mongoose, { Schema, model, Document } from "mongoose";
 export interface IAncestorEntry {
   level: number; // 1 = direct parent, 2 = grandparent, etc.
   userId: mongoose.Types.ObjectId;
-  side?: "A" | "B"; // only for placementAncestors: which side of that ancestor this user's subtree is on
 }
 
 export interface INominee {
@@ -33,7 +32,6 @@ export interface IUser extends Document {
   linkedPhoneAccounts: mongoose.Types.ObjectId[];
   permissions: string[];
   generationAncestors: IAncestorEntry[];
-  placementAncestors: IAncestorEntry[];
   directSalesCount: number;
   teamSalesCount: number;
   currentRank: string | null;
@@ -52,7 +50,6 @@ const AncestorEntrySchema = new Schema<IAncestorEntry>(
   {
     level: { type: Number, required: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    side: { type: String, enum: ["A", "B"] },
   },
   { _id: false }
 );
@@ -73,7 +70,6 @@ const UserSchema = new Schema<IUser>(
     linkedPhoneAccounts: [{ type: Schema.Types.ObjectId, ref: "User" }],
     permissions: [{ type: String }],
     generationAncestors: [AncestorEntrySchema],
-    placementAncestors: [AncestorEntrySchema],
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
     currentRank: { type: String, default: null },
@@ -116,7 +112,5 @@ const UserSchema = new Schema<IUser>(
   },
   { timestamps: true }
 );
-
-UserSchema.index({ "placementAncestors.userId": 1 });
 
 export const User = model<IUser>("User", UserSchema);

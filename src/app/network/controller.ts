@@ -10,7 +10,7 @@ interface TreeNode {
 
 const buildTreeFromFlat = (nodes: any[], parentId: string): TreeNode[] =>
   nodes
-    .filter(n => n.placementAncestors?.[0]?.userId?.toString() === parentId)
+    .filter(n => n.generationAncestors?.[0]?.userId?.toString() === parentId)
     .map(n => ({
       _id: n._id.toString(),
       username: n.username,
@@ -20,8 +20,8 @@ const buildTreeFromFlat = (nodes: any[], parentId: string): TreeNode[] =>
 
 export const getDownline = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const all = await User.find({ "placementAncestors.userId": req.user!._id })
-      .select("_id username name placementAncestors")
+    const all = await User.find({ "generationAncestors.userId": req.user!._id })
+      .select("_id username name generationAncestors")
       .lean();
     res.json({ tree: buildTreeFromFlat(all, req.user!._id.toString()) });
   } catch (err) { next(err); }
@@ -29,8 +29,8 @@ export const getDownline = async (req: Request, res: Response, next: NextFunctio
 
 export const getUpline = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const me = await User.findById(req.user!._id).select("placementAncestors").lean();
-    const level1 = (me as any)?.placementAncestors?.[0];
+    const me = await User.findById(req.user!._id).select("generationAncestors").lean();
+    const level1 = (me as any)?.generationAncestors?.[0];
     if (!level1) return res.json({ upline: null });
     const parent = await User.findById(level1.userId).select("_id username name").lean();
     if (!parent) return res.json({ upline: null });

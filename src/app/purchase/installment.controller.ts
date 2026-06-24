@@ -13,10 +13,17 @@ const findOrCreateWallet = async (userId: string) => {
   return await Wallet.findOne({ userId });
 };
 
-export const createInstallmentPayment = async (req: Request, res: Response, next: NextFunction) => {
+export const createInstallmentPayment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { installmentNo, amount, senderAccount, transactionId } = req.body;
-    const purchase = await Purchase.findById(req.params.purchaseId).populate("shareId", "installment");
+    const purchase = await Purchase.findById(req.params.purchaseId).populate(
+      "shareId",
+      "installment"
+    );
     if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
     }
@@ -47,7 +54,11 @@ export const createInstallmentPayment = async (req: Request, res: Response, next
   }
 };
 
-export const getInstallmentSummary = async (req: Request, res: Response, next: NextFunction) => {
+export const getInstallmentSummary = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const purchase = await Purchase.findById(req.params.purchaseId).lean();
     if (!purchase)
@@ -62,11 +73,17 @@ export const getInstallmentSummary = async (req: Request, res: Response, next: N
     const totalInstallments: number = purchase.installmentCount ?? 0;
     const perInstallment: number = purchase.installmentAmount ?? 0;
 
-    const allPayments = await InstallmentPayment.find({ purchaseId: purchase._id })
-      .sort({ installmentNo: 1, createdAt: 1 }).lean();
+    const allPayments = await InstallmentPayment.find({
+      purchaseId: purchase._id,
+    })
+      .sort({ installmentNo: 1, createdAt: 1 })
+      .lean();
 
-    const approvedCount = allPayments.filter((p) => p.status === "approved").length;
-    const totalPayable = (purchase.downPayment ?? 0) + totalInstallments * perInstallment;
+    const approvedCount = allPayments.filter(
+      (p) => p.status === "approved"
+    ).length;
+    const totalPayable =
+      (purchase.downPayment ?? 0) + totalInstallments * perInstallment;
     const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
 
     res.json({
@@ -78,12 +95,20 @@ export const getInstallmentSummary = async (req: Request, res: Response, next: N
       amountRemaining,
       payments: allPayments,
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const getInstallmentsByPurchase = async (req: Request, res: Response, next: NextFunction) => {
+export const getInstallmentsByPurchase = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const purchase = await Purchase.findById(req.params.purchaseId).select("userId");
+    const purchase = await Purchase.findById(req.params.purchaseId).select(
+      "userId"
+    );
     if (!purchase) {
       return res.status(404).json({ message: "Purchase not found" });
     }
@@ -104,9 +129,16 @@ export const getInstallmentsByPurchase = async (req: Request, res: Response, nex
   }
 };
 
-export const updateInstallmentStatus = async (req: Request, res: Response, next: NextFunction) => {
+export const updateInstallmentStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { status, reviewNote } = req.body as { status: "approved" | "rejected"; reviewNote?: string };
+    const { status, reviewNote } = req.body as {
+      status: "approved" | "rejected";
+      reviewNote?: string;
+    };
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
@@ -131,14 +163,20 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
     await payment.save();
 
     if (status === "approved") {
-      const purchase = await Purchase.findById(payment.purchaseId).populate("shareId", "cashPrice installment commissions");
+      const purchase = await Purchase.findById(payment.purchaseId).populate(
+        "shareId",
+        "cashPrice installment commissions"
+      );
       if (purchase) {
         purchase.amountPaid += payment.amount;
         await purchase.save();
 
         const share = purchase.shareId as any;
         const sharePrice = Number(share?.cashPrice ?? 0);
-        const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
+        const totalPayable = calculateTotalPayable(
+          sharePrice,
+          purchase.quantity
+        );
         const certificateStatus = calculateCertificateStatus({
           status: purchase.status,
           paymentType: purchase.paymentType,
@@ -148,17 +186,28 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
 
         await Certificate.findOneAndUpdate(
           { purchaseId: purchase._id },
-          { status: certificateStatus, issuedAt: certificateStatus === "issued" ? new Date() : undefined },
+          {
+            status: certificateStatus,
+            issuedAt: certificateStatus === "issued" ? new Date() : undefined,
+          },
           { upsert: true, new: true }
         );
 
         // Installment commission via snapshot
         try {
-          await distributeInstallmentPaymentCommission(purchase._id.toString(), payment.amount, payment.installmentNo);
-        } catch (e) { console.error("Installment commission error:", e); }
+          await distributeInstallmentPaymentCommission(
+            purchase._id.toString(),
+            payment.amount,
+            payment.installmentNo
+          );
+        } catch (e) {
+          console.error("Installment commission error:", e);
+        }
 
         // Ledger: inflow for this installment payment
-        const buyer = await User.findById(purchase.userId).select("name username").lean();
+        const buyer = await User.findById(purchase.userId)
+          .select("name username")
+          .lean();
         const buyerName = (buyer as any)?.name ?? "";
         const buyerUsername = (buyer as any)?.username ?? "";
         await CompanyLedger.create({
@@ -168,7 +217,9 @@ export const updateInstallmentStatus = async (req: Request, res: Response, next:
           relatedId: payment._id,
           relatedModel: "InstallmentPayment",
           userId: purchase.userId,
-          note: `Installment #${payment.installmentNo} received — ${purchase.snapshot?.shareTitle ?? ""} — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
+          note: `Installment #${payment.installmentNo} received — ${
+            purchase.snapshot?.shareTitle ?? ""
+          } — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
         }).catch(() => {});
       }
     }
