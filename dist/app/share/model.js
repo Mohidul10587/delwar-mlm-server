@@ -21,6 +21,7 @@ const ShareSchema = new mongoose_1.Schema({
     ],
     installmentCommissionRate: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    totalShares: { type: Number, required: true, default: 0 },
     projectType: { type: String, default: "" },
     location: { type: String, default: "" },
     developer: { type: String, default: "" },

@@ -6,6 +6,25 @@ import { User } from "../user/model";
 import { Settings } from "../settings/model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
+import { ShareSlot } from "../share/shareSlot.model";
+
+// Helper — build slotsByPurchase map from a list of purchaseIds
+async function fetchSlotsByPurchase(purchaseIds: any[]): Promise<Record<string, string[]>> {
+  if (!purchaseIds.length) return {};
+  const slots = await ShareSlot.find({
+    purchaseId: { $in: purchaseIds },
+    status: "sold",
+  })
+    .select("purchaseId shareNumber")
+    .sort({ shareNumber: 1 })
+    .lean();
+  const map: Record<string, string[]> = {};
+  for (const s of slots) {
+    const key = s.purchaseId!.toString();
+    (map[key] ??= []).push(s.shareNumber);
+  }
+  return map;
+}
 
 // POST /purchase  — logged-in user submits a purchase request
 export const createPurchase = async (req: Request, res: Response, next: NextFunction) => {
@@ -27,15 +46,12 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     const qty = Number(quantity);
     const totalPayable = share.cashPrice * qty;
 
-    // Cash: fixed DP = maxDownPayment, 1 installment for remainder
-    // Installment: user-provided DP and installmentCount
     const resolvedDP =
       paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
     const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
     const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
     const amountPaid = resolvedDP;
 
-    // Build snapshot — locks all commission/config + rank/salary rules at time of purchase
     const settings = await Settings.findOne().lean();
     const ranks = (settings?.ranks ?? []) as any[];
     const snapshot = {
@@ -103,7 +119,6 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
       .sort({ createdAt: -1 })
       .lean();
 
-    // fetch all installment payments for these purchases in one query
     const installmentPurchaseIds = purchases
       .filter((p) => p.paymentType === "installment" && p.status !== "pending")
       .map((p) => p._id);
@@ -116,12 +131,19 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
       (paymentsByPurchase[key] ??= []).push(pay);
     }
 
+    // Fetch share slots for approved purchases
+    const approvedIds = purchases
+      .filter((p) => p.status === "approved")
+      .map((p) => p._id);
+    const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
+
     const enriched = purchases.map((purchase) => {
       const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
       const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
       const base = {
         ...purchase,
         totalPayable,
+        shareNumbers: slotsByPurchase[purchase._id.toString()] ?? [],
         certificateStatus: calculateCertificateStatus({
           status: purchase.status,
           paymentType: purchase.paymentType,
@@ -162,12 +184,20 @@ export const getPurchaseById = async (req: Request, res: Response, next: NextFun
       .populate("shareId", "title cashPrice installment")
       .lean();
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+
     const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
     const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
+
+    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+      .select("shareNumber")
+      .sort({ shareNumber: 1 })
+      .lean();
+
     res.json({
       purchase: {
         ...purchase,
         totalPayable,
+        shareNumbers: slots.map((s) => s.shareNumber),
         certificateStatus: calculateCertificateStatus({
           status: purchase.status,
           paymentType: purchase.paymentType,
@@ -188,12 +218,19 @@ export const getMyPurchases = async (req: Request, res: Response, next: NextFunc
       .populate("shareId", "title cashPrice installment image")
       .sort({ createdAt: -1 })
       .lean();
+
+    const approvedIds = purchases
+      .filter((p) => p.status === "approved")
+      .map((p) => p._id);
+    const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
+
     const enriched = purchases.map((purchase) => {
       const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
       const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
       return {
         ...purchase,
         totalPayable,
+        shareNumbers: slotsByPurchase[purchase._id.toString()] ?? [],
         certificateStatus: calculateCertificateStatus({
           status: purchase.status,
           paymentType: purchase.paymentType,

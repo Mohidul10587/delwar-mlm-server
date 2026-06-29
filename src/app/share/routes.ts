@@ -5,12 +5,16 @@ import {
   getShareById,
   updateShare,
   deleteShare,
+  getShareStats,
+  getSharesWithStats,
 } from "./controller";
-import { verifySuperAdmin } from "../../middleware/auth";
+import { verifySuperAdmin, verifyStaff } from "../../middleware/auth";
 
 const router = Router();
 
 router.get("/", getShares);
+router.get("/stats", verifyStaff, getShareStats);
+router.get("/with-stats", verifyStaff, getSharesWithStats);
 router.get("/:id", getShareById);
 router.post("/", verifySuperAdmin, createShare);
 router.put("/:id", verifySuperAdmin, updateShare);

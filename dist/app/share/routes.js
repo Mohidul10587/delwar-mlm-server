@@ -5,6 +5,8 @@ const controller_1 = require("./controller");
 const auth_1 = require("../../middleware/auth");
 const router = (0, express_1.Router)();
 router.get("/", controller_1.getShares);
+router.get("/stats", auth_1.verifyStaff, controller_1.getShareStats);
+router.get("/with-stats", auth_1.verifyStaff, controller_1.getSharesWithStats);
 router.get("/:id", controller_1.getShareById);
 router.post("/", auth_1.verifySuperAdmin, controller_1.createShare);
 router.put("/:id", auth_1.verifySuperAdmin, controller_1.updateShare);

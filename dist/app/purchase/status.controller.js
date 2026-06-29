@@ -9,13 +9,46 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePurchaseStatus = void 0;
+exports.reclaimShares = exports.updatePurchaseStatus = void 0;
 const model_1 = require("./model");
 const service_1 = require("./service");
 const model_2 = require("../certificate/model");
 const commissions_1 = require("./commissions");
 const model_3 = require("../user/model");
 const model_4 = require("../ledger/model");
+const shareSlot_model_1 = require("../share/shareSlot.model");
+// ── Share allocation helpers ──────────────────────────────────────────────────
+/**
+ * Allocates available share slots to a purchase.
+ * Returns error string if not enough available, otherwise null.
+ */
+function allocateShares(purchase) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const available = yield shareSlot_model_1.ShareSlot.find({
+            shareId: purchase.shareId,
+            status: "available",
+        })
+            .sort({ shareNumber: 1 })
+            .limit(purchase.quantity)
+            .select("_id");
+        if (available.length < purchase.quantity) {
+            return { error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required` };
+        }
+        yield shareSlot_model_1.ShareSlot.updateMany({ _id: { $in: available.map((s) => s._id) } }, { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } });
+        return null;
+    });
+}
+/**
+ * Reclaims all sold share slots belonging to a purchase.
+ * Returns number of slots reclaimed.
+ */
+function reclaimPurchaseShares(purchaseId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const result = yield shareSlot_model_1.ShareSlot.updateMany({ purchaseId, status: "sold" }, { $set: { status: "reclaimed", reclaimedAt: new Date(), userId: null, purchaseId: null } });
+        return result.modifiedCount;
+    });
+}
+// ── Update Purchase Status (Approve / Reject) ─────────────────────────────────
 const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f;
     try {
@@ -24,29 +57,42 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             return res.status(400).json({ message: "Invalid status" });
         if (status === "rejected" && !String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim())
             return res.status(400).json({ message: "Rejection reason is required" });
-        const purchase = yield model_1.Purchase.findByIdAndUpdate(req.params.id, {
-            status,
-            reviewNote: String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim(),
-            reviewedBy: req.user._id,
-            reviewedAt: new Date(),
-        }, { new: true });
-        if (!purchase) {
+        const purchase = yield model_1.Purchase.findById(req.params.id);
+        if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
-        }
-        if (status === "approved" && !purchase.commissionProcessed) {
-            // For cash: mark full amount as paid (downPayment + remainder)
-            if (purchase.paymentType === "cash") {
-                const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
-                if (fullAmount > purchase.amountPaid) {
-                    purchase.amountPaid = fullAmount;
-                    yield purchase.save();
-                }
+        const wasAlreadyApproved = purchase.status === "approved";
+        // Step 1 — Allocate share slots (only on first approval)
+        if (status === "approved" && !wasAlreadyApproved) {
+            const allocationError = yield allocateShares(purchase);
+            if (allocationError) {
+                return res.status(400).json({ message: allocationError.error });
             }
-            (0, commissions_1.distributeCommissions)(purchase._id.toString());
+        }
+        // Step 2 — For cash: mark full amount as paid
+        if (status === "approved" && !wasAlreadyApproved && purchase.paymentType === "cash") {
+            const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
+            if (fullAmount > purchase.amountPaid) {
+                purchase.amountPaid = fullAmount;
+            }
+        }
+        // Step 3 — Save purchase status
+        purchase.status = status;
+        purchase.reviewNote = String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim();
+        purchase.reviewedBy = req.user._id;
+        purchase.reviewedAt = new Date();
+        yield purchase.save();
+        // Respond immediately
+        res.json({ message: `Purchase ${status}`, purchase });
+        if (status === "approved" && !wasAlreadyApproved) {
+            // Step 4 — User personal shares count
             yield model_3.User.findByIdAndUpdate(purchase.userId, {
                 $inc: { personalSharesCount: purchase.quantity },
             });
-            // Ledger: record inflow for this purchase approval
+            // Step 5 — Distribute commissions
+            if (!purchase.commissionProcessed) {
+                (0, commissions_1.distributeCommissions)(purchase._id.toString());
+            }
+            // Step 6 — Ledger entry
             const buyer = yield model_3.User.findById(purchase.userId).select("name username").lean();
             const buyerName = (_a = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _a !== void 0 ? _a : "";
             const buyerUsername = (_b = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _b !== void 0 ? _b : "";
@@ -60,6 +106,7 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
                 note: `Purchase approved — ${(_d = (_c = purchase.snapshot) === null || _c === void 0 ? void 0 : _c.shareTitle) !== null && _d !== void 0 ? _d : ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
             }).catch(() => { });
         }
+        // Step 7 — Update certificate status
         const purchaseWithShare = yield model_1.Purchase.findById(purchase._id)
             .populate("shareId", "cashPrice")
             .lean();
@@ -77,10 +124,31 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
                 issuedAt: certificateStatus === "issued" ? new Date() : undefined,
             }, { upsert: true, new: true });
         }
-        res.json({ message: `Purchase ${status}`, purchase });
     }
     catch (err) {
         next(err);
     }
 });
 exports.updatePurchaseStatus = updatePurchaseStatus;
+// ── Reclaim Shares (Installment Default) ─────────────────────────────────────
+const reclaimShares = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const purchase = yield model_1.Purchase.findById(req.params.purchaseId);
+        if (!purchase)
+            return res.status(404).json({ message: "Purchase not found" });
+        const reclaimed = yield reclaimPurchaseShares(purchase._id);
+        if (reclaimed === 0) {
+            return res.status(404).json({
+                message: "No sold share slots found for this purchase",
+            });
+        }
+        res.json({
+            message: `${reclaimed} share slot(s) reclaimed`,
+            reclaimed,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.reclaimShares = reclaimShares;

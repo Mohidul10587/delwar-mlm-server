@@ -28,6 +28,7 @@ export interface IShare extends Document {
   // Installment managerial commission (same rate for all generations)
   installmentCommissionRate: number; // %
 
+  totalShares: number;
   isActive: boolean;
   projectType?: string;
   location?: string;
@@ -63,6 +64,7 @@ const ShareSchema = new Schema<IShare>(
     installmentCommissionRate: { type: Number, default: 0 },
 
     isActive: { type: Boolean, default: true },
+    totalShares: { type: Number, required: true, default: 0 },
     projectType: { type: String, default: "" },
     location: { type: String, default: "" },
     developer: { type: String, default: "" },
