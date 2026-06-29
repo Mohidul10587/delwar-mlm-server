@@ -1,12 +1,31 @@
 import { Router } from "express";
 import {
-  register, adminRegister, login, verify, logout, refresh,
-  switchAccount, toggleUserActive, getUsers, deleteUser, getUserDetails,
-  adminUpdatePhone, adminUpdatePassword, adminUpdateRelations,
-  updatePhone, updateImage, changePassword, updatePermissions, updateInfo,
+  register,
+  adminRegister,
+  login,
+  verify,
+  logout,
+  refresh,
+  switchAccount,
+  toggleUserActive,
+  getUsers,
+  deleteUser,
+  getUserDetails,
+  adminUpdatePhone,
+  adminUpdatePassword,
+  adminUpdateRelations,
+  updatePhone,
+  updateImage,
+  changePassword,
+  updatePermissions,
+  updateInfo,
 } from "./controller";
 import { getSuperAdminStats } from "./stats.controller";
-import { verifyUser, verifyAdmin, verifySuperAdmin } from "../../middleware/auth";
+import {
+  verifyUser,
+  verifyAdmin,
+  verifySuperAdmin,
+} from "../../middleware/auth";
 
 const router = Router();
 
