@@ -36,12 +36,27 @@ export const getWalletByUser = async (req: Request, res: Response, next: NextFun
 
 export const getMyTransactions = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const page = parseInt(req.query.page as string) || 1;
+    const page  = parseInt(req.query.page  as string) || 1;
     const limit = parseInt(req.query.limit as string) || 30;
-    const skip = (page - 1) * limit;
+    const skip  = (page - 1) * limit;
+
+    const filter: any = { userId: req.user!._id };
+
+    if (req.query.type) filter.type = req.query.type;
+
+    if (req.query.startDate || req.query.endDate) {
+      filter.createdAt = {};
+      if (req.query.startDate) filter.createdAt.$gte = new Date(req.query.startDate as string);
+      if (req.query.endDate) {
+        const end = new Date(req.query.endDate as string);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+
     const [transactions, total] = await Promise.all([
-      TransactionLog.find({ userId: req.user!._id }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      TransactionLog.countDocuments({ userId: req.user!._id }),
+      TransactionLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      TransactionLog.countDocuments(filter),
     ]);
     res.json({ transactions, total, page, pages: Math.ceil(total / limit) });
   } catch (err) { next(err); }

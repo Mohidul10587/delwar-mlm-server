@@ -6,6 +6,7 @@ import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { RankSalaryLog } from "../rank/salary-log.model";
 import { CompanyLedger } from "../ledger/model";
+import { ShareSlot } from "../share/shareSlot.model";
 
 const router = Router();
 
@@ -23,7 +24,7 @@ router.get("/full", async (_req: Request, res: Response) => {
         manCommFromDownPayment: 0,
         manCommFromInstallment: 0,
         totalBalance: 0,
-      directCommissionBalance: 0,
+        directCommissionBalance: 0,
         salaryBalance: 0,
         rewardBalance: 0,
       }
@@ -38,6 +39,11 @@ router.get("/full", async (_req: Request, res: Response) => {
         teamSalesCount: 0,
         personalSharesCount: 0,
       }
+    ),
+    // Reset all share slots back to available
+    ShareSlot.updateMany(
+      {},
+      { $set: { status: "available", userId: null, purchaseId: null, reclaimedAt: null } }
     ),
   ]);
   res.json({ message: "Full reset complete" });

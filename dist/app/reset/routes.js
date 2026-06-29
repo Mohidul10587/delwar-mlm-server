@@ -17,6 +17,7 @@ const model_3 = require("../wallet/model");
 const model_4 = require("../user/model");
 const salary_log_model_1 = require("../rank/salary-log.model");
 const model_5 = require("../ledger/model");
+const shareSlot_model_1 = require("../share/shareSlot.model");
 const router = (0, express_1.Router)();
 router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     yield Promise.all([
@@ -42,6 +43,8 @@ router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* (
             teamSalesCount: 0,
             personalSharesCount: 0,
         }),
+        // Reset all share slots back to available
+        shareSlot_model_1.ShareSlot.updateMany({}, { $set: { status: "available", userId: null, purchaseId: null, reclaimedAt: null } }),
     ]);
     res.json({ message: "Full reset complete" });
 }));

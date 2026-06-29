@@ -11,6 +11,7 @@ router.get("/my", auth_1.verifyUser, controller_1.getMyPurchases);
 router.get("/", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), controller_1.getPurchases);
 router.get("/installments/pending", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), installment_controller_1.getPendingInstallments);
 router.patch("/:id/status", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), status_controller_1.updatePurchaseStatus);
+router.post("/:purchaseId/reclaim", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), status_controller_1.reclaimShares);
 router.get("/:id", auth_1.verifyStaff, (0, auth_1.requirePermission)("purchase.review"), controller_1.getPurchaseById);
 router.post("/:purchaseId/installments", auth_1.verifyUser, installment_controller_1.createInstallmentPayment);
 router.get("/:purchaseId/installments/summary", auth_1.verifyUser, installment_controller_1.getInstallmentSummary);
