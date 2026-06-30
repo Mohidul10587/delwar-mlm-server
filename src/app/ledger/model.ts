@@ -7,6 +7,7 @@ import { Schema, model, Document, Types } from "mongoose";
  *   purchase_received        — cash purchase down-payment approved
  *   installment_received     — individual installment payment approved
  *   investment_received      — investment deposit created
+ *   transfer_fee_received    — fee charged on balance transfer between users
  *
  * OUTFLOW (company pays out):
  *   commission_paid          — direct or managerial commission to a user's wallet
@@ -14,21 +15,25 @@ import { Schema, model, Document, Types } from "mongoose";
  *   reward_paid              — rank achievement reward credited to a user's wallet
  *   investment_profit_paid   — monthly / partial / maturity profit distributed
  *   withdrawal_paid          — withdrawal request approved (money leaves company)
+ *   incentive_bonus_paid     — incentive bonus granted by admin
  */
 export type LedgerType =
   | "purchase_received"
   | "installment_received"
   | "investment_received"
+  | "transfer_fee_received"
   | "commission_paid"
   | "salary_paid"
   | "reward_paid"
   | "investment_profit_paid"
-  | "withdrawal_paid";
+  | "withdrawal_paid"
+  | "incentive_bonus_paid";
 
 export const INFLOW_TYPES: LedgerType[] = [
   "purchase_received",
   "installment_received",
   "investment_received",
+  "transfer_fee_received",
 ];
 
 export const OUTFLOW_TYPES: LedgerType[] = [
@@ -37,6 +42,7 @@ export const OUTFLOW_TYPES: LedgerType[] = [
   "reward_paid",
   "investment_profit_paid",
   "withdrawal_paid",
+  "incentive_bonus_paid",
 ];
 
 export interface ICompanyLedger extends Document {

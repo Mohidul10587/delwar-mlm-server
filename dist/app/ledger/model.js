@@ -6,6 +6,7 @@ exports.INFLOW_TYPES = [
     "purchase_received",
     "installment_received",
     "investment_received",
+    "transfer_fee_received",
 ];
 exports.OUTFLOW_TYPES = [
     "commission_paid",
@@ -13,6 +14,7 @@ exports.OUTFLOW_TYPES = [
     "reward_paid",
     "investment_profit_paid",
     "withdrawal_paid",
+    "incentive_bonus_paid",
 ];
 const CompanyLedgerSchema = new mongoose_1.Schema({
     date: { type: Date, required: true, index: true },

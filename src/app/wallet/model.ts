@@ -2,12 +2,14 @@ import { Schema, model, Document, Types } from "mongoose";
 
 export interface IWallet extends Document {
   userId: Types.ObjectId;
-  totalBalance: number; // virtual
+  totalBalance: number; // pre-save computed
   directCommissionBalance: number;
   manCommFromDownPayment: number;
   manCommFromInstallment: number;
   salaryBalance: number;
   rewardBalance: number;
+  incentiveBonus: number;  // admin-granted, non-withdrawable
+  transferBalance: number; // received via balance transfer
 }
 
 export interface ITransactionLog extends Document {
@@ -23,7 +25,10 @@ export interface ITransactionLog extends Document {
     | "withdrawal_rejected"
     | "admin_credit"
     | "admin_debit"
-    | "installment_received";
+    | "installment_received"
+    | "incentive_bonus"
+    | "transfer_sent"
+    | "transfer_received";
   amount: number;
   balanceAfter: number;
   note: string;
@@ -39,6 +44,8 @@ const WalletSchema = new Schema<IWallet>(
     manCommFromInstallment: { type: Number, default: 0 },
     salaryBalance: { type: Number, default: 0 },
     rewardBalance: { type: Number, default: 0 },
+    incentiveBonus: { type: Number, default: 0 },
+    transferBalance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -49,7 +56,9 @@ WalletSchema.pre("save", function () {
     (this.manCommFromDownPayment ?? 0) +
     (this.manCommFromInstallment ?? 0) +
     (this.salaryBalance ?? 0) +
-    (this.rewardBalance ?? 0);
+    (this.rewardBalance ?? 0) +
+    (this.incentiveBonus ?? 0) +
+    (this.transferBalance ?? 0);
 });
 
 const TransactionLogSchema = new Schema<ITransactionLog>(
@@ -69,6 +78,9 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
         "admin_credit",
         "admin_debit",
         "installment_received",
+        "incentive_bonus",
+        "transfer_sent",
+        "transfer_received",
       ],
       required: true,
     },

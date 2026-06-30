@@ -70,5 +70,6 @@ const SettingsSchema = new mongoose_1.Schema({
             maturity: { profitPercentage: 0, minAmount: 0, bulletPoints: [] },
         }),
     },
+    balanceTransferFeePercent: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.Settings = (0, mongoose_1.model)("Settings", SettingsSchema);

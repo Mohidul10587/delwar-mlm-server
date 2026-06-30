@@ -26,6 +26,7 @@ import dashboardRoutes from "./app/dashboard/routes";
 import categoryRoutes from "./app/category/routes";
 import ledgerRoutes from "./app/ledger/routes";
 import noticeRoutes from "./app/notice/routes";
+import transferRoutes from "./app/transfer/routes";
 import { setSocketIO } from "./app/notice/controller";
 dotenv.config();
 const app: Express = express();
@@ -77,6 +78,7 @@ app.use("/dashboard", dashboardRoutes);
 app.use("/category", categoryRoutes);
 app.use("/ledger", ledgerRoutes);
 app.use("/notice", noticeRoutes);
+app.use("/transfer", transferRoutes);
 app.use(errorHandler);
 
 if (process.env.VERCEL !== "1") {

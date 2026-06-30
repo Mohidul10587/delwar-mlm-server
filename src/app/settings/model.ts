@@ -54,6 +54,8 @@ export interface ISettings extends Document {
     partial:  { profitPercentage: number; minAmount: number; bulletPoints: { en: string; bn: string }[] };
     maturity: { profitPercentage: number; minAmount: number; bulletPoints: { en: string; bn: string }[] };
   };
+  // Balance transfer fee
+  balanceTransferFeePercent: number;
 }
 
 const SettingsSchema = new Schema<ISettings>({
@@ -124,6 +126,7 @@ const SettingsSchema = new Schema<ISettings>({
       maturity: { profitPercentage: 0, minAmount: 0, bulletPoints: [] },
     }),
   },
+  balanceTransferFeePercent: { type: Number, default: 0 },
 }, { timestamps: true });
 
 export const Settings = model<ISettings>("Settings", SettingsSchema);

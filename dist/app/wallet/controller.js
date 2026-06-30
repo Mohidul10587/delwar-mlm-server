@@ -9,8 +9,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminDebit = exports.adminCredit = exports.getMyTransactions = exports.getWalletByUser = exports.getMyWallet = void 0;
+exports.adminGiveIncentiveBonus = exports.adminDebit = exports.adminCredit = exports.getMyTransactions = exports.getWalletByUser = exports.getMyWallet = void 0;
 const model_1 = require("./model");
+const model_2 = require("../ledger/model");
 const findOrCreate = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     let wallet = yield model_1.Wallet.findOne({ userId });
     if (!wallet)
@@ -22,6 +23,7 @@ const findOrCreate = (userId) => __awaiter(void 0, void 0, void 0, function* () 
             manCommFromInstallment: 0,
             salaryBalance: 0,
             rewardBalance: 0,
+            incentiveBonus: 0,
         });
     return wallet;
 });
@@ -110,3 +112,36 @@ const adminDebit = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.adminDebit = adminDebit;
+const adminGiveIncentiveBonus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { amount, note } = req.body;
+        if (!amount || Number(amount) <= 0) {
+            return res.status(400).json({ message: "Amount must be greater than 0" });
+        }
+        const wallet = yield findOrCreate(req.params.userId);
+        wallet.incentiveBonus = ((_a = wallet.incentiveBonus) !== null && _a !== void 0 ? _a : 0) + Number(amount);
+        yield wallet.save();
+        // Transaction log
+        yield model_1.TransactionLog.create({
+            userId: req.params.userId,
+            type: "incentive_bonus",
+            amount: Number(amount),
+            balanceAfter: wallet.totalBalance,
+            note: note || "Incentive bonus granted by admin",
+        });
+        // Company ledger
+        yield model_2.CompanyLedger.create({
+            date: new Date(),
+            type: "incentive_bonus_paid",
+            amount: Number(amount),
+            userId: req.params.userId,
+            note: note || "Incentive bonus granted by admin",
+        });
+        res.json({ message: "Incentive bonus granted successfully", wallet });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.adminGiveIncentiveBonus = adminGiveIncentiveBonus;

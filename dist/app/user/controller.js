@@ -26,7 +26,9 @@ const defaultPermissionsByRole = {
 };
 const generateTokens = (id) => {
     const accessToken = jsonwebtoken_1.default.sign({ id }, JWT_SECRET, { expiresIn: "30m" });
-    const refreshToken = jsonwebtoken_1.default.sign({ id }, JWT_REFRESH_SECRET, { expiresIn: "1d" });
+    const refreshToken = jsonwebtoken_1.default.sign({ id }, JWT_REFRESH_SECRET, {
+        expiresIn: "1d",
+    });
     return { accessToken, refreshToken };
 };
 const cookieOpts = () => ({
@@ -40,10 +42,15 @@ function buildGenerationAncestors(referrerId) {
         var _a;
         if (!referrerId)
             return [];
-        const parent = yield model_1.User.findById(referrerId).select("generationAncestors").lean();
+        const parent = yield model_1.User.findById(referrerId)
+            .select("generationAncestors")
+            .lean();
         if (!parent)
             return [];
-        const parentAncestors = ((_a = parent.generationAncestors) !== null && _a !== void 0 ? _a : []).map((a) => ({ level: a.level + 1, userId: a.userId }));
+        const parentAncestors = ((_a = parent.generationAncestors) !== null && _a !== void 0 ? _a : []).map((a) => ({
+            level: a.level + 1,
+            userId: a.userId,
+        }));
         return [{ level: 1, userId: referrerId }, ...parentAncestors];
     });
 }
@@ -55,7 +62,9 @@ function cascadeGenerationAncestors(rootId) {
     return __awaiter(this, void 0, void 0, function* () {
         let queue = [rootId];
         while (queue.length > 0) {
-            const children = yield model_1.User.find({ "generationAncestors.0.userId": { $in: queue } })
+            const children = yield model_1.User.find({
+                "generationAncestors.0.userId": { $in: queue },
+            })
                 .select("_id generationAncestors")
                 .lean();
             if (children.length === 0)
@@ -78,7 +87,9 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
             return res.status(400).json({ message: "Username already taken" });
         let referrerId = null;
         if (referrerUsername) {
-            const referrer = yield model_1.User.findOne({ username: referrerUsername }).select("_id");
+            const referrer = yield model_1.User.findOne({
+                username: referrerUsername,
+            }).select("_id");
             if (!referrer)
                 return res.status(400).json({ message: "Referrer not found" });
             referrerId = referrer._id;
@@ -86,7 +97,10 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const generationAncestors = yield buildGenerationAncestors(referrerId);
         const user = yield model_1.User.create({
-            name, username, phone, password: hashedPassword,
+            name,
+            username,
+            phone,
+            password: hashedPassword,
             generationAncestors,
         });
         yield model_2.Wallet.create({ userId: user._id });
@@ -131,7 +145,9 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const generationAncestors = yield buildGenerationAncestors(referrerId);
         const user = yield model_1.User.create({
-            name, username, phone,
+            name,
+            username,
+            phone,
             password: hashedPassword,
             role,
             permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [],
@@ -182,7 +198,9 @@ const refresh = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(401).json({ message: "Invalid refresh token" });
-        const newAccessToken = jsonwebtoken_1.default.sign({ id: user._id.toString() }, JWT_SECRET, { expiresIn: "30m" });
+        const newAccessToken = jsonwebtoken_1.default.sign({ id: user._id.toString() }, JWT_SECRET, {
+            expiresIn: "30m",
+        });
         res.cookie("accessToken", newAccessToken, cookieOpts());
         res.json({ success: true, user });
     }
@@ -298,9 +316,7 @@ const toggleUserActive = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         user.isActive = !user.isActive;
         yield user.save();
         res.json({
-            message: user.isActive
-                ? "User activated"
-                : "User disabled",
+            message: user.isActive ? "User activated" : "User disabled",
             user,
         });
     }
@@ -371,7 +387,12 @@ const getUsers = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
             ];
         }
         const [users, total] = yield Promise.all([
-            model_1.User.find(query).select("-password").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            model_1.User.find(query)
+                .select("-password")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
             model_1.User.countDocuments(query),
         ]);
         res.json({ users, total, page, pages: Math.ceil(total / limit) });
@@ -419,7 +440,9 @@ const adminUpdateRelations = (req, res, next) => __awaiter(void 0, void 0, void 
         user.generationAncestors = generationAncestors;
         yield user.save();
         yield Promise.all([
-            referrerUsername !== undefined ? cascadeGenerationAncestors(user._id) : Promise.resolve(),
+            referrerUsername !== undefined
+                ? cascadeGenerationAncestors(user._id)
+                : Promise.resolve(),
         ]);
         res.json({ message: "Updated successfully", user });
     }
@@ -430,7 +453,7 @@ const adminUpdateRelations = (req, res, next) => __awaiter(void 0, void 0, void 
 exports.adminUpdateRelations = adminUpdateRelations;
 const updateInfo = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { nominee, nominee2, district, upazila, dateOfBirth, paymentMethods } = req.body;
+        const { nominee, nominee2, district, upazila, dateOfBirth, paymentMethods, } = req.body;
         const user = yield model_1.User.findById(req.user._id);
         if (!user)
             return res.status(404).json({ message: "User not found" });
@@ -457,7 +480,8 @@ exports.updateInfo = updateInfo;
 const updatePermissions = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { permissions } = req.body;
-        if (!Array.isArray(permissions) || permissions.some((p) => typeof p !== "string")) {
+        if (!Array.isArray(permissions) ||
+            permissions.some((p) => typeof p !== "string")) {
             return res.status(400).json({
                 message: "permissions must be string array",
             });

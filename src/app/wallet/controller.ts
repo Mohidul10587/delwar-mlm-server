@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Wallet, TransactionLog } from "./model";
+import { CompanyLedger } from "../ledger/model";
 
 const findOrCreate = async (userId: string) => {
   let wallet = await Wallet.findOne({ userId });
@@ -12,6 +13,7 @@ const findOrCreate = async (userId: string) => {
       manCommFromInstallment: 0,
       salaryBalance: 0,
       rewardBalance: 0,
+      incentiveBonus: 0,
     });
   return wallet;
 };
@@ -83,5 +85,37 @@ export const adminDebit = async (req: Request, res: Response, next: NextFunction
     await wallet.save();
     await TransactionLog.create({ userId: req.params.userId, type: "admin_debit", amount, balanceAfter: wallet.directCommissionBalance, note: note || "" });
     res.json({ message: "Debited", wallet });
+  } catch (err) { next(err); }
+};
+
+export const adminGiveIncentiveBonus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { amount, note } = req.body;
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than 0" });
+    }
+    const wallet = await findOrCreate(req.params.userId);
+    wallet.incentiveBonus = (wallet.incentiveBonus ?? 0) + Number(amount);
+    await wallet.save();
+
+    // Transaction log
+    await TransactionLog.create({
+      userId: req.params.userId,
+      type: "incentive_bonus",
+      amount: Number(amount),
+      balanceAfter: wallet.totalBalance,
+      note: note || "Incentive bonus granted by admin",
+    });
+
+    // Company ledger
+    await CompanyLedger.create({
+      date: new Date(),
+      type: "incentive_bonus_paid",
+      amount: Number(amount),
+      userId: req.params.userId,
+      note: note || "Incentive bonus granted by admin",
+    });
+
+    res.json({ message: "Incentive bonus granted successfully", wallet });
   } catch (err) { next(err); }
 };
