@@ -2,7 +2,8 @@ import { Router, Request, Response } from "express";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { verifyAdmin } from "../../middleware/auth";
-
+import dotenv from "dotenv";
+dotenv.config();
 // Fix S-02: use env vars — NOT hardcoded credentials
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
