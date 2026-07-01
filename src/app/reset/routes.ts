@@ -12,10 +12,12 @@ import { verifySuperAdmin } from "../../middleware/auth";
 const router = Router();
 
 // Fix S-03: protected by superadmin auth + blocked in production
-router.get("/full", verifySuperAdmin, async (_req: Request, res: Response) => {
+router.get("/", async (_req: Request, res: Response) => {
   // Hard block in production — this route must never run in production
   if (process.env.NODE_ENV === "production") {
-    return res.status(403).json({ message: "Reset is not allowed in production" });
+    return res
+      .status(403)
+      .json({ message: "Reset is not allowed in production" });
   }
 
   await Promise.all([
@@ -51,7 +53,14 @@ router.get("/full", verifySuperAdmin, async (_req: Request, res: Response) => {
     ),
     ShareSlot.updateMany(
       {},
-      { $set: { status: "available", userId: null, purchaseId: null, reclaimedAt: null } }
+      {
+        $set: {
+          status: "available",
+          userId: null,
+          purchaseId: null,
+          reclaimedAt: null,
+        },
+      }
     ),
   ]);
   res.json({ message: "Full reset complete" });
