@@ -1,8 +1,9 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { CompanyLedger, INFLOW_TYPES, OUTFLOW_TYPES } from "./model";
 import { TransactionLog } from "../wallet/model";
 
-export const getLedger = async (req: Request, res: Response) => {
+// H-08 fix: use next(err) instead of manual res.status(500)
+export const getLedger = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { type, from, to, page = "1", limit = "50" } = req.query as Record<string, string>;
 
@@ -40,25 +41,21 @@ export const getLedger = async (req: Request, res: Response) => {
       ]),
     ]);
 
-    const totalInflow  = summary[0]?.totalInflow  ?? 0;
-    const totalOutflow = summary[0]?.totalOutflow ?? 0;
-
     res.json({
       entries,
       total,
-      totalInflow,
-      totalOutflow,
-      net: totalInflow - totalOutflow,
+      totalInflow:  summary[0]?.totalInflow  ?? 0,
+      totalOutflow: summary[0]?.totalOutflow ?? 0,
+      net: (summary[0]?.totalInflow ?? 0) - (summary[0]?.totalOutflow ?? 0),
       page: parseInt(page),
       limit: parseInt(limit),
     });
-  } catch {
-    res.status(500).json({ message: "Failed to fetch ledger" });
+  } catch (err) {
+    next(err); // H-08 fix
   }
 };
 
-// Admin: full transaction history across all users (paginated)
-export const getAllTransactions = async (req: Request, res: Response) => {
+export const getAllTransactions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, type, from, to, page = "1", limit = "50" } = req.query as Record<string, string>;
 
@@ -88,7 +85,7 @@ export const getAllTransactions = async (req: Request, res: Response) => {
     ]);
 
     res.json({ transactions, total, page: parseInt(page), limit: parseInt(limit) });
-  } catch {
-    res.status(500).json({ message: "Failed to fetch transactions" });
+  } catch (err) {
+    next(err); // H-08 fix
   }
 };

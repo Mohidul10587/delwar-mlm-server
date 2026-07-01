@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -9,7 +42,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMyPurchases = exports.getPurchaseById = exports.getPurchases = exports.createPurchase = void 0;
+exports.getMyPurchases = exports.getInstallmentReceipt = exports.getPurchaseReceipt = exports.getPurchaseById = exports.getPurchases = exports.createPurchase = void 0;
 const model_1 = require("./model");
 const installment_model_1 = require("./installment.model");
 const model_2 = require("../share/model");
@@ -44,9 +77,44 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
     var _a, _b, _c;
     try {
         const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo } = req.body;
+        // Fix V-01: validate quantity
+        const qty = parseInt(String(quantity), 10);
+        if (!Number.isInteger(qty) || qty < 1) {
+            return res.status(400).json({ message: "Quantity must be a positive integer" });
+        }
+        // Fix F-10: check transactionId uniqueness before creating purchase
+        if (!transactionId || !String(transactionId).trim()) {
+            return res.status(400).json({ message: "Transaction ID is required" });
+        }
+        const { isTransactionIdUsed } = yield Promise.resolve().then(() => __importStar(require("../../utils/isTransactionIdUsed")));
+        const duplicate = yield isTransactionIdUsed(String(transactionId).trim());
+        if (duplicate) {
+            return res.status(400).json({ message: "This transaction ID has already been used" });
+        }
+        if (!["cash", "installment"].includes(paymentType)) {
+            return res.status(400).json({ message: "Invalid payment type" });
+        }
         const share = yield model_2.Share.findById(shareId);
         if (!share)
             return res.status(404).json({ message: "Share not found" });
+        if (!share.isActive)
+            return res.status(400).json({ message: "This share is not available for purchase" });
+        // Fix F-11: validate down payment range for installment
+        if (paymentType === "installment") {
+            const dp = Number(downPayment);
+            if (isNaN(dp) || dp < share.minDownPayment || dp > share.maxDownPayment) {
+                return res.status(400).json({
+                    message: `Down payment per unit must be between ৳${share.minDownPayment.toLocaleString()} and ৳${share.maxDownPayment.toLocaleString()}`,
+                });
+            }
+            // Fix F-14: validate installment count range
+            const ic = parseInt(String(installmentCount), 10);
+            if (!Number.isInteger(ic) || ic < share.minInstallments || ic > share.maxInstallments) {
+                return res.status(400).json({
+                    message: `Installment count must be between ${share.minInstallments} and ${share.maxInstallments}`,
+                });
+            }
+        }
         const buyer = yield model_3.User.findById(req.user._id).select("name phone nominee nominee2");
         const resolvedBuyerInfo = buyerInfo !== null && buyerInfo !== void 0 ? buyerInfo : (buyer ? {
             name: buyer.name,
@@ -54,7 +122,6 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             nominee: (_a = buyer.nominee) !== null && _a !== void 0 ? _a : undefined,
             nominee2: (_b = buyer.nominee2) !== null && _b !== void 0 ? _b : undefined,
         } : null);
-        const qty = Number(quantity);
         const totalPayable = share.cashPrice * qty;
         const resolvedDP = paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
         const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
@@ -99,7 +166,7 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             installmentAmount: resolvedInstallmentAmount,
             amountPaid,
             senderAccount,
-            transactionId,
+            transactionId: String(transactionId).trim(),
             buyerInfo: resolvedBuyerInfo,
             snapshot,
         });
@@ -119,15 +186,27 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
     }
 });
 exports.createPurchase = createPurchase;
-// GET /purchase  — superadmin gets all purchases (populated)
+// GET /purchase  — superadmin gets all purchases (populated, paginated)
 const getPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
-        const purchases = yield model_1.Purchase.find()
-            .populate("userId", "name username phone")
-            .populate("shareId", "title cashPrice installment")
-            .sort({ createdAt: -1 })
-            .lean();
+        // H-05 fix: pagination
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 30;
+        const skip = (page - 1) * limit;
+        const filter = {};
+        if (req.query.status)
+            filter.status = req.query.status;
+        const [purchases, total] = yield Promise.all([
+            model_1.Purchase.find(filter)
+                .populate("userId", "name username phone")
+                .populate("shareId", "title cashPrice installment")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            model_1.Purchase.countDocuments(filter),
+        ]);
         const installmentPurchaseIds = purchases
             .filter((p) => p.paymentType === "installment" && p.status !== "pending")
             .map((p) => p._id);
@@ -171,7 +250,7 @@ const getPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
                     payments,
                 } });
         });
-        res.json({ purchases: enriched });
+        res.json({ purchases: enriched, total, page, pages: Math.ceil(total / limit) });
     }
     catch (err) {
         next(err);
@@ -208,7 +287,89 @@ const getPurchaseById = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.getPurchaseById = getPurchaseById;
-// GET /purchase/my  — logged-in user sees their own purchases
+// GET /purchase/:id/receipt  — logged-in user gets receipt for an approved purchase
+const getPurchaseReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e, _f;
+    try {
+        const purchase = yield model_1.Purchase.findById(req.params.id)
+            .populate("userId", "name username phone")
+            .populate("shareId", "title cashPrice image")
+            .lean();
+        if (!purchase)
+            return res.status(404).json({ message: "Purchase not found" });
+        // Only the owner or admin can access
+        const isOwner = purchase.userId && ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
+        const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
+        if (!isOwner && !isStaff)
+            return res.status(403).json({ message: "Forbidden" });
+        if (purchase.status !== "approved")
+            return res.status(400).json({ message: "Receipt only available for approved purchases" });
+        // Fetch share slot numbers
+        const slots = yield shareSlot_model_1.ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+            .select("shareNumber")
+            .sort({ shareNumber: 1 })
+            .lean();
+        // Fetch company settings for receipt header
+        const settings = yield model_4.Settings.findOne()
+            .select("siteTitle logo contactPhone contactEmail contactAddress")
+            .lean();
+        res.json({
+            purchase,
+            shareNumbers: slots.map((s) => s.shareNumber),
+            company: {
+                siteTitle: (_b = settings === null || settings === void 0 ? void 0 : settings.siteTitle) !== null && _b !== void 0 ? _b : "",
+                logo: (_c = settings === null || settings === void 0 ? void 0 : settings.logo) !== null && _c !== void 0 ? _c : "",
+                contactPhone: (_d = settings === null || settings === void 0 ? void 0 : settings.contactPhone) !== null && _d !== void 0 ? _d : "",
+                contactEmail: (_e = settings === null || settings === void 0 ? void 0 : settings.contactEmail) !== null && _e !== void 0 ? _e : "",
+                contactAddress: (_f = settings === null || settings === void 0 ? void 0 : settings.contactAddress) !== null && _f !== void 0 ? _f : "",
+            },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getPurchaseReceipt = getPurchaseReceipt;
+// GET /purchase/:purchaseId/installments/:installmentId/receipt
+const getInstallmentReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e, _f;
+    try {
+        const { purchaseId, installmentId } = req.params;
+        const purchase = yield model_1.Purchase.findById(purchaseId)
+            .populate("userId", "name username phone")
+            .populate("shareId", "title cashPrice image")
+            .lean();
+        if (!purchase)
+            return res.status(404).json({ message: "Purchase not found" });
+        const isOwner = purchase.userId && ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
+        const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
+        if (!isOwner && !isStaff)
+            return res.status(403).json({ message: "Forbidden" });
+        const installment = yield installment_model_1.InstallmentPayment.findById(installmentId).lean();
+        if (!installment)
+            return res.status(404).json({ message: "Installment not found" });
+        if (installment.status !== "approved")
+            return res.status(400).json({ message: "Receipt only available for approved installments" });
+        const settings = yield model_4.Settings.findOne()
+            .select("siteTitle logo contactPhone contactEmail contactAddress")
+            .lean();
+        res.json({
+            purchase,
+            installment,
+            company: {
+                siteTitle: (_b = settings === null || settings === void 0 ? void 0 : settings.siteTitle) !== null && _b !== void 0 ? _b : "",
+                logo: (_c = settings === null || settings === void 0 ? void 0 : settings.logo) !== null && _c !== void 0 ? _c : "",
+                contactPhone: (_d = settings === null || settings === void 0 ? void 0 : settings.contactPhone) !== null && _d !== void 0 ? _d : "",
+                contactEmail: (_e = settings === null || settings === void 0 ? void 0 : settings.contactEmail) !== null && _e !== void 0 ? _e : "",
+                contactAddress: (_f = settings === null || settings === void 0 ? void 0 : settings.contactAddress) !== null && _f !== void 0 ? _f : "",
+            },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getInstallmentReceipt = getInstallmentReceipt;
 const getMyPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const purchases = yield model_1.Purchase.find({ userId: req.user._id })

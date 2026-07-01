@@ -12,30 +12,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePermissions = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
+exports.updatePermissions = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const validation_1 = require("./validation");
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "your-refresh-secret";
+const authConfig_1 = require("../../utils/authConfig");
 const defaultPermissionsByRole = {
     admin: ["purchase.review"],
     staff: ["purchase.review"],
 };
 const generateTokens = (id) => {
-    const accessToken = jsonwebtoken_1.default.sign({ id }, JWT_SECRET, { expiresIn: "30m" });
-    const refreshToken = jsonwebtoken_1.default.sign({ id }, JWT_REFRESH_SECRET, {
+    const accessToken = jsonwebtoken_1.default.sign({ id }, authConfig_1.JWT_SECRET, { expiresIn: "30m" });
+    const refreshToken = jsonwebtoken_1.default.sign({ id }, authConfig_1.JWT_REFRESH_SECRET, {
         expiresIn: "1d",
     });
     return { accessToken, refreshToken };
 };
-const cookieOpts = () => ({
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: (process.env.NODE_ENV === "production" ? "none" : "lax"),
-});
 /** Build generation ancestor list (no side needed). */
 function buildGenerationAncestors(referrerId) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -112,8 +106,8 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
             yield user.save();
         }
         const { accessToken, refreshToken } = generateTokens(user._id.toString());
-        res.cookie("accessToken", accessToken, cookieOpts());
-        res.cookie("refreshToken", refreshToken, cookieOpts());
+        res.cookie("accessToken", accessToken, (0, authConfig_1.cookieOpts)());
+        res.cookie("refreshToken", refreshToken, (0, authConfig_1.cookieOpts)());
         res.status(201).json({ message: "Registered successfully", user });
     }
     catch (err) {
@@ -180,8 +174,8 @@ const login = (req, res, next) => __awaiter(void 0, void 0, void 0, function* ()
         if (!isValid)
             return res.status(401).json({ message: "Invalid password" });
         const { accessToken, refreshToken } = generateTokens(user._id.toString());
-        res.cookie("accessToken", accessToken, cookieOpts());
-        res.cookie("refreshToken", refreshToken, cookieOpts());
+        res.cookie("accessToken", accessToken, (0, authConfig_1.cookieOpts)());
+        res.cookie("refreshToken", refreshToken, (0, authConfig_1.cookieOpts)());
         res.json({ message: "Login successful", user });
     }
     catch (err) {
@@ -194,14 +188,14 @@ const refresh = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const token = req.cookies.refreshToken;
         if (!token)
             return res.status(401).json({ message: "No refresh token" });
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_REFRESH_SECRET);
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_REFRESH_SECRET);
         const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(401).json({ message: "Invalid refresh token" });
-        const newAccessToken = jsonwebtoken_1.default.sign({ id: user._id.toString() }, JWT_SECRET, {
+        const newAccessToken = jsonwebtoken_1.default.sign({ id: user._id.toString() }, authConfig_1.JWT_SECRET, {
             expiresIn: "30m",
         });
-        res.cookie("accessToken", newAccessToken, cookieOpts());
+        res.cookie("accessToken", newAccessToken, (0, authConfig_1.cookieOpts)());
         res.json({ success: true, user });
     }
     catch (_a) {
@@ -211,8 +205,8 @@ const refresh = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 exports.refresh = refresh;
 const logout = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        res.clearCookie("accessToken", cookieOpts());
-        res.clearCookie("refreshToken", cookieOpts());
+        res.clearCookie("accessToken", (0, authConfig_1.cookieOpts)());
+        res.clearCookie("refreshToken", (0, authConfig_1.cookieOpts)());
         res.json({ message: "Logged out successfully" });
     }
     catch (error) {
@@ -225,7 +219,7 @@ const verify = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const token = req.cookies.accessToken;
         if (!token)
             return res.status(401).json({ message: "No token provided" });
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_SECRET);
         const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
@@ -250,8 +244,8 @@ const switchAccount = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         if (!targetUser.isActive)
             return res.status(403).json({ message: "Target account is inactive" });
         const { accessToken, refreshToken } = generateTokens(targetUser._id.toString());
-        res.cookie("accessToken", accessToken, cookieOpts());
-        res.cookie("refreshToken", refreshToken, cookieOpts());
+        res.cookie("accessToken", accessToken, (0, authConfig_1.cookieOpts)());
+        res.cookie("refreshToken", refreshToken, (0, authConfig_1.cookieOpts)());
         res.json({ message: "Switched account", user: targetUser });
     }
     catch (err) {
@@ -279,7 +273,11 @@ const updatePhone = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     var _a;
     try {
         const { phone } = req.body;
-        const user = yield model_1.User.findByIdAndUpdate((_a = req.user) === null || _a === void 0 ? void 0 : _a._id, { $set: { phone } }, { new: true }).select("-password");
+        // M-12 fix: basic phone validation
+        if (!phone || !/^[0-9+\-\s]{7,15}$/.test(String(phone).trim())) {
+            return res.status(400).json({ message: "Invalid phone number format" });
+        }
+        const user = yield model_1.User.findByIdAndUpdate((_a = req.user) === null || _a === void 0 ? void 0 : _a._id, { $set: { phone: String(phone).trim() } }, { new: true }).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
         res.json({ message: "Phone updated", user });
@@ -477,6 +475,23 @@ const updateInfo = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.updateInfo = updateInfo;
+const getLinkedAccounts = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const currentUser = req.user;
+        const ids = currentUser.linkedPhoneAccounts;
+        if (!ids || ids.length === 0) {
+            return res.json({ users: [] });
+        }
+        const users = yield model_1.User.find({ _id: { $in: ids } })
+            .select("_id username name image role isActive")
+            .lean();
+        res.json({ users });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getLinkedAccounts = getLinkedAccounts;
 const updatePermissions = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { permissions } = req.body;

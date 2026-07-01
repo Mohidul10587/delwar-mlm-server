@@ -7,10 +7,17 @@ import { User } from "../user/model";
 import { RankSalaryLog } from "../rank/salary-log.model";
 import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../share/shareSlot.model";
+import { verifySuperAdmin } from "../../middleware/auth";
 
 const router = Router();
 
-router.get("/full", async (_req: Request, res: Response) => {
+// Fix S-03: protected by superadmin auth + blocked in production
+router.get("/full", verifySuperAdmin, async (_req: Request, res: Response) => {
+  // Hard block in production — this route must never run in production
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ message: "Reset is not allowed in production" });
+  }
+
   await Promise.all([
     Purchase.deleteMany({}),
     InstallmentPayment.deleteMany({}),
@@ -27,6 +34,8 @@ router.get("/full", async (_req: Request, res: Response) => {
         directCommissionBalance: 0,
         salaryBalance: 0,
         rewardBalance: 0,
+        incentiveBonus: 0,
+        transferBalance: 0,
       }
     ),
     User.updateMany(
@@ -40,7 +49,6 @@ router.get("/full", async (_req: Request, res: Response) => {
         personalSharesCount: 0,
       }
     ),
-    // Reset all share slots back to available
     ShareSlot.updateMany(
       {},
       { $set: { status: "available", userId: null, purchaseId: null, reclaimedAt: null } }

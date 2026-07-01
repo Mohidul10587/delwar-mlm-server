@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -15,10 +48,12 @@ const model_2 = require("../wallet/model");
 const model_3 = require("../user/model");
 const controller_1 = require("../rank/controller");
 const model_4 = require("../ledger/model");
-const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
-    let wallet = yield model_2.Wallet.findOne({ userId });
-    if (!wallet)
-        wallet = yield model_2.Wallet.create({
+// M-10 fix: removed conflicting $setOnInsert + $inc on same fields.
+// Use a two-step upsert: ensure wallet exists first, then $inc atomically.
+const atomicCreditWallet = (userId, field, amount) => __awaiter(void 0, void 0, void 0, function* () {
+    // Ensure wallet document exists (no-op if already exists)
+    yield model_2.Wallet.findOneAndUpdate({ userId }, {
+        $setOnInsert: {
             userId,
             totalBalance: 0,
             directCommissionBalance: 0,
@@ -26,25 +61,38 @@ const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, functio
             manCommFromInstallment: 0,
             salaryBalance: 0,
             rewardBalance: 0,
-        });
+            incentiveBonus: 0,
+            transferBalance: 0,
+        },
+    }, { upsert: true });
+    // Then atomically increment — no conflict with $setOnInsert
+    const wallet = yield model_2.Wallet.findOneAndUpdate({ userId }, { $inc: { [field]: amount, totalBalance: amount } }, { new: true });
+    if (!wallet)
+        throw new Error(`Wallet not found for userId=${userId} after upsert`);
     return wallet;
 });
 const ledgerCommission = (txId, userId, amount, note) => __awaiter(void 0, void 0, void 0, function* () {
-    yield model_4.CompanyLedger.create({
-        date: new Date(),
-        type: "commission_paid",
-        amount,
-        relatedId: txId,
-        relatedModel: "TransactionLog",
-        userId,
-        note,
-    });
+    try {
+        yield model_4.CompanyLedger.create({
+            date: new Date(),
+            type: "commission_paid",
+            amount,
+            relatedId: txId,
+            relatedModel: "TransactionLog",
+            userId,
+            note,
+        });
+    }
+    catch (err) {
+        // Log ledger failure — financial audit trail must be preserved
+        console.error(`[LEDGER ERROR] Failed to create commission ledger for userId=${userId}, amount=${amount}:`, err);
+    }
 });
 const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     try {
-        const purchase = yield model_1.Purchase.findById(purchaseId).populate("shareId");
-        if (!purchase || purchase.commissionProcessed)
+        const purchase = yield model_1.Purchase.findOneAndUpdate({ _id: purchaseId, commissionProcessed: false }, { $set: { commissionProcessed: true } }, { new: true }).populate("shareId");
+        if (!purchase)
             return;
         const snap = purchase.snapshot;
         if (!snap)
@@ -52,12 +100,16 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         const buyer = yield model_3.User.findById(purchase.userId).select("generationAncestors name username");
         if (!buyer)
             return;
-        const buyerName = (_a = buyer.name) !== null && _a !== void 0 ? _a : "";
-        const buyerUsername = (_b = buyer.username) !== null && _b !== void 0 ? _b : "";
-        const shareTitle = (_c = snap.shareTitle) !== null && _c !== void 0 ? _c : "";
+        // C-04 fix: load Settings once and pass to all recalcUserRank calls
+        const { Settings } = yield Promise.resolve().then(() => __importStar(require("../settings/model")));
+        const settingsDoc = yield Settings.findOne();
+        const preloadedRanks = ((_a = settingsDoc === null || settingsDoc === void 0 ? void 0 : settingsDoc.ranks) !== null && _a !== void 0 ? _a : []);
+        const buyerName = (_b = buyer.name) !== null && _b !== void 0 ? _b : "";
+        const buyerUsername = (_c = buyer.username) !== null && _c !== void 0 ? _c : "";
+        const shareTitle = (_d = snap.shareTitle) !== null && _d !== void 0 ? _d : "";
         const qty = purchase.quantity;
         const payType = purchase.paymentType === "cash" ? "Cash" : "Installment";
-        const referrerId = (_e = (_d = buyer.generationAncestors[0]) === null || _d === void 0 ? void 0 : _d.userId) !== null && _e !== void 0 ? _e : null;
+        const referrerId = (_f = (_e = buyer.generationAncestors[0]) === null || _e === void 0 ? void 0 : _e.userId) !== null && _f !== void 0 ? _f : null;
         let downPaymentPortion;
         let installmentPortion;
         if (purchase.paymentType === "cash") {
@@ -72,9 +124,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         if (referrerId) {
             const commission = (snap.directSaleCommissionValue / 100) * downPaymentPortion;
             if (commission > 0) {
-                const wallet = yield findOrCreateWallet(referrerId.toString());
-                wallet.directCommissionBalance += commission;
-                yield wallet.save();
+                const wallet = yield atomicCreditWallet(referrerId.toString(), "directCommissionBalance", commission);
                 const note = `Direct sale commission (${snap.directSaleCommissionValue}% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty} [${payType}]`;
                 const tx = yield model_2.TransactionLog.create({
                     userId: referrerId,
@@ -87,7 +137,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 yield ledgerCommission(tx._id, referrerId.toString(), commission, note);
             }
             yield model_3.User.findByIdAndUpdate(referrerId, { $inc: { directSalesCount: qty } });
-            yield (0, controller_1.recalcUserRank)(referrerId.toString());
+            yield (0, controller_1.recalcUserRank)(referrerId.toString(), preloadedRanks); // C-04 fix
         }
         // ── 2. Down Payment Managerial Commission ─────────────────────────────────
         if (downPaymentPortion > 0) {
@@ -100,9 +150,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 const genConfig = snap.downPaymentGenerationRates.find((g) => g.generation === gen);
                 if (genConfig && genConfig.rate > 0) {
                     const commission = (genConfig.rate / 100) * downPaymentPortion;
-                    const wallet = yield findOrCreateWallet(currentId);
-                    wallet.manCommFromDownPayment += commission;
-                    yield wallet.save();
+                    const wallet = yield atomicCreditWallet(currentId, "manCommFromDownPayment", commission);
                     const note = `Gen ${gen} managerial commission — DP (${genConfig.rate}% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
                     const tx = yield model_2.TransactionLog.create({
                         userId: currentId,
@@ -115,7 +163,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                     yield ledgerCommission(tx._id, currentId, commission, note);
                 }
                 yield model_3.User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: qty } });
-                yield (0, controller_1.recalcUserRank)(currentId);
+                yield (0, controller_1.recalcUserRank)(currentId, preloadedRanks); // C-04 fix
             }
         }
         // ── 3. Installment Portion Managerial Commission ──────────────────────────
@@ -128,9 +176,7 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 const currentId = ancestor.userId.toString();
                 const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
                 if (commission > 0) {
-                    const wallet = yield findOrCreateWallet(currentId);
-                    wallet.manCommFromInstallment += commission;
-                    yield wallet.save();
+                    const wallet = yield atomicCreditWallet(currentId, "manCommFromInstallment", commission);
                     const note = `Gen ${gen} managerial commission — Installment portion (${snap.installmentCommissionRate}% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
                     const tx = yield model_2.TransactionLog.create({
                         userId: currentId,
@@ -144,11 +190,15 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 }
             }
         }
-        purchase.commissionProcessed = true;
-        yield purchase.save();
     }
     catch (err) {
-        console.error("Commission distribution error:", err);
+        console.error(`[COMMISSION ERROR] distributeCommissions failed for purchaseId=${purchaseId}:`, err);
+        try {
+            yield model_1.Purchase.findByIdAndUpdate(purchaseId, { $set: { commissionProcessed: false } });
+        }
+        catch (rollbackErr) {
+            console.error(`[COMMISSION ERROR] Failed to roll back commissionProcessed for purchaseId=${purchaseId}:`, rollbackErr);
+        }
     }
 });
 exports.distributeCommissions = distributeCommissions;
@@ -176,9 +226,8 @@ const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount, i
             const currentId = ancestor.userId.toString();
             const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
             if (commission > 0) {
-                const wallet = yield findOrCreateWallet(currentId);
-                wallet.manCommFromInstallment += commission;
-                yield wallet.save();
+                // Fix F-03: atomic $inc
+                const wallet = yield atomicCreditWallet(currentId, "manCommFromInstallment", commission);
                 const note = `Gen ${gen} managerial commission — ${instLabel} (${snap.installmentCommissionRate}% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
                 const tx = yield model_2.TransactionLog.create({
                     userId: currentId,
@@ -193,7 +242,7 @@ const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount, i
         }
     }
     catch (err) {
-        console.error("Installment payment commission error:", err);
+        console.error(`[COMMISSION ERROR] distributeInstallmentPaymentCommission failed for purchaseId=${purchaseId}:`, err);
     }
 });
 exports.distributeInstallmentPaymentCommission = distributeInstallmentPaymentCommission;

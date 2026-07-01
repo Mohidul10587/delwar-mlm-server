@@ -113,4 +113,10 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
+// Fix D-01: Add indexes for frequently queried fields
+UserSchema.index({ phone: 1 });
+UserSchema.index({ "generationAncestors.userId": 1 });
+UserSchema.index({ currentRank: 1 });
+UserSchema.index({ "generationAncestors.0.userId": 1 });
+
 export const User = model<IUser>("User", UserSchema);

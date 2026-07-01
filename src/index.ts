@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import cors from "cors";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { errorHandler } from "./middleware/errorHandler";
 import { seedAdmin } from "./utils/seedAdmin";
 import settingsRoutes from "./app/settings/routes";
@@ -28,7 +30,9 @@ import ledgerRoutes from "./app/ledger/routes";
 import noticeRoutes from "./app/notice/routes";
 import transferRoutes from "./app/transfer/routes";
 import { setSocketIO } from "./app/notice/controller";
+
 dotenv.config();
+
 const app: Express = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -38,6 +42,7 @@ const io = new Server(httpServer, {
   },
 });
 setSocketIO(io);
+
 const port = process.env.PORT || 5000;
 
 mongoose.connect(process.env.MONGODB_URI as string);
@@ -46,8 +51,13 @@ mongoose.connection.once("open", async () => {
   await seedAdmin();
 });
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Fix S-11: Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 app.use(
   cors({
@@ -56,6 +66,44 @@ app.use(
     credentials: true,
   })
 );
+
+// Fix S-06: Rate limiting
+
+// General API rate limit — 200 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests, please try again later" },
+});
+
+// Strict limit for auth endpoints — 10 attempts per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many login attempts, please try again later" },
+});
+
+// Financial action limit — 30 requests per 15 minutes per IP
+const financialLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many financial requests, please try again later" },
+});
+
+app.use(generalLimiter);
+app.use("/user/login", authLimiter);
+app.use("/user/register", authLimiter);
+app.use("/user/refresh", authLimiter);
+app.use("/purchase", financialLimiter);
+app.use("/withdrawal", financialLimiter);
+app.use("/transfer", financialLimiter);
+app.use("/investment", financialLimiter);
 
 app.get("/", (_req: Request, res: Response) => res.send("MLM Server"));
 

@@ -18,8 +18,14 @@ const model_4 = require("../user/model");
 const salary_log_model_1 = require("../rank/salary-log.model");
 const model_5 = require("../ledger/model");
 const shareSlot_model_1 = require("../share/shareSlot.model");
+const auth_1 = require("../../middleware/auth");
 const router = (0, express_1.Router)();
-router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// Fix S-03: protected by superadmin auth + blocked in production
+router.get("/full", auth_1.verifySuperAdmin, (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    // Hard block in production — this route must never run in production
+    if (process.env.NODE_ENV === "production") {
+        return res.status(403).json({ message: "Reset is not allowed in production" });
+    }
     yield Promise.all([
         model_1.Purchase.deleteMany({}),
         installment_model_1.InstallmentPayment.deleteMany({}),
@@ -34,6 +40,8 @@ router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* (
             directCommissionBalance: 0,
             salaryBalance: 0,
             rewardBalance: 0,
+            incentiveBonus: 0,
+            transferBalance: 0,
         }),
         model_4.User.updateMany({}, {
             currentRank: null,
@@ -43,7 +51,6 @@ router.get("/full", (_req, res) => __awaiter(void 0, void 0, void 0, function* (
             teamSalesCount: 0,
             personalSharesCount: 0,
         }),
-        // Reset all share slots back to available
         shareSlot_model_1.ShareSlot.updateMany({}, { $set: { status: "available", userId: null, purchaseId: null, reclaimedAt: null } }),
     ]);
     res.json({ message: "Full reset complete" });

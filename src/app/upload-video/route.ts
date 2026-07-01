@@ -1,21 +1,19 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
+import { verifyAdmin } from "../../middleware/auth";
 
-const router = Router();
-
-/* ---------------- CLOUDINARY CONFIG ---------------- */
+// Fix S-02: use env vars — NOT hardcoded credentials
 cloudinary.config({
-  cloud_name: "dr9az74sd",
-  api_key: "243991651923286",
-  api_secret: "gNrIxiD_CD0MLykESs7CSY_qddQ",
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-/* ---------------- MULTER CONFIG ---------------- */
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // ✅ 50MB
+    fileSize: 50 * 1024 * 1024, // 50MB
   },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith("video/")) {
@@ -26,21 +24,18 @@ const upload = multer({
   },
 });
 
-/* ---------------- ROUTE ---------------- */
+const router = Router();
+
+// Fix S-04: protected — only admin can upload videos
 router.post(
   "/upload/video",
+  verifyAdmin,
   upload.single("file"),
   async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file provided" });
       }
-
-      console.log("Incoming file:", {
-        name: req.file.originalname,
-        size: req.file.size,
-        type: req.file.mimetype,
-      });
 
       const uploadResult: any = await new Promise((resolve, reject) => {
         cloudinary.uploader
@@ -66,9 +61,8 @@ router.post(
         size: uploadResult.bytes,
       });
     } catch (error: any) {
-      console.error("Upload error:", error);
       return res.status(500).json({
-        error: error.message || "Video upload failed",
+        error: "Video upload failed",
       });
     }
   }

@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { User } from "../app/user/model";
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+import { JWT_SECRET } from "../utils/authConfig";
 
 export const verifyUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -10,7 +9,7 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
     if (!token) return res.status(401).json({ message: "Unauthorized" });
 
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("-password");
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
     if (!user.isActive)
@@ -29,7 +28,7 @@ export const verifySuperAdmin = async (req: Request, res: Response, next: NextFu
     if (!token) return res.status(401).json({ message: "Unauthorized" });
 
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (!user.isActive)
@@ -51,7 +50,7 @@ export const verifyAdmin = async (req: Request, res: Response, next: NextFunctio
     if (!token) return res.status(401).json({ message: "Unauthorized" });
 
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (!user.isActive)
@@ -73,7 +72,7 @@ export const verifyStaff = async (req: Request, res: Response, next: NextFunctio
     if (!token) return res.status(401).json({ message: "Unauthorized" });
 
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (!user.isActive)

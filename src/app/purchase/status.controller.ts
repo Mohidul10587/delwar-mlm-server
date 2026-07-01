@@ -10,33 +10,60 @@ import { ShareSlot } from "../share/shareSlot.model";
 // ── Share allocation helpers ──────────────────────────────────────────────────
 
 /**
- * Allocates available share slots to a purchase.
- * Returns error string if not enough available, otherwise null.
+ * Fix F-01: Allocates share slots atomically to prevent race conditions.
+ * Each slot is updated one-by-one with a status=available guard so that
+ * two concurrent approvals cannot grab the same slot.
  */
 async function allocateShares(purchase: any): Promise<{ error: string } | null> {
+  // Find available slot IDs first
   const available = await ShareSlot.find({
     shareId: purchase.shareId,
     status: "available",
   })
     .sort({ shareNumber: 1 })
     .limit(purchase.quantity)
-    .select("_id");
+    .select("_id")
+    .lean();
 
   if (available.length < purchase.quantity) {
-    return { error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required` };
+    return {
+      error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required`,
+    };
   }
 
-  await ShareSlot.updateMany(
-    { _id: { $in: available.map((s) => s._id) } },
-    { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } }
-  );
+  // Fix F-01: Atomically claim each slot — only succeeds if status is still "available"
+  let claimed = 0;
+  const claimedIds: any[] = [];
+  for (const slot of available) {
+    const updated = await ShareSlot.findOneAndUpdate(
+      { _id: slot._id, status: "available" }, // atomic guard
+      { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } },
+      { new: true }
+    );
+    if (updated) {
+      claimed++;
+      claimedIds.push(slot._id);
+    }
+  }
+
+  if (claimed < purchase.quantity) {
+    // Roll back whatever we already claimed
+    if (claimedIds.length > 0) {
+      await ShareSlot.updateMany(
+        { _id: { $in: claimedIds } },
+        { $set: { status: "available", userId: null, purchaseId: null } }
+      );
+    }
+    return {
+      error: `Only ${claimed} slot(s) could be allocated (concurrent conflict). Please retry.`,
+    };
+  }
 
   return null;
 }
 
 /**
  * Reclaims all sold share slots belonging to a purchase.
- * Returns number of slots reclaimed.
  */
 async function reclaimPurchaseShares(purchaseId: any): Promise<number> {
   const result = await ShareSlot.updateMany(
@@ -98,24 +125,29 @@ export const updatePurchaseStatus = async (
         $inc: { personalSharesCount: purchase.quantity },
       });
 
-      // Step 5 — Distribute commissions
+      // Step 5 — Fix P-02: await commission distribution so errors are caught
       if (!purchase.commissionProcessed) {
-        distributeCommissions((purchase._id as any).toString());
+        await distributeCommissions((purchase._id as any).toString());
       }
 
       // Step 6 — Ledger entry
       const buyer = await User.findById(purchase.userId).select("name username").lean();
       const buyerName = (buyer as any)?.name ?? "";
       const buyerUsername = (buyer as any)?.username ?? "";
-      await CompanyLedger.create({
-        date: new Date(),
-        type: "purchase_received",
-        amount: purchase.amountPaid,
-        relatedId: purchase._id,
-        relatedModel: "Purchase",
-        userId: purchase.userId,
-        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
-      }).catch(() => {});
+      try {
+        await CompanyLedger.create({
+          date: new Date(),
+          type: "purchase_received",
+          amount: purchase.amountPaid,
+          relatedId: purchase._id,
+          relatedModel: "Purchase",
+          userId: purchase.userId,
+          note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+        });
+      } catch (ledgerErr) {
+        // Fix E-02: log ledger failures — do not silently swallow
+        console.error(`[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`, ledgerErr);
+      }
     }
 
     // Step 7 — Update certificate status

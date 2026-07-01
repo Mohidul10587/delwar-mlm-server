@@ -15,31 +15,57 @@ const model_2 = require("../share/model");
 const model_3 = require("../purchase/model");
 const model_4 = require("../withdrawal/model");
 const model_5 = require("../wallet/model");
-const getSuperAdminStats = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// H-07 fix: added try/catch and next(err)
+const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f;
-    const [totalUsers, activeUsers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
-        model_1.User.countDocuments({ role: "user" }),
-        model_1.User.countDocuments({ role: "user", isActive: true }),
-        model_2.Share.countDocuments(),
-        model_3.Purchase.countDocuments(),
-        model_3.Purchase.countDocuments({ status: "pending" }),
-        model_3.Purchase.countDocuments({ status: "approved" }),
-        model_4.Withdrawal.countDocuments({ status: "pending" }),
-        model_4.Withdrawal.countDocuments({ status: "approved" }),
-        model_5.Wallet.aggregate([{ $group: { _id: null, totalBalance: { $sum: { $add: ["$directCommissionBalance", "$manCommFromDownPayment", "$manCommFromInstallment", "$salaryBalance", "$rewardBalance"] } }, totalDPCommission: { $sum: "$manCommFromDownPayment" }, totalInstallmentCommission: { $sum: "$manCommFromInstallment" } } }]),
-    ]);
-    res.json({
-        totalUsers,
-        activeUsers,
-        totalShares,
-        totalPurchases,
-        pendingPurchases,
-        approvedPurchases,
-        pendingWithdrawals,
-        approvedWithdrawals,
-        totalWalletBalance: (_b = (_a = walletAgg[0]) === null || _a === void 0 ? void 0 : _a.totalBalance) !== null && _b !== void 0 ? _b : 0,
-        totalManCommFromDownPayment: (_d = (_c = walletAgg[0]) === null || _c === void 0 ? void 0 : _c.totalDPCommission) !== null && _d !== void 0 ? _d : 0,
-        totalManCommFromInstallment: (_f = (_e = walletAgg[0]) === null || _e === void 0 ? void 0 : _e.totalInstallmentCommission) !== null && _f !== void 0 ? _f : 0,
-    });
+    try {
+        const [totalUsers, activeUsers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
+            model_1.User.countDocuments({ role: "user" }),
+            model_1.User.countDocuments({ role: "user", isActive: true }),
+            model_2.Share.countDocuments(),
+            model_3.Purchase.countDocuments(),
+            model_3.Purchase.countDocuments({ status: "pending" }),
+            model_3.Purchase.countDocuments({ status: "approved" }),
+            model_4.Withdrawal.countDocuments({ status: "pending" }),
+            model_4.Withdrawal.countDocuments({ status: "approved" }),
+            // L-05 fix: include incentiveBonus and transferBalance in aggregate
+            model_5.Wallet.aggregate([{
+                    $group: {
+                        _id: null,
+                        totalBalance: {
+                            $sum: {
+                                $add: [
+                                    "$directCommissionBalance",
+                                    "$manCommFromDownPayment",
+                                    "$manCommFromInstallment",
+                                    "$salaryBalance",
+                                    "$rewardBalance",
+                                    "$incentiveBonus",
+                                    "$transferBalance",
+                                ],
+                            },
+                        },
+                        totalDPCommission: { $sum: "$manCommFromDownPayment" },
+                        totalInstallmentCommission: { $sum: "$manCommFromInstallment" },
+                    },
+                }]),
+        ]);
+        res.json({
+            totalUsers,
+            activeUsers,
+            totalShares,
+            totalPurchases,
+            pendingPurchases,
+            approvedPurchases,
+            pendingWithdrawals,
+            approvedWithdrawals,
+            totalWalletBalance: (_b = (_a = walletAgg[0]) === null || _a === void 0 ? void 0 : _a.totalBalance) !== null && _b !== void 0 ? _b : 0,
+            totalManCommFromDownPayment: (_d = (_c = walletAgg[0]) === null || _c === void 0 ? void 0 : _c.totalDPCommission) !== null && _d !== void 0 ? _d : 0,
+            totalManCommFromInstallment: (_f = (_e = walletAgg[0]) === null || _e === void 0 ? void 0 : _e.totalInstallmentCommission) !== null && _f !== void 0 ? _f : 0,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
 });
 exports.getSuperAdminStats = getSuperAdminStats;

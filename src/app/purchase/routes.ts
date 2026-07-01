@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createPurchase, getPurchases, getPurchaseById, getMyPurchases } from "./controller";
+import { createPurchase, getPurchases, getPurchaseById, getMyPurchases, getPurchaseReceipt, getInstallmentReceipt } from "./controller";
 import { updatePurchaseStatus, reclaimShares } from "./status.controller";
 import { verifyUser, verifyAdmin, verifyStaff, requirePermission } from "../../middleware/auth";
 import {
@@ -18,9 +18,11 @@ router.get("/",            verifyStaff,       requirePermission("purchase.review
 router.get("/installments/pending", verifyStaff, requirePermission("purchase.review"), getPendingInstallments);
 router.patch("/:id/status",         verifyStaff, requirePermission("purchase.review"), updatePurchaseStatus);
 router.post("/:purchaseId/reclaim", verifyStaff, requirePermission("purchase.review"), reclaimShares);
+router.get("/:id/receipt",          verifyUser,  getPurchaseReceipt);
 router.get("/:id",                  verifyStaff, requirePermission("purchase.review"), getPurchaseById);
 router.post("/:purchaseId/installments", verifyUser, createInstallmentPayment);
 router.get("/:purchaseId/installments/summary", verifyUser, getInstallmentSummary);
+router.get("/:purchaseId/installments/:installmentId/receipt", verifyUser, getInstallmentReceipt);
 router.get("/:purchaseId/installments", verifyUser, getInstallmentsByPurchase);
 router.patch(
   "/installments/:id/status",

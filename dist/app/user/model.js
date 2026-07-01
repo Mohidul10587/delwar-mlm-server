@@ -60,4 +60,9 @@ const UserSchema = new mongoose_1.Schema({
         default: null,
     },
 }, { timestamps: true });
+// Fix D-01: Add indexes for frequently queried fields
+UserSchema.index({ phone: 1 });
+UserSchema.index({ "generationAncestors.userId": 1 });
+UserSchema.index({ currentRank: 1 });
+UserSchema.index({ "generationAncestors.0.userId": 1 });
 exports.User = (0, mongoose_1.model)("User", UserSchema);

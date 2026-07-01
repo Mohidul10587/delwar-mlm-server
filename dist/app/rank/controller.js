@@ -43,8 +43,16 @@ const createRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
     try {
         const s = yield getSettings();
         const { name, requiredGeneration = 1, requiredApprovedSales = 0, reward, salary, } = req.body;
+        // M-13 fix: prevent duplicate rank names
+        if (!name || !String(name).trim()) {
+            return res.status(400).json({ message: "Rank name is required" });
+        }
+        const exists = s.ranks.some((r) => { var _a; return ((_a = r.name) === null || _a === void 0 ? void 0 : _a.toLowerCase()) === String(name).trim().toLowerCase(); });
+        if (exists) {
+            return res.status(400).json({ message: `A rank named "${name}" already exists` });
+        }
         s.ranks.push({
-            name,
+            name: String(name).trim(),
             requiredGeneration,
             requiredApprovedSales,
             reward,
@@ -121,8 +129,8 @@ const getMyRank = (req, res, next) => __awaiter(void 0, void 0, void 0, function
         const allRanks = ((_a = s.ranks) !== null && _a !== void 0 ? _a : []);
         const currentRankName = (_b = user === null || user === void 0 ? void 0 : user.currentRank) !== null && _b !== void 0 ? _b : null;
         const currentRank = (_c = allRanks.find((r) => r.name === currentRankName)) !== null && _c !== void 0 ? _c : null;
-        const nextRank = null; // Remove rank progression logic since no order field
-        res.json({ currentRank, nextRank, allRanks });
+        // L-01 fix: removed dead nextRank = null
+        res.json({ currentRank, allRanks });
     }
     catch (err) {
         next(err);
@@ -151,30 +159,36 @@ function getTotalApprovedSalesByGeneration(userId, generation) {
     });
 }
 // ── Recalculate and update user rank ─────────────────────────────────────────
-const recalcUserRank = (userId) => __awaiter(void 0, void 0, void 0, function* () {
+// M-09 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor
+// C-04 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor
+const recalcUserRank = (userId, preloadedRanks) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
     try {
         const user = yield model_2.User.findById(userId).select("currentRank currentRankAchievedAt earnedRanks");
         if (!user)
             return;
-        const s = yield model_1.Settings.findOne();
-        const ranks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []);
+        // C-04 fix: reuse passed ranks, only query if not provided
+        let ranks;
+        if (preloadedRanks) {
+            ranks = preloadedRanks;
+        }
+        else {
+            const s = yield model_1.Settings.findOne();
+            ranks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []);
+        }
         if (!ranks.length)
             return;
         let newRank = null;
         let currentEarnedRanks = user.earnedRanks || [];
-        // Check each rank sequentially
         for (let i = 0; i < ranks.length; i++) {
             const rank = ranks[i];
-            const generation = i + 1; // Rank 1 = Generation 1, Rank 2 = Generation 2, etc.
+            const generation = i + 1;
             const threshold = (_b = rank.requiredApprovedSales) !== null && _b !== void 0 ? _b : 0;
-            // Skip if previous rank not earned (sequential progression)
             if (i > 0 && !currentEarnedRanks.includes(ranks[i - 1].name)) {
                 break;
             }
-            // Skip if current rank already earned
             if (currentEarnedRanks.includes(rank.name)) {
-                newRank = rank; // Keep track of highest earned rank
+                newRank = rank;
                 continue;
             }
             if (threshold > 0) {
@@ -184,18 +198,24 @@ const recalcUserRank = (userId) => __awaiter(void 0, void 0, void 0, function* (
                     currentEarnedRanks.push(rank.name);
                 }
                 else {
-                    break; // Can't achieve this rank, stop checking higher ranks
+                    break;
                 }
             }
         }
         const newRankName = (_c = newRank === null || newRank === void 0 ? void 0 : newRank.name) !== null && _c !== void 0 ? _c : null;
         if (newRankName && newRankName !== user.currentRank) {
-            yield model_2.User.findByIdAndUpdate(userId, {
-                currentRank: newRankName,
-                currentRankAchievedAt: new Date(),
-                earnedRanks: currentEarnedRanks,
-            });
-            yield issueRankReward(userId, newRank);
+            // H-10 fix: atomic update — only update if currentRank hasn't changed concurrently
+            const updated = yield model_2.User.findOneAndUpdate({ _id: userId, currentRank: user.currentRank }, {
+                $set: {
+                    currentRank: newRankName,
+                    currentRankAchievedAt: new Date(),
+                    earnedRanks: currentEarnedRanks,
+                },
+            }, { new: true });
+            // If updated is null, another concurrent call already updated the rank — skip reward
+            if (updated) {
+                yield issueRankReward(userId, newRank);
+            }
         }
     }
     catch (err) {
@@ -208,11 +228,17 @@ function issueRankReward(userId, rank) {
         var _a;
         if (!((_a = rank === null || rank === void 0 ? void 0 : rank.reward) === null || _a === void 0 ? void 0 : _a.value))
             return;
-        const wallet = yield model_4.Wallet.findOne({ userId });
-        if (!wallet)
+        // Fix F-08: Atomic check — only issue reward if not already issued for this rank
+        // Uses TransactionLog as the source of truth to prevent double-issuance
+        const alreadyIssued = yield model_4.TransactionLog.findOne({
+            userId,
+            type: "reward",
+            note: { $regex: `"${rank.name}"` },
+        }).lean();
+        if (alreadyIssued)
             return;
-        wallet.rewardBalance += rank.reward.value;
-        yield wallet.save();
+        // Fix F-05: atomic $inc to prevent race condition
+        const wallet = yield model_4.Wallet.findOneAndUpdate({ userId }, { $inc: { rewardBalance: rank.reward.value, totalBalance: rank.reward.value } }, { new: true, upsert: true });
         const note = `Rank reward — "${rank.name}" achieved: ${rank.reward.name} worth ৳${rank.reward.value.toLocaleString()} (${rank.reward.type})`;
         yield model_4.TransactionLog.create({
             userId,
@@ -221,13 +247,18 @@ function issueRankReward(userId, rank) {
             balanceAfter: wallet.rewardBalance,
             note,
         });
-        yield model_5.CompanyLedger.create({
-            date: new Date(),
-            type: "reward_paid",
-            amount: rank.reward.value,
-            userId,
-            note,
-        }).catch(() => { });
+        try {
+            yield model_5.CompanyLedger.create({
+                date: new Date(),
+                type: "reward_paid",
+                amount: rank.reward.value,
+                userId,
+                note,
+            });
+        }
+        catch (ledgerErr) {
+            console.error(`[LEDGER ERROR] reward_paid for userId=${userId}:`, ledgerErr);
+        }
     });
 }
 // ── Monthly salary release ────────────────────────────────────────────────────
@@ -322,26 +353,27 @@ const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function*
         const monthlySalesCount = (_e = (_d = monthlySalesResult[0]) === null || _d === void 0 ? void 0 : _d.count) !== null && _e !== void 0 ? _e : 0;
         if (monthlySalesCount < ((_f = sal.minMonthlySales) !== null && _f !== void 0 ? _f : 0))
             continue;
-        // All conditions met — issue salary
-        const wallet = yield model_4.Wallet.findOne({ userId: user._id });
-        if (!wallet)
-            continue;
-        wallet.salaryBalance += sal.amount;
-        yield wallet.save();
+        // Fix F-05: atomic $inc — prevents race condition if cron runs twice concurrently
+        const updatedWallet = yield model_4.Wallet.findOneAndUpdate({ userId: user._id }, { $inc: { salaryBalance: sal.amount, totalBalance: sal.amount } }, { new: true, upsert: true });
         yield model_4.TransactionLog.create({
             userId: user._id,
             type: "salary",
             amount: sal.amount,
-            balanceAfter: wallet.salaryBalance,
+            balanceAfter: updatedWallet.salaryBalance,
             note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${(_g = sal.durationMonths) !== null && _g !== void 0 ? _g : 3})`,
         });
-        yield model_5.CompanyLedger.create({
-            date: new Date(),
-            type: "salary_paid",
-            amount: sal.amount,
-            userId: user._id,
-            note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${(_h = sal.durationMonths) !== null && _h !== void 0 ? _h : 3})`,
-        }).catch(() => { });
+        try {
+            yield model_5.CompanyLedger.create({
+                date: new Date(),
+                type: "salary_paid",
+                amount: sal.amount,
+                userId: user._id,
+                note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${(_h = sal.durationMonths) !== null && _h !== void 0 ? _h : 3})`,
+            });
+        }
+        catch (ledgerErr) {
+            console.error(`[LEDGER ERROR] salary_paid for userId=${user._id}:`, ledgerErr);
+        }
         yield salary_log_model_1.RankSalaryLog.create({
             userId: user._id,
             rankName: rank.name,

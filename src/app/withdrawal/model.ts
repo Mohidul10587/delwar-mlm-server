@@ -10,6 +10,8 @@ export interface IWithdrawal extends Document {
   reviewNote: string;
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
+  // Fix F-07: stores per-field deduction amounts for correct refund on rejection
+  deductionBreakdown?: Record<string, number>;
 }
 
 const WithdrawalSchema = new Schema<IWithdrawal>(
@@ -23,6 +25,7 @@ const WithdrawalSchema = new Schema<IWithdrawal>(
     reviewNote: { type: String, default: "" },
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
+    deductionBreakdown: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true }
 );

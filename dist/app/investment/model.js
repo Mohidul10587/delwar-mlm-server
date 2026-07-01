@@ -17,4 +17,7 @@ const InvestmentSchema = new mongoose_1.Schema({
     lastProfitPaidMonth: { type: String, default: null },
     status: { type: String, enum: ["active", "completed"], default: "active" },
 }, { timestamps: true });
+// Fix D-05: Unique index on transactionId — DB-level duplicate prevention
+InvestmentSchema.index({ transactionId: 1 }, { unique: true });
+InvestmentSchema.index({ userId: 1, createdAt: -1 });
 exports.Investment = (0, mongoose_1.model)("Investment", InvestmentSchema);

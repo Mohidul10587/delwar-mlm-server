@@ -12,5 +12,6 @@ const WithdrawalSchema = new mongoose_1.Schema({
     reviewNote: { type: String, default: "" },
     reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
+    deductionBreakdown: { type: mongoose_1.Schema.Types.Mixed, default: null },
 }, { timestamps: true });
 exports.Withdrawal = (0, mongoose_1.model)("Withdrawal", WithdrawalSchema);

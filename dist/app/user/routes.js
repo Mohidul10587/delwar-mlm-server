@@ -12,6 +12,7 @@ router.get("/verify", controller_1.verify);
 router.post("/refresh", controller_1.refresh);
 router.post("/logout", auth_1.verifyUser, controller_1.logout);
 router.post("/switch/:targetUserId", auth_1.verifyUser, controller_1.switchAccount);
+router.get("/linked-accounts", auth_1.verifyUser, controller_1.getLinkedAccounts);
 router.get("/stats", auth_1.verifySuperAdmin, stats_controller_1.getSuperAdminStats);
 router.get("/details/:id", auth_1.verifyAdmin, controller_1.getUserDetails);
 router.get("/list", auth_1.verifyAdmin, controller_1.getUsers);

@@ -12,24 +12,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.adminGiveIncentiveBonus = exports.adminDebit = exports.adminCredit = exports.getMyTransactions = exports.getWalletByUser = exports.getMyWallet = void 0;
 const model_1 = require("./model");
 const model_2 = require("../ledger/model");
-const findOrCreate = (userId) => __awaiter(void 0, void 0, void 0, function* () {
-    let wallet = yield model_1.Wallet.findOne({ userId });
-    if (!wallet)
-        wallet = yield model_1.Wallet.create({
-            userId,
-            totalBalance: 0,
-            directCommissionBalance: 0,
-            manCommFromDownPayment: 0,
-            manCommFromInstallment: 0,
-            salaryBalance: 0,
-            rewardBalance: 0,
-            incentiveBonus: 0,
-        });
-    return wallet;
-});
+const walletUtils_1 = require("../../utils/walletUtils");
 const getMyWallet = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const wallet = yield findOrCreate(req.user._id.toString());
+        const wallet = yield (0, walletUtils_1.findOrCreateWallet)(req.user._id.toString());
         const transactions = yield model_1.TransactionLog.find({ userId: req.user._id })
             .sort({ createdAt: -1 }).limit(20).lean();
         res.json({ wallet, transactions });
@@ -41,7 +27,7 @@ const getMyWallet = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
 exports.getMyWallet = getMyWallet;
 const getWalletByUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const wallet = yield findOrCreate(req.params.userId);
+        const wallet = yield (0, walletUtils_1.findOrCreateWallet)(req.params.userId);
         const transactions = yield model_1.TransactionLog.find({ userId: req.params.userId })
             .sort({ createdAt: -1 }).limit(50).lean();
         res.json({ wallet, transactions });
@@ -83,12 +69,20 @@ exports.getMyTransactions = getMyTransactions;
 const adminCredit = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { amount, note } = req.body;
-        const wallet = yield findOrCreate(req.params.userId);
-        if (!wallet)
-            return res.status(404).json({ message: "Wallet not found" });
-        wallet.directCommissionBalance += Number(amount);
-        yield wallet.save();
-        yield model_1.TransactionLog.create({ userId: req.params.userId, type: "admin_credit", amount, balanceAfter: wallet.directCommissionBalance, note: note || "" });
+        // Fix V-02: validate amount
+        const amt = Number(amount);
+        if (isNaN(amt) || amt <= 0) {
+            return res.status(400).json({ message: "Amount must be greater than 0" });
+        }
+        // Fix F-12: atomic $inc keeps totalBalance consistent
+        const wallet = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { directCommissionBalance: amt, totalBalance: amt } }, { new: true, upsert: true });
+        yield model_1.TransactionLog.create({
+            userId: req.params.userId,
+            type: "admin_credit",
+            amount: amt,
+            balanceAfter: wallet.totalBalance,
+            note: note || "",
+        });
         res.json({ message: "Credited", wallet });
     }
     catch (err) {
@@ -99,13 +93,26 @@ exports.adminCredit = adminCredit;
 const adminDebit = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { amount, note } = req.body;
-        const wallet = yield findOrCreate(req.params.userId);
+        // Fix V-02: validate amount
+        const amt = Number(amount);
+        if (isNaN(amt) || amt <= 0) {
+            return res.status(400).json({ message: "Amount must be greater than 0" });
+        }
+        const wallet = yield model_1.Wallet.findOne({ userId: req.params.userId });
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
-        wallet.directCommissionBalance = Math.max(0, wallet.directCommissionBalance - Number(amount));
-        yield wallet.save();
-        yield model_1.TransactionLog.create({ userId: req.params.userId, type: "admin_debit", amount, balanceAfter: wallet.directCommissionBalance, note: note || "" });
-        res.json({ message: "Debited", wallet });
+        // Prevent debit below zero
+        const deductable = Math.min(amt, wallet.directCommissionBalance);
+        // Fix F-12: atomic $inc
+        const updated = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { directCommissionBalance: -deductable, totalBalance: -deductable } }, { new: true });
+        yield model_1.TransactionLog.create({
+            userId: req.params.userId,
+            type: "admin_debit",
+            amount: deductable,
+            balanceAfter: updated.totalBalance,
+            note: note || "",
+        });
+        res.json({ message: "Debited", wallet: updated });
     }
     catch (err) {
         next(err);
@@ -113,31 +120,34 @@ const adminDebit = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
 });
 exports.adminDebit = adminDebit;
 const adminGiveIncentiveBonus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
     try {
         const { amount, note } = req.body;
-        if (!amount || Number(amount) <= 0) {
+        // Fix V-02: validate amount
+        const amt = Number(amount);
+        if (isNaN(amt) || amt <= 0) {
             return res.status(400).json({ message: "Amount must be greater than 0" });
         }
-        const wallet = yield findOrCreate(req.params.userId);
-        wallet.incentiveBonus = ((_a = wallet.incentiveBonus) !== null && _a !== void 0 ? _a : 0) + Number(amount);
-        yield wallet.save();
-        // Transaction log
+        // Fix F-12: atomic $inc keeps totalBalance consistent
+        const wallet = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { incentiveBonus: amt, totalBalance: amt } }, { new: true, upsert: true });
         yield model_1.TransactionLog.create({
             userId: req.params.userId,
             type: "incentive_bonus",
-            amount: Number(amount),
+            amount: amt,
             balanceAfter: wallet.totalBalance,
             note: note || "Incentive bonus granted by admin",
         });
-        // Company ledger
-        yield model_2.CompanyLedger.create({
-            date: new Date(),
-            type: "incentive_bonus_paid",
-            amount: Number(amount),
-            userId: req.params.userId,
-            note: note || "Incentive bonus granted by admin",
-        });
+        try {
+            yield model_2.CompanyLedger.create({
+                date: new Date(),
+                type: "incentive_bonus_paid",
+                amount: amt,
+                userId: req.params.userId,
+                note: note || "Incentive bonus granted by admin",
+            });
+        }
+        catch (ledgerErr) {
+            console.error(`[LEDGER ERROR] incentive_bonus_paid for userId=${req.params.userId}:`, ledgerErr);
+        }
         res.json({ message: "Incentive bonus granted successfully", wallet });
     }
     catch (err) {

@@ -1,15 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
 import { InstallmentPayment } from "./installment.model";
-import { Share } from "../share/model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { distributeInstallmentPaymentCommission } from "./commissions";
 import { CompanyLedger } from "../ledger/model";
+import { isTransactionIdUsed } from "../../utils/isTransactionIdUsed";
 
-const findOrCreateWallet = async (userId: string) => {
+// Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
+const getWallet = async (userId: string) => {
   return await Wallet.findOne({ userId });
 };
 
@@ -35,14 +36,40 @@ export const createInstallmentPayment = async (
         message: "This purchase is not installment type",
       });
     }
+    if (purchase.status !== "approved") {
+      return res.status(400).json({
+        message: "Cannot submit installment for a non-approved purchase",
+      });
+    }
+
+    // Fix V-03: validate installmentNo
+    const instNo = parseInt(String(installmentNo), 10);
+    if (!Number.isInteger(instNo) || instNo < 1) {
+      return res.status(400).json({ message: "Invalid installment number" });
+    }
+
+    // Fix F-09: check transactionId uniqueness for installments
+    if (!transactionId || !String(transactionId).trim()) {
+      return res.status(400).json({ message: "Transaction ID is required" });
+    }
+    const duplicate = await isTransactionIdUsed(String(transactionId).trim());
+    if (duplicate) {
+      return res.status(400).json({ message: "This transaction ID has already been used" });
+    }
+
+    // Validate amount
+    const parsedAmount = Number(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than 0" });
+    }
 
     const payment = await InstallmentPayment.create({
       purchaseId: purchase._id,
       userId: req.user!._id,
-      installmentNo: Number(installmentNo),
-      amount: Number(amount),
+      installmentNo: instNo,
+      amount: parsedAmount,
       senderAccount,
-      transactionId,
+      transactionId: String(transactionId).trim(),
     });
 
     res.status(201).json({
@@ -180,14 +207,14 @@ export const updateInstallmentStatus = async (
     await payment.save();
 
     if (status === "approved") {
-      const purchase = await Purchase.findById(payment.purchaseId).populate(
-        "shareId",
-        "cashPrice installment commissions"
-      );
-      if (purchase) {
-        purchase.amountPaid += payment.amount;
-        await purchase.save();
+      // Fix F-04: use atomic $inc to avoid race condition on amountPaid
+      const purchase = await Purchase.findByIdAndUpdate(
+        payment.purchaseId,
+        { $inc: { amountPaid: payment.amount } },
+        { new: true }
+      ).populate("shareId", "cashPrice installment commissions");
 
+      if (purchase) {
         const share = purchase.shareId as any;
         const sharePrice = Number(share?.cashPrice ?? 0);
         const totalPayable = calculateTotalPayable(
@@ -218,26 +245,30 @@ export const updateInstallmentStatus = async (
             payment.installmentNo
           );
         } catch (e) {
-          console.error("Installment commission error:", e);
+          console.error("[COMMISSION ERROR] Installment commission error:", e);
         }
 
-        // Ledger: inflow for this installment payment
+        // Fix E-02: Ledger — inflow for this installment payment (log failure, don't swallow)
         const buyer = await User.findById(purchase.userId)
           .select("name username")
           .lean();
         const buyerName = (buyer as any)?.name ?? "";
         const buyerUsername = (buyer as any)?.username ?? "";
-        await CompanyLedger.create({
-          date: new Date(),
-          type: "installment_received",
-          amount: payment.amount,
-          relatedId: payment._id,
-          relatedModel: "InstallmentPayment",
-          userId: purchase.userId,
-          note: `Installment #${payment.installmentNo} received — ${
-            purchase.snapshot?.shareTitle ?? ""
-          } — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
-        }).catch(() => {});
+        try {
+          await CompanyLedger.create({
+            date: new Date(),
+            type: "installment_received",
+            amount: payment.amount,
+            relatedId: payment._id,
+            relatedModel: "InstallmentPayment",
+            userId: purchase.userId,
+            note: `Installment #${payment.installmentNo} received — ${
+              purchase.snapshot?.shareTitle ?? ""
+            } — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
+          });
+        } catch (ledgerErr) {
+          console.error(`[LEDGER ERROR] installment_received for paymentId=${payment._id}:`, ledgerErr);
+        }
 
         await TransactionLog.create({
           userId: purchase.userId,
@@ -246,7 +277,9 @@ export const updateInstallmentStatus = async (
           balanceAfter: 0,
           note: `Installment #${payment.installmentNo} approved — ${purchase.snapshot?.shareTitle ?? ""}, ৳${payment.amount.toLocaleString()}`,
           relatedPurchaseId: purchase._id,
-        }).catch(() => {});
+        }).catch((err) => {
+          console.error(`[TXLOG ERROR] installment_received log failed for paymentId=${payment._id}:`, err);
+        });
       }
     }
 

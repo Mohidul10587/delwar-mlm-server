@@ -15,18 +15,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
 const cloudinary_1 = require("cloudinary");
-const router = (0, express_1.Router)();
-/* ---------------- CLOUDINARY CONFIG ---------------- */
+const auth_1 = require("../../middleware/auth");
+// Fix S-02: use env vars — NOT hardcoded credentials
 cloudinary_1.v2.config({
-    cloud_name: "dr9az74sd",
-    api_key: "243991651923286",
-    api_secret: "gNrIxiD_CD0MLykESs7CSY_qddQ",
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-/* ---------------- MULTER CONFIG ---------------- */
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: {
-        fileSize: 50 * 1024 * 1024, // ✅ 50MB
+        fileSize: 50 * 1024 * 1024, // 50MB
     },
     fileFilter: (_req, file, cb) => {
         if (!file.mimetype.startsWith("video/")) {
@@ -37,17 +36,13 @@ const upload = (0, multer_1.default)({
         }
     },
 });
-/* ---------------- ROUTE ---------------- */
-router.post("/upload/video", upload.single("file"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const router = (0, express_1.Router)();
+// Fix S-04: protected — only admin can upload videos
+router.post("/upload/video", auth_1.verifyAdmin, upload.single("file"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         if (!req.file) {
             return res.status(400).json({ error: "No file provided" });
         }
-        console.log("Incoming file:", {
-            name: req.file.originalname,
-            size: req.file.size,
-            type: req.file.mimetype,
-        });
         const uploadResult = yield new Promise((resolve, reject) => {
             var _a;
             cloudinary_1.v2.uploader
@@ -71,9 +66,8 @@ router.post("/upload/video", upload.single("file"), (req, res) => __awaiter(void
         });
     }
     catch (error) {
-        console.error("Upload error:", error);
         return res.status(500).json({
-            error: error.message || "Video upload failed",
+            error: "Video upload failed",
         });
     }
 }));

@@ -11,20 +11,45 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getGenerations = exports.getReferrals = exports.getUpline = exports.getDownline = void 0;
 const model_1 = require("../user/model");
-const buildTreeFromFlat = (nodes, parentId) => nodes
-    .filter(n => { var _a, _b, _c; return ((_c = (_b = (_a = n.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
-    .map(n => ({
-    _id: n._id.toString(),
-    username: n.username,
-    name: n.name,
-    children: buildTreeFromFlat(nodes, n._id.toString()),
-}));
+// M-07 fix: O(n) tree build using a pre-indexed map instead of O(n²) filter per node
+const buildTreeFromFlat = (nodes, parentId) => {
+    var _a, _b, _c;
+    // Build parent→children map once
+    const childMap = new Map();
+    for (const n of nodes) {
+        const pid = (_c = (_b = (_a = n.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString();
+        if (!pid)
+            continue;
+        if (!childMap.has(pid))
+            childMap.set(pid, []);
+        childMap.get(pid).push(n);
+    }
+    const buildNode = (pid) => {
+        var _a;
+        return ((_a = childMap.get(pid)) !== null && _a !== void 0 ? _a : []).map((n) => ({
+            _id: n._id.toString(),
+            username: n.username,
+            name: n.name,
+            children: buildNode(n._id.toString()),
+        }));
+    };
+    return buildNode(parentId);
+};
 const getDownline = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const all = yield model_1.User.find({ "generationAncestors.userId": req.user._id })
-            .select("_id username name generationAncestors")
-            .lean();
-        res.json({ tree: buildTreeFromFlat(all, req.user._id.toString()) });
+        // M-14 fix: pagination added — large networks won't crash
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
+        const skip = (page - 1) * limit;
+        const [all, total] = yield Promise.all([
+            model_1.User.find({ "generationAncestors.userId": req.user._id })
+                .select("_id username name generationAncestors")
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            model_1.User.countDocuments({ "generationAncestors.userId": req.user._id }),
+        ]);
+        res.json({ tree: buildTreeFromFlat(all, req.user._id.toString()), total, page, pages: Math.ceil(total / limit) });
     }
     catch (err) {
         next(err);

@@ -23,4 +23,9 @@ const ShareSlotSchema = new Schema<IShareSlot>(
   { timestamps: true }
 );
 
+// L-06 fix: compound indexes for frequent queries
+ShareSlotSchema.index({ shareId: 1, status: 1 });
+ShareSlotSchema.index({ purchaseId: 1, status: 1 });
+ShareSlotSchema.index({ userId: 1 });
+
 export const ShareSlot = model<IShareSlot>("ShareSlot", ShareSlotSchema);

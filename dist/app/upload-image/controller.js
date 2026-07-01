@@ -20,7 +20,18 @@ cloudinary_1.v2.config({
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
+// Fix S-09: file size limit + mime type filter
+const upload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+    fileFilter: (_req, file, cb) => {
+        const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+        if (!allowed.includes(file.mimetype)) {
+            return cb(new Error("Only JPEG, PNG, WebP and GIF images are allowed"));
+        }
+        cb(null, true);
+    },
+});
 exports.uploadImage = [
     upload.single("file"),
     (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {

@@ -15,14 +15,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.requirePermission = exports.verifyStaff = exports.verifyAdmin = exports.verifySuperAdmin = exports.verifyUser = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const model_1 = require("../app/user/model");
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const authConfig_1 = require("../utils/authConfig");
 const verifyUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const token = req.cookies.accessToken;
         if (!token)
             return res.status(401).json({ message: "Unauthorized" });
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        const user = yield model_1.User.findById(decoded.id);
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_SECRET);
+        const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(401).json({ message: "Unauthorized" });
         if (!user.isActive)
@@ -40,8 +40,8 @@ const verifySuperAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const token = req.cookies.accessToken;
         if (!token)
             return res.status(401).json({ message: "Unauthorized" });
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        const user = yield model_1.User.findById(decoded.id);
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_SECRET);
+        const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
@@ -61,8 +61,8 @@ const verifyAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const token = req.cookies.accessToken;
         if (!token)
             return res.status(401).json({ message: "Unauthorized" });
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        const user = yield model_1.User.findById(decoded.id);
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_SECRET);
+        const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
@@ -82,8 +82,8 @@ const verifyStaff = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const token = req.cookies.accessToken;
         if (!token)
             return res.status(401).json({ message: "Unauthorized" });
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        const user = yield model_1.User.findById(decoded.id);
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_SECRET);
+        const user = yield model_1.User.findById(decoded.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)

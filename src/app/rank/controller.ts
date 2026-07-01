@@ -43,8 +43,20 @@ export const createRank = async (
       reward,
       salary,
     } = req.body;
+
+    // M-13 fix: prevent duplicate rank names
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: "Rank name is required" });
+    }
+    const exists = (s.ranks as any[]).some(
+      (r) => r.name?.toLowerCase() === String(name).trim().toLowerCase()
+    );
+    if (exists) {
+      return res.status(400).json({ message: `A rank named "${name}" already exists` });
+    }
+
     (s.ranks as any[]).push({
-      name,
+      name: String(name).trim(),
       requiredGeneration,
       requiredApprovedSales,
       reward,
@@ -149,10 +161,9 @@ export const getMyRank = async (
     const s = await getSettings();
     const allRanks = (s.ranks ?? []);
     const currentRankName = (user as any)?.currentRank ?? null;
-    const currentRank =
-      allRanks.find((r: any) => r.name === currentRankName) ?? null;
-    const nextRank = null; // Remove rank progression logic since no order field
-    res.json({ currentRank, nextRank, allRanks });
+    const currentRank = allRanks.find((r: any) => r.name === currentRankName) ?? null;
+    // L-01 fix: removed dead nextRank = null
+    res.json({ currentRank, allRanks });
   } catch (err) {
     next(err);
   }
@@ -187,34 +198,39 @@ async function getTotalApprovedSalesByGeneration(
 
 // ── Recalculate and update user rank ─────────────────────────────────────────
 
-export const recalcUserRank = async (userId: string) => {
+// M-09 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor
+// C-04 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor
+export const recalcUserRank = async (userId: string, preloadedRanks?: any[]) => {
   try {
     const user = await User.findById(userId).select(
       "currentRank currentRankAchievedAt earnedRanks"
     );
     if (!user) return;
 
-    const s = await Settings.findOne();
-    const ranks = (s?.ranks ?? []) as any[];
+    // C-04 fix: reuse passed ranks, only query if not provided
+    let ranks: any[];
+    if (preloadedRanks) {
+      ranks = preloadedRanks;
+    } else {
+      const s = await Settings.findOne();
+      ranks = (s?.ranks ?? []) as any[];
+    }
     if (!ranks.length) return;
 
     let newRank: any = null;
     let currentEarnedRanks = (user as any).earnedRanks || [];
 
-    // Check each rank sequentially
     for (let i = 0; i < ranks.length; i++) {
       const rank = ranks[i];
-      const generation = i + 1; // Rank 1 = Generation 1, Rank 2 = Generation 2, etc.
+      const generation = i + 1;
       const threshold: number = rank.requiredApprovedSales ?? 0;
-      
-      // Skip if previous rank not earned (sequential progression)
-      if (i > 0 && !currentEarnedRanks.includes(ranks[i-1].name)) {
+
+      if (i > 0 && !currentEarnedRanks.includes(ranks[i - 1].name)) {
         break;
       }
 
-      // Skip if current rank already earned
       if (currentEarnedRanks.includes(rank.name)) {
-        newRank = rank; // Keep track of highest earned rank
+        newRank = rank;
         continue;
       }
 
@@ -224,7 +240,7 @@ export const recalcUserRank = async (userId: string) => {
           newRank = rank;
           currentEarnedRanks.push(rank.name);
         } else {
-          break; // Can't achieve this rank, stop checking higher ranks
+          break;
         }
       }
     }
@@ -232,13 +248,22 @@ export const recalcUserRank = async (userId: string) => {
     const newRankName: string | null = newRank?.name ?? null;
 
     if (newRankName && newRankName !== (user as any).currentRank) {
-      await User.findByIdAndUpdate(userId, {
-        currentRank: newRankName,
-        currentRankAchievedAt: new Date(),
-        earnedRanks: currentEarnedRanks,
-      });
-
-      await issueRankReward(userId, newRank);
+      // H-10 fix: atomic update — only update if currentRank hasn't changed concurrently
+      const updated = await User.findOneAndUpdate(
+        { _id: userId, currentRank: (user as any).currentRank },
+        {
+          $set: {
+            currentRank: newRankName,
+            currentRankAchievedAt: new Date(),
+            earnedRanks: currentEarnedRanks,
+          },
+        },
+        { new: true }
+      );
+      // If updated is null, another concurrent call already updated the rank — skip reward
+      if (updated) {
+        await issueRankReward(userId, newRank);
+      }
     }
   } catch (err) {
     console.error("recalcUserRank error:", err);
@@ -247,11 +272,22 @@ export const recalcUserRank = async (userId: string) => {
 
 async function issueRankReward(userId: string, rank: any) {
   if (!rank?.reward?.value) return;
-  const wallet = await Wallet.findOne({ userId });
-  if (!wallet) return;
 
-  wallet.rewardBalance += rank.reward.value;
-  await wallet.save();
+  // Fix F-08: Atomic check — only issue reward if not already issued for this rank
+  // Uses TransactionLog as the source of truth to prevent double-issuance
+  const alreadyIssued = await TransactionLog.findOne({
+    userId,
+    type: "reward",
+    note: { $regex: `"${rank.name}"` },
+  }).lean();
+  if (alreadyIssued) return;
+
+  // Fix F-05: atomic $inc to prevent race condition
+  const wallet = await Wallet.findOneAndUpdate(
+    { userId },
+    { $inc: { rewardBalance: rank.reward.value, totalBalance: rank.reward.value } },
+    { new: true, upsert: true }
+  );
 
   const note = `Rank reward — "${rank.name}" achieved: ${rank.reward.name} worth ৳${rank.reward.value.toLocaleString()} (${rank.reward.type})`;
   await TransactionLog.create({
@@ -262,13 +298,17 @@ async function issueRankReward(userId: string, rank: any) {
     note,
   });
 
-  await CompanyLedger.create({
-    date: new Date(),
-    type: "reward_paid",
-    amount: rank.reward.value,
-    userId,
-    note,
-  }).catch(() => {});
+  try {
+    await CompanyLedger.create({
+      date: new Date(),
+      type: "reward_paid",
+      amount: rank.reward.value,
+      userId,
+      note,
+    });
+  } catch (ledgerErr) {
+    console.error(`[LEDGER ERROR] reward_paid for userId=${userId}:`, ledgerErr);
+  }
 }
 
 // ── Monthly salary release ────────────────────────────────────────────────────
@@ -374,28 +414,32 @@ export const processMonthlySalaries = async (): Promise<number> => {
     const monthlySalesCount: number = monthlySalesResult[0]?.count ?? 0;
     if (monthlySalesCount < (sal.minMonthlySales ?? 0)) continue;
 
-    // All conditions met — issue salary
-    const wallet = await Wallet.findOne({ userId: user._id });
-    if (!wallet) continue;
-
-    wallet.salaryBalance += sal.amount;
-    await wallet.save();
+    // Fix F-05: atomic $inc — prevents race condition if cron runs twice concurrently
+    const updatedWallet = await Wallet.findOneAndUpdate(
+      { userId: user._id },
+      { $inc: { salaryBalance: sal.amount, totalBalance: sal.amount } },
+      { new: true, upsert: true }
+    );
 
     await TransactionLog.create({
       userId: user._id,
       type: "salary",
       amount: sal.amount,
-      balanceAfter: wallet.salaryBalance,
+      balanceAfter: updatedWallet.salaryBalance,
       note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
     });
 
-    await CompanyLedger.create({
-      date: new Date(),
-      type: "salary_paid",
-      amount: sal.amount,
-      userId: user._id,
-      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
-    }).catch(() => {});
+    try {
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "salary_paid",
+        amount: sal.amount,
+        userId: user._id,
+        note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
+      });
+    } catch (ledgerErr) {
+      console.error(`[LEDGER ERROR] salary_paid for userId=${user._id}:`, ledgerErr);
+    }
 
     await RankSalaryLog.create({
       userId: user._id,

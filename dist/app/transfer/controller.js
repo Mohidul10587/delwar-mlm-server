@@ -26,35 +26,13 @@ const TRANSFERABLE_FIELDS = [
     "rewardBalance",
     "transferBalance",
 ];
-const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
-    let wallet = yield model_1.Wallet.findOne({ userId });
-    if (!wallet)
-        wallet = yield model_1.Wallet.create({
-            userId,
-            totalBalance: 0,
-            directCommissionBalance: 0,
-            manCommFromDownPayment: 0,
-            manCommFromInstallment: 0,
-            salaryBalance: 0,
-            rewardBalance: 0,
-            incentiveBonus: 0,
-            transferBalance: 0,
-        });
-    return wallet;
-});
-/**
- * POST /transfer
- * Body: { receiverUsername, amount, sourceBalance }
- * sourceBalance: one of the TRANSFERABLE_FIELDS
- */
 const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a;
     const session = yield mongoose_1.default.startSession();
     session.startTransaction();
     try {
         const senderId = req.user._id.toString();
         const { receiverUsername, amount, sourceBalance } = req.body;
-        // ── Validate inputs ─────────────────────────────────────────────────
         if (!receiverUsername || !amount || !sourceBalance) {
             yield session.abortTransaction();
             return res.status(400).json({ message: "receiverUsername, amount and sourceBalance are required" });
@@ -68,7 +46,6 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
             yield session.abortTransaction();
             return res.status(400).json({ message: "Invalid source balance type" });
         }
-        // ── Find receiver ────────────────────────────────────────────────────
         const receiver = yield model_4.User.findOne({ username: receiverUsername }).lean();
         if (!receiver) {
             yield session.abortTransaction();
@@ -78,30 +55,41 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
             yield session.abortTransaction();
             return res.status(400).json({ message: "You cannot transfer to yourself" });
         }
-        // ── Get fee rate from settings ───────────────────────────────────────
         const settings = yield model_3.Settings.findOne().lean();
         const feePercent = (_a = settings === null || settings === void 0 ? void 0 : settings.balanceTransferFeePercent) !== null && _a !== void 0 ? _a : 0;
         const feeAmount = parseFloat(((transferAmount * feePercent) / 100).toFixed(2));
         const totalDeduction = parseFloat((transferAmount + feeAmount).toFixed(2));
-        // ── Check sender balance ─────────────────────────────────────────────
-        const senderWallet = yield findOrCreateWallet(senderId);
-        const senderAvailable = senderWallet[sourceBalance];
-        if (senderAvailable < totalDeduction) {
+        // C-01 Fix: atomic $inc with balance guard — no read-modify-write
+        const senderWallet = yield model_1.Wallet.findOneAndUpdate({
+            userId: senderId,
+            [sourceBalance]: { $gte: totalDeduction }, // atomic guard
+        }, {
+            $inc: {
+                [sourceBalance]: -totalDeduction,
+                totalBalance: -totalDeduction,
+            },
+        }, { new: true, session });
+        if (!senderWallet) {
             yield session.abortTransaction();
             return res.status(400).json({
-                message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} (৳${transferAmount} + ৳${feeAmount} fee) but have ৳${senderAvailable.toLocaleString()} in this balance.`,
+                message: `Insufficient balance in selected source for ৳${totalDeduction.toLocaleString()} (৳${transferAmount} + ৳${feeAmount} fee).`,
             });
         }
-        // ── Deduct from sender ───────────────────────────────────────────────
-        senderWallet[sourceBalance] =
-            parseFloat((senderAvailable - totalDeduction).toFixed(2));
-        yield senderWallet.save({ session });
-        // ── Credit receiver ──────────────────────────────────────────────────
-        const receiverWallet = yield findOrCreateWallet(receiver._id.toString());
-        receiverWallet.transferBalance = parseFloat((((_b = receiverWallet.transferBalance) !== null && _b !== void 0 ? _b : 0) + transferAmount).toFixed(2));
-        yield receiverWallet.save({ session });
+        // Credit receiver atomically
+        // L-10 Fix: use upsert so wallet is created if missing
+        const receiverWallet = yield model_1.Wallet.findOneAndUpdate({ userId: receiver._id.toString() }, {
+            $inc: { transferBalance: transferAmount, totalBalance: transferAmount },
+            $setOnInsert: {
+                userId: receiver._id.toString(),
+                directCommissionBalance: 0,
+                manCommFromDownPayment: 0,
+                manCommFromInstallment: 0,
+                salaryBalance: 0,
+                rewardBalance: 0,
+                incentiveBonus: 0,
+            },
+        }, { upsert: true, new: true, session });
         const now = new Date();
-        // ── Sender transaction log ───────────────────────────────────────────
         yield model_1.TransactionLog.create([{
                 userId: senderId,
                 type: "transfer_sent",
@@ -110,7 +98,6 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
                 note: `Transferred ৳${transferAmount} to @${receiver.username} (fee: ৳${feeAmount}, rate: ${feePercent}%)`,
                 createdAt: now,
             }], { session });
-        // ── Receiver transaction log ─────────────────────────────────────────
         yield model_1.TransactionLog.create([{
                 userId: receiver._id.toString(),
                 type: "transfer_received",
@@ -119,7 +106,6 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
                 note: `Received ৳${transferAmount} from @${req.user.username}`,
                 createdAt: now,
             }], { session });
-        // ── Company ledger (fee income) ──────────────────────────────────────
         if (feeAmount > 0) {
             yield model_2.CompanyLedger.create([{
                     date: now,
@@ -146,9 +132,6 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
     }
 });
 exports.sendTransfer = sendTransfer;
-/**
- * GET /transfer/fee — returns current transfer fee percent for the UI
- */
 const getTransferFee = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {

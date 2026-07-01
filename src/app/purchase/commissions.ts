@@ -4,43 +4,78 @@ import { User } from "../user/model";
 import { recalcUserRank } from "../rank/controller";
 import { CompanyLedger } from "../ledger/model";
 
-const findOrCreateWallet = async (userId: string) => {
-  let wallet = await Wallet.findOne({ userId });
-  if (!wallet)
-    wallet = await Wallet.create({
-      userId,
-      totalBalance: 0,
-      directCommissionBalance: 0,
-      manCommFromDownPayment: 0,
-      manCommFromInstallment: 0,
-      salaryBalance: 0,
-      rewardBalance: 0,
-    });
+// M-10 fix: removed conflicting $setOnInsert + $inc on same fields.
+// Use a two-step upsert: ensure wallet exists first, then $inc atomically.
+const atomicCreditWallet = async (
+  userId: string,
+  field: "directCommissionBalance" | "manCommFromDownPayment" | "manCommFromInstallment",
+  amount: number
+) => {
+  // Ensure wallet document exists (no-op if already exists)
+  await Wallet.findOneAndUpdate(
+    { userId },
+    {
+      $setOnInsert: {
+        userId,
+        totalBalance: 0,
+        directCommissionBalance: 0,
+        manCommFromDownPayment: 0,
+        manCommFromInstallment: 0,
+        salaryBalance: 0,
+        rewardBalance: 0,
+        incentiveBonus: 0,
+        transferBalance: 0,
+      },
+    },
+    { upsert: true }
+  );
+  // Then atomically increment — no conflict with $setOnInsert
+  const wallet = await Wallet.findOneAndUpdate(
+    { userId },
+    { $inc: { [field]: amount, totalBalance: amount } },
+    { new: true }
+  );
+  if (!wallet) throw new Error(`Wallet not found for userId=${userId} after upsert`);
   return wallet;
 };
 
 const ledgerCommission = async (txId: any, userId: string, amount: number, note: string) => {
-  await CompanyLedger.create({
-    date: new Date(),
-    type: "commission_paid",
-    amount,
-    relatedId: txId,
-    relatedModel: "TransactionLog",
-    userId,
-    note,
-  });
+  try {
+    await CompanyLedger.create({
+      date: new Date(),
+      type: "commission_paid",
+      amount,
+      relatedId: txId,
+      relatedModel: "TransactionLog",
+      userId,
+      note,
+    });
+  } catch (err) {
+    // Log ledger failure — financial audit trail must be preserved
+    console.error(`[LEDGER ERROR] Failed to create commission ledger for userId=${userId}, amount=${amount}:`, err);
+  }
 };
 
 export const distributeCommissions = async (purchaseId: string) => {
   try {
-    const purchase = await Purchase.findById(purchaseId).populate("shareId");
-    if (!purchase || purchase.commissionProcessed) return;
+    const purchase = await Purchase.findOneAndUpdate(
+      { _id: purchaseId, commissionProcessed: false },
+      { $set: { commissionProcessed: true } },
+      { new: true }
+    ).populate("shareId");
+
+    if (!purchase) return;
 
     const snap = purchase.snapshot;
     if (!snap) return;
 
     const buyer = await User.findById(purchase.userId).select("generationAncestors name username");
     if (!buyer) return;
+
+    // C-04 fix: load Settings once and pass to all recalcUserRank calls
+    const { Settings } = await import("../settings/model");
+    const settingsDoc = await Settings.findOne();
+    const preloadedRanks = (settingsDoc?.ranks ?? []) as any[];
 
     const buyerName = (buyer as any).name ?? "";
     const buyerUsername = (buyer as any).username ?? "";
@@ -65,10 +100,7 @@ export const distributeCommissions = async (purchaseId: string) => {
     if (referrerId) {
       const commission = (snap.directSaleCommissionValue / 100) * downPaymentPortion;
       if (commission > 0) {
-        const wallet = await findOrCreateWallet(referrerId.toString());
-        wallet.directCommissionBalance += commission;
-        await wallet.save();
-
+        const wallet = await atomicCreditWallet(referrerId.toString(), "directCommissionBalance", commission);
         const note = `Direct sale commission (${snap.directSaleCommissionValue}% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty} [${payType}]`;
         const tx = await TransactionLog.create({
           userId: referrerId,
@@ -81,7 +113,7 @@ export const distributeCommissions = async (purchaseId: string) => {
         await ledgerCommission(tx._id, referrerId.toString(), commission, note);
       }
       await User.findByIdAndUpdate(referrerId, { $inc: { directSalesCount: qty } });
-      await recalcUserRank(referrerId.toString());
+      await recalcUserRank(referrerId.toString(), preloadedRanks); // C-04 fix
     }
 
     // ── 2. Down Payment Managerial Commission ─────────────────────────────────
@@ -95,10 +127,7 @@ export const distributeCommissions = async (purchaseId: string) => {
         const genConfig = snap.downPaymentGenerationRates.find((g) => g.generation === gen);
         if (genConfig && genConfig.rate > 0) {
           const commission = (genConfig.rate / 100) * downPaymentPortion;
-          const wallet = await findOrCreateWallet(currentId);
-          wallet.manCommFromDownPayment += commission;
-          await wallet.save();
-
+          const wallet = await atomicCreditWallet(currentId, "manCommFromDownPayment", commission);
           const note = `Gen ${gen} managerial commission — DP (${genConfig.rate}% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
           const tx = await TransactionLog.create({
             userId: currentId,
@@ -111,7 +140,7 @@ export const distributeCommissions = async (purchaseId: string) => {
           await ledgerCommission(tx._id, currentId, commission, note);
         }
         await User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: qty } });
-        await recalcUserRank(currentId);
+        await recalcUserRank(currentId, preloadedRanks); // C-04 fix
       }
     }
 
@@ -125,10 +154,7 @@ export const distributeCommissions = async (purchaseId: string) => {
 
         const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
         if (commission > 0) {
-          const wallet = await findOrCreateWallet(currentId);
-          wallet.manCommFromInstallment += commission;
-          await wallet.save();
-
+          const wallet = await atomicCreditWallet(currentId, "manCommFromInstallment", commission);
           const note = `Gen ${gen} managerial commission — Installment portion (${snap.installmentCommissionRate}% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
           const tx = await TransactionLog.create({
             userId: currentId,
@@ -142,11 +168,13 @@ export const distributeCommissions = async (purchaseId: string) => {
         }
       }
     }
-
-    purchase.commissionProcessed = true;
-    await purchase.save();
   } catch (err) {
-    console.error("Commission distribution error:", err);
+    console.error(`[COMMISSION ERROR] distributeCommissions failed for purchaseId=${purchaseId}:`, err);
+    try {
+      await Purchase.findByIdAndUpdate(purchaseId, { $set: { commissionProcessed: false } });
+    } catch (rollbackErr) {
+      console.error(`[COMMISSION ERROR] Failed to roll back commissionProcessed for purchaseId=${purchaseId}:`, rollbackErr);
+    }
   }
 };
 
@@ -178,9 +206,8 @@ export const distributeInstallmentPaymentCommission = async (
 
       const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
       if (commission > 0) {
-        const wallet = await findOrCreateWallet(currentId);
-        wallet.manCommFromInstallment += commission;
-        await wallet.save();
+        // Fix F-03: atomic $inc
+        const wallet = await atomicCreditWallet(currentId, "manCommFromInstallment", commission);
 
         const note = `Gen ${gen} managerial commission — ${instLabel} (${snap.installmentCommissionRate}% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
         const tx = await TransactionLog.create({
@@ -195,6 +222,6 @@ export const distributeInstallmentPaymentCommission = async (
       }
     }
   } catch (err) {
-    console.error("Installment payment commission error:", err);
+    console.error(`[COMMISSION ERROR] distributeInstallmentPaymentCommission failed for purchaseId=${purchaseId}:`, err);
   }
 };

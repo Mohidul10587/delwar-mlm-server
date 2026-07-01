@@ -50,6 +50,8 @@ const WalletSchema = new Schema<IWallet>(
   { timestamps: true }
 );
 
+// Fix F-12: totalBalance is recomputed on every save (for .save() calls)
+// For $inc operations callers MUST also $inc totalBalance by the same amount.
 WalletSchema.pre("save", function () {
   this.totalBalance =
     (this.directCommissionBalance ?? 0) +
@@ -60,6 +62,9 @@ WalletSchema.pre("save", function () {
     (this.incentiveBonus ?? 0) +
     (this.transferBalance ?? 0);
 });
+
+// Index for fast userId lookups
+WalletSchema.index({ userId: 1 }, { unique: true });
 
 const TransactionLogSchema = new Schema<ITransactionLog>(
   {
@@ -91,6 +96,9 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
   },
   { timestamps: true }
 );
+
+// Index for fast transaction history lookups
+TransactionLogSchema.index({ userId: 1, createdAt: -1 });
 
 export const Wallet = model<IWallet>("Wallet", WalletSchema);
 export const TransactionLog = model<ITransactionLog>("TransactionLog", TransactionLogSchema);

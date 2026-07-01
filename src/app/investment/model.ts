@@ -37,4 +37,8 @@ const InvestmentSchema = new Schema<IInvestment>(
   { timestamps: true }
 );
 
+// Fix D-05: Unique index on transactionId — DB-level duplicate prevention
+InvestmentSchema.index({ transactionId: 1 }, { unique: true });
+InvestmentSchema.index({ userId: 1, createdAt: -1 });
+
 export const Investment = model<IInvestment>("Investment", InvestmentSchema);

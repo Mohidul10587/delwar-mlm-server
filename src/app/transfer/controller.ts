@@ -5,7 +5,6 @@ import { CompanyLedger } from "../ledger/model";
 import { Settings } from "../settings/model";
 import { User } from "../user/model";
 
-// Balances eligible for transfer (not incentiveBonus)
 type TransferableBalance =
   | "directCommissionBalance"
   | "manCommFromDownPayment"
@@ -23,28 +22,6 @@ const TRANSFERABLE_FIELDS: TransferableBalance[] = [
   "transferBalance",
 ];
 
-const findOrCreateWallet = async (userId: string) => {
-  let wallet = await Wallet.findOne({ userId });
-  if (!wallet)
-    wallet = await Wallet.create({
-      userId,
-      totalBalance: 0,
-      directCommissionBalance: 0,
-      manCommFromDownPayment: 0,
-      manCommFromInstallment: 0,
-      salaryBalance: 0,
-      rewardBalance: 0,
-      incentiveBonus: 0,
-      transferBalance: 0,
-    });
-  return wallet;
-};
-
-/**
- * POST /transfer
- * Body: { receiverUsername, amount, sourceBalance }
- * sourceBalance: one of the TRANSFERABLE_FIELDS
- */
 export const sendTransfer = async (req: Request, res: Response, next: NextFunction) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -52,7 +29,6 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
     const senderId = req.user!._id.toString();
     const { receiverUsername, amount, sourceBalance } = req.body;
 
-    // ── Validate inputs ─────────────────────────────────────────────────
     if (!receiverUsername || !amount || !sourceBalance) {
       await session.abortTransaction();
       return res.status(400).json({ message: "receiverUsername, amount and sourceBalance are required" });
@@ -69,7 +45,6 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ message: "Invalid source balance type" });
     }
 
-    // ── Find receiver ────────────────────────────────────────────────────
     const receiver = await User.findOne({ username: receiverUsername }).lean();
     if (!receiver) {
       await session.abortTransaction();
@@ -80,37 +55,54 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ message: "You cannot transfer to yourself" });
     }
 
-    // ── Get fee rate from settings ───────────────────────────────────────
     const settings = await Settings.findOne().lean();
     const feePercent = settings?.balanceTransferFeePercent ?? 0;
     const feeAmount = parseFloat(((transferAmount * feePercent) / 100).toFixed(2));
     const totalDeduction = parseFloat((transferAmount + feeAmount).toFixed(2));
 
-    // ── Check sender balance ─────────────────────────────────────────────
-    const senderWallet = await findOrCreateWallet(senderId);
-    const senderAvailable = senderWallet[sourceBalance as TransferableBalance] as number;
-    if (senderAvailable < totalDeduction) {
+    // C-01 Fix: atomic $inc with balance guard — no read-modify-write
+    const senderWallet = await Wallet.findOneAndUpdate(
+      {
+        userId: senderId,
+        [sourceBalance]: { $gte: totalDeduction }, // atomic guard
+      },
+      {
+        $inc: {
+          [sourceBalance]: -totalDeduction,
+          totalBalance: -totalDeduction,
+        },
+      },
+      { new: true, session }
+    );
+
+    if (!senderWallet) {
       await session.abortTransaction();
       return res.status(400).json({
-        message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} (৳${transferAmount} + ৳${feeAmount} fee) but have ৳${senderAvailable.toLocaleString()} in this balance.`,
+        message: `Insufficient balance in selected source for ৳${totalDeduction.toLocaleString()} (৳${transferAmount} + ৳${feeAmount} fee).`,
       });
     }
 
-    // ── Deduct from sender ───────────────────────────────────────────────
-    (senderWallet[sourceBalance as TransferableBalance] as number) =
-      parseFloat((senderAvailable - totalDeduction).toFixed(2));
-    await senderWallet.save({ session });
-
-    // ── Credit receiver ──────────────────────────────────────────────────
-    const receiverWallet = await findOrCreateWallet(receiver._id.toString());
-    receiverWallet.transferBalance = parseFloat(
-      ((receiverWallet.transferBalance ?? 0) + transferAmount).toFixed(2)
+    // Credit receiver atomically
+    // L-10 Fix: use upsert so wallet is created if missing
+    const receiverWallet = await Wallet.findOneAndUpdate(
+      { userId: receiver._id.toString() },
+      {
+        $inc: { transferBalance: transferAmount, totalBalance: transferAmount },
+        $setOnInsert: {
+          userId: receiver._id.toString(),
+          directCommissionBalance: 0,
+          manCommFromDownPayment: 0,
+          manCommFromInstallment: 0,
+          salaryBalance: 0,
+          rewardBalance: 0,
+          incentiveBonus: 0,
+        },
+      },
+      { upsert: true, new: true, session }
     );
-    await receiverWallet.save({ session });
 
     const now = new Date();
 
-    // ── Sender transaction log ───────────────────────────────────────────
     await TransactionLog.create(
       [{
         userId: senderId,
@@ -123,7 +115,6 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
       { session }
     );
 
-    // ── Receiver transaction log ─────────────────────────────────────────
     await TransactionLog.create(
       [{
         userId: receiver._id.toString(),
@@ -136,7 +127,6 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
       { session }
     );
 
-    // ── Company ledger (fee income) ──────────────────────────────────────
     if (feeAmount > 0) {
       await CompanyLedger.create(
         [{
@@ -166,9 +156,6 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-/**
- * GET /transfer/fee — returns current transfer fee percent for the UI
- */
 export const getTransferFee = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const settings = await Settings.findOne().lean();

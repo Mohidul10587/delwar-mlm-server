@@ -1,9 +1,11 @@
 import { Router } from "express";
-import { getSettings, updateSettings } from "./controller";
-import { verifySuperAdmin } from "../../middleware/auth";
+import { getPublicSettings, getSettings, updateSettings } from "./controller";
+import { verifySuperAdmin, verifyAdmin } from "../../middleware/auth";
 
 const router = Router();
-router.get("/", getSettings);
+
+router.get("/public", getPublicSettings);       // H-02: public safe fields only
+router.get("/", verifyAdmin, getSettings);      // H-02: full settings requires admin
 router.put("/", verifySuperAdmin, updateSettings);
 
 export default router;

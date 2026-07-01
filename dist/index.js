@@ -20,6 +20,8 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const cors_1 = __importDefault(require("cors"));
 const body_parser_1 = __importDefault(require("body-parser"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const helmet_1 = __importDefault(require("helmet"));
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const errorHandler_1 = require("./middleware/errorHandler");
 const seedAdmin_1 = require("./utils/seedAdmin");
 const routes_1 = __importDefault(require("./app/settings/routes"));
@@ -58,14 +60,51 @@ mongoose_1.default.connection.once("open", () => __awaiter(void 0, void 0, void 
     console.log("Connected to MongoDB");
     yield (0, seedAdmin_1.seedAdmin)();
 }));
-app.use(body_parser_1.default.json());
-app.use(body_parser_1.default.urlencoded({ extended: true }));
+// Fix S-11: Security headers
+app.use((0, helmet_1.default)({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(body_parser_1.default.json({ limit: "10mb" }));
+app.use(body_parser_1.default.urlencoded({ extended: true, limit: "10mb" }));
 app.use((0, cookie_parser_1.default)());
 app.use((0, cors_1.default)({
     origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
 }));
+// Fix S-06: Rate limiting
+// General API rate limit — 200 requests per 15 minutes per IP
+const generalLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many requests, please try again later" },
+});
+// Strict limit for auth endpoints — 10 attempts per 15 minutes per IP
+const authLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many login attempts, please try again later" },
+});
+// Financial action limit — 30 requests per 15 minutes per IP
+const financialLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many financial requests, please try again later" },
+});
+app.use(generalLimiter);
+app.use("/user/login", authLimiter);
+app.use("/user/register", authLimiter);
+app.use("/user/refresh", authLimiter);
+app.use("/purchase", financialLimiter);
+app.use("/withdrawal", financialLimiter);
+app.use("/transfer", financialLimiter);
+app.use("/investment", financialLimiter);
 app.get("/", (_req, res) => res.send("MLM Server"));
 app.use("/settings", routes_1.default);
 app.use("/user", routes_2.default);

@@ -5,6 +5,7 @@ import { Wallet } from "../wallet/model";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { registerSchema, adminRegisterSchema, loginSchema } from "./validation";
+import { JWT_SECRET, JWT_REFRESH_SECRET, cookieOpts } from "../../utils/authConfig";
 
 declare module "express" {
   interface Request {
@@ -12,9 +13,6 @@ declare module "express" {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET || "your-refresh-secret";
 const defaultPermissionsByRole: Record<string, string[]> = {
   admin: ["purchase.review"],
   staff: ["purchase.review"],
@@ -27,14 +25,6 @@ const generateTokens = (id: string) => {
   });
   return { accessToken, refreshToken };
 };
-
-const cookieOpts = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: (process.env.NODE_ENV === "production" ? "none" : "lax") as
-    | "none"
-    | "lax",
-});
 
 /** Build generation ancestor list (no side needed). */
 async function buildGenerationAncestors(
@@ -349,9 +339,13 @@ export const updatePhone = async (
 ) => {
   try {
     const { phone } = req.body;
+    // M-12 fix: basic phone validation
+    if (!phone || !/^[0-9+\-\s]{7,15}$/.test(String(phone).trim())) {
+      return res.status(400).json({ message: "Invalid phone number format" });
+    }
     const user = await Model.findByIdAndUpdate(
       req.user?._id,
-      { $set: { phone } },
+      { $set: { phone: String(phone).trim() } },
       { new: true }
     ).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });

@@ -12,12 +12,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTransactionIdUsed = isTransactionIdUsed;
 const model_1 = require("../app/purchase/model");
 const model_2 = require("../app/investment/model");
+const installment_model_1 = require("../app/purchase/installment.model");
+/**
+ * Fix F-09, F-10: Check transactionId uniqueness across
+ * Purchase, InstallmentPayment, and Investment collections.
+ */
 function isTransactionIdUsed(transactionId) {
     return __awaiter(this, void 0, void 0, function* () {
-        const [p, inv] = yield Promise.all([
+        const [p, inv, inst] = yield Promise.all([
             model_1.Purchase.exists({ transactionId }),
             model_2.Investment.exists({ transactionId }),
+            installment_model_1.InstallmentPayment.exists({ transactionId }),
         ]);
-        return !!(p || inv);
+        return !!(p || inv || inst);
     });
 }

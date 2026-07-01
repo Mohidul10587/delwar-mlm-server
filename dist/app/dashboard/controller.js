@@ -16,14 +16,29 @@ const model_3 = require("../settings/model");
 const model_4 = require("../user/model");
 const model_5 = require("../share/model");
 const model_6 = require("../event/model");
-const buildTree = (nodes, parentId) => nodes
-    .filter((n) => { var _a, _b, _c; return ((_c = (_b = (_a = n.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString()) === parentId; })
-    .map((n) => ({
-    _id: n._id.toString(),
-    username: n.username,
-    name: n.name,
-    children: buildTree(nodes, n._id.toString()),
-}));
+// M-08 fix: O(n) tree build using pre-indexed parent→children map
+const buildTree = (nodes, parentId) => {
+    var _a, _b, _c;
+    const childMap = new Map();
+    for (const n of nodes) {
+        const pid = (_c = (_b = (_a = n.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId) === null || _c === void 0 ? void 0 : _c.toString();
+        if (!pid)
+            continue;
+        if (!childMap.has(pid))
+            childMap.set(pid, []);
+        childMap.get(pid).push(n);
+    }
+    const buildNode = (pid) => {
+        var _a;
+        return ((_a = childMap.get(pid)) !== null && _a !== void 0 ? _a : []).map((n) => ({
+            _id: n._id.toString(),
+            username: n.username,
+            name: n.name,
+            children: buildNode(n._id.toString()),
+        }));
+    };
+    return buildNode(parentId);
+};
 // GET /dashboard/user
 const getUserDashboard = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f, _g;
@@ -33,7 +48,11 @@ const getUserDashboard = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             model_1.Wallet.findOne({ userId }).lean(),
             model_2.Purchase.find({ userId }).populate("shareId", "title cashPrice installment image").sort({ createdAt: -1 }).lean(),
             model_4.User.findById(userId).select("directSalesCount teamSalesCount currentRank").lean(),
-            model_4.User.find({ "generationAncestors.userId": userId }).select("_id username name generationAncestors").lean(),
+            // H-06 fix: limit downline fetch to prevent memory issues on large networks
+            model_4.User.find({ "generationAncestors.userId": userId })
+                .select("_id username name generationAncestors")
+                .limit(500)
+                .lean(),
             model_3.Settings.findOne().lean(),
             model_5.Share.find({ isActive: true }).lean(),
             model_6.Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),

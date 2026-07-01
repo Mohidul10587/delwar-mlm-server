@@ -155,4 +155,9 @@ const PurchaseSchema = new Schema<IPurchase>(
   { timestamps: true }
 );
 
+// Fix D-02: Add indexes for performance and duplicate prevention
+PurchaseSchema.index({ userId: 1, createdAt: -1 });
+PurchaseSchema.index({ status: 1 });
+PurchaseSchema.index({ transactionId: 1 }, { unique: true, sparse: true });
+
 export const Purchase = model<IPurchase>("Purchase", PurchaseSchema);

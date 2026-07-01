@@ -13,6 +13,8 @@ const WalletSchema = new mongoose_1.Schema({
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
 }, { timestamps: true });
+// Fix F-12: totalBalance is recomputed on every save (for .save() calls)
+// For $inc operations callers MUST also $inc totalBalance by the same amount.
 WalletSchema.pre("save", function () {
     var _a, _b, _c, _d, _e, _f, _g;
     this.totalBalance =
@@ -24,6 +26,8 @@ WalletSchema.pre("save", function () {
             ((_f = this.incentiveBonus) !== null && _f !== void 0 ? _f : 0) +
             ((_g = this.transferBalance) !== null && _g !== void 0 ? _g : 0);
 });
+// Index for fast userId lookups
+WalletSchema.index({ userId: 1 }, { unique: true });
 const TransactionLogSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     type: {
@@ -51,5 +55,7 @@ const TransactionLogSchema = new mongoose_1.Schema({
     note: { type: String, default: "" },
     relatedPurchaseId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Purchase" },
 }, { timestamps: true });
+// Index for fast transaction history lookups
+TransactionLogSchema.index({ userId: 1, createdAt: -1 });
 exports.Wallet = (0, mongoose_1.model)("Wallet", WalletSchema);
 exports.TransactionLog = (0, mongoose_1.model)("TransactionLog", TransactionLogSchema);

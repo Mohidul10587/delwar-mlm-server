@@ -5,7 +5,7 @@ import { verifyUser, verifySuperAdmin } from "../../middleware/auth";
 const router = Router();
 
 router.get("/my", verifyUser, getMyRank);
-router.get("/", getRanks);
+router.get("/", verifyUser, getRanks); // H-01 fix: require login to see rank list
 router.post("/", verifySuperAdmin, createRank);
 router.post("/release-salaries", verifySuperAdmin, releaseMonthlySalaries);
 router.put("/replace-all", verifySuperAdmin, replaceAllRanks);

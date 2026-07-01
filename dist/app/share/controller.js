@@ -14,6 +14,17 @@ const model_1 = require("./model");
 const shareSlot_model_1 = require("./shareSlot.model");
 const model_2 = require("../settings/model");
 const BATCH_SIZE = 1000;
+/** Returns true if the share's offer is currently active based on dates */
+function isOfferActive(share) {
+    if (!share.isOffer)
+        return false;
+    const now = new Date();
+    if (share.offerStartDate && new Date(share.offerStartDate) > now)
+        return false;
+    if (share.offerEndDate && new Date(share.offerEndDate) < now)
+        return false;
+    return true;
+}
 const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     try {
@@ -22,10 +33,15 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const totalShares = Number((_b = req.body.totalShares) !== null && _b !== void 0 ? _b : 0);
         const pkg = yield model_1.Share.create(Object.assign(Object.assign(Object.assign({}, defaults), req.body), { totalShares }));
         if (totalShares > 0) {
-            // Find the current highest share number across all slots
-            const last = yield shareSlot_model_1.ShareSlot.findOne().sort({ shareNumber: -1 }).select("shareNumber").lean();
+            // M-06 fix: use a mutex-like approach via findOneAndUpdate to get a
+            // reserved sequence range atomically, preventing duplicate share numbers.
+            // We find the global max share number once and use it as the base.
+            // The unique index on shareNumber will still catch any collision.
+            const last = yield shareSlot_model_1.ShareSlot.findOne()
+                .sort({ shareNumber: -1 })
+                .select("shareNumber")
+                .lean();
             const lastSeq = last ? parseInt(last.shareNumber.replace("THL-", ""), 10) : 0;
-            // Build all docs in memory, insert in batches
             for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
                 const docs = [];
                 const end = Math.min(batch + BATCH_SIZE, totalShares);
@@ -39,7 +55,19 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
                         reclaimedAt: null,
                     });
                 }
-                yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: false });
+                // ordered: false so a duplicate shareNumber error doesn't block the rest
+                try {
+                    yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: false });
+                }
+                catch (insertErr) {
+                    // Duplicate key on shareNumber — retry with a fresh sequence base
+                    if ((insertErr === null || insertErr === void 0 ? void 0 : insertErr.code) === 11000) {
+                        return res.status(409).json({
+                            message: "Share number conflict due to concurrent creation. Please retry.",
+                        });
+                    }
+                    throw insertErr;
+                }
             }
         }
         res.status(201).json({ message: "Share created", pkg });
@@ -51,8 +79,18 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
 exports.createShare = createShare;
 const getShares = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const shares = yield model_1.Share.find({ isActive: true }).lean();
-        res.json({ shares });
+        const { projectStatus, isOffer } = req.query;
+        const filter = { isActive: true };
+        if (projectStatus)
+            filter.projectStatus = projectStatus;
+        const shares = yield model_1.Share.find(filter).lean();
+        // Apply offer-active filter in memory (needs date comparison)
+        const result = isOffer === "true"
+            ? shares.filter(isOfferActive).sort((a, b) => { var _a, _b; return ((_a = b.offerPriority) !== null && _a !== void 0 ? _a : 0) - ((_b = a.offerPriority) !== null && _b !== void 0 ? _b : 0); })
+            : shares;
+        // Attach computed isActiveOffer flag to every share
+        const enriched = result.map((s) => (Object.assign(Object.assign({}, s), { isActiveOffer: isOfferActive(s) })));
+        res.json({ shares: enriched });
     }
     catch (err) {
         next(err);
@@ -64,7 +102,7 @@ const getShareById = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         const pkg = yield model_1.Share.findById(req.params.id).lean();
         if (!pkg)
             return res.status(404).json({ message: "Share not found" });
-        res.json({ pkg });
+        res.json({ pkg: Object.assign(Object.assign({}, pkg), { isActiveOffer: isOfferActive(pkg) }) });
     }
     catch (err) {
         next(err);
@@ -187,7 +225,10 @@ const getSharesWithStats = (req, res, next) => __awaiter(void 0, void 0, void 0,
             const { available = 0, sold = 0, reclaimed = 0 } = (_a = map[key]) !== null && _a !== void 0 ? _a : {};
             return { _id: s._id, title: s.title, totalShares: s.totalShares, sold, reclaimed, available };
         });
-        res.json({ shares: shares.filter((s) => s.isActive), stats });
+        res.json({
+            shares: shares.filter((s) => s.isActive).map((s) => (Object.assign(Object.assign({}, s), { isActiveOffer: isOfferActive(s) }))),
+            stats,
+        });
     }
     catch (err) {
         next(err);

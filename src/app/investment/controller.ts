@@ -53,15 +53,19 @@ export const createInvestment = async (req: Request, res: Response, next: NextFu
       endDate,
     });
 
-    await CompanyLedger.create({
-      date: new Date(),
-      type: "investment_received",
-      amount: parsedAmount,
-      relatedId: investment._id,
-      relatedModel: "Investment",
-      userId: req.user!._id,
-      note: `Investment received — ${profitType} plan, ৳${parsedAmount.toLocaleString()}, TxID: ${transactionId}, Account: ${senderAccount}`,
-    }).catch(() => {});
+    try {
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "investment_received",
+        amount: parsedAmount,
+        relatedId: investment._id,
+        relatedModel: "Investment",
+        userId: req.user!._id,
+        note: `Investment received — ${profitType} plan, ৳${parsedAmount.toLocaleString()}, TxID: ${transactionId}, Account: ${senderAccount}`,
+      });
+    } catch (ledgerErr) {
+      console.error(`[LEDGER ERROR] investment_received for investmentId=${investment._id}:`, ledgerErr);
+    }
 
     res.status(201).json({ message: "Investment created", investment });
   } catch (err) { next(err); }
@@ -119,7 +123,7 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
 
       const wallet = await Wallet.findOneAndUpdate(
         { userId: investment.userId },
-        { $inc: { directCommissionBalance: totalPayout } },
+        { $inc: { directCommissionBalance: totalPayout, totalBalance: totalPayout } }, // C-02 fix
         { new: true, upsert: true }
       );
       await TransactionLog.create({
@@ -128,20 +132,35 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
         note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
       });
 
-      await CompanyLedger.create({
-        date: now,
-        type: "investment_profit_paid",
-        amount: totalPayout,
-        relatedId: investment._id,
-        relatedModel: "Investment",
-        userId: investment.userId,
-        note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
-      }).catch(() => {});
+      try {
+        await CompanyLedger.create({
+          date: now,
+          type: "investment_profit_paid",
+          amount: totalPayout,
+          relatedId: investment._id,
+          relatedModel: "Investment",
+          userId: investment.userId,
+          note: `Investment maturity payout — ৳${totalPayout.toLocaleString()} (principal ৳${investment.originalAmount.toLocaleString()} + profit ৳${(totalPayout - investment.originalAmount).toFixed(2)})`,
+        });
+      } catch (ledgerErr) {
+        console.error(`[LEDGER ERROR] investment_profit_paid maturity for investmentId=${investment._id}:`, ledgerErr);
+      }
 
-      investment.lastProfitPaidAt = now;
-      investment.lastProfitPaidMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      investment.status = "completed";
-      await investment.save();
+      // M-11 fix: update investment status atomically before crediting wallet
+      const claimedMaturity = await Investment.findOneAndUpdate(
+        { _id: investment._id, status: { $ne: "completed" } },
+        {
+          $set: {
+            lastProfitPaidAt: now,
+            lastProfitPaidMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+            status: "completed",
+          },
+        },
+        { new: true }
+      );
+      if (!claimedMaturity) {
+        return res.status(400).json({ message: "Maturity payout already processed" });
+      }
 
       return res.json({ message: "Maturity payout completed", profitAmount: totalPayout });
     }
@@ -185,7 +204,7 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
 
     const wallet = await Wallet.findOneAndUpdate(
       { userId: investment.userId },
-      { $inc: { directCommissionBalance: profitAmount } },
+      { $inc: { directCommissionBalance: profitAmount, totalBalance: profitAmount } }, // C-02 fix
       { new: true, upsert: true }
     );
     await TransactionLog.create({
@@ -194,15 +213,19 @@ export const distributeProfit = async (req: Request, res: Response, next: NextFu
       note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()} (original ৳${investment.originalAmount.toLocaleString()})`,
     });
 
-    await CompanyLedger.create({
-      date: now,
-      type: "investment_profit_paid",
-      amount: profitAmount,
-      relatedId: investment._id,
-      relatedModel: "Investment",
-      userId: investment.userId,
-      note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()}`,
-    }).catch(() => {});
+    try {
+      await CompanyLedger.create({
+        date: now,
+        type: "investment_profit_paid",
+        amount: profitAmount,
+        relatedId: investment._id,
+        relatedModel: "Investment",
+        userId: investment.userId,
+        note: `Investment profit — ${investment.profitType} plan, payment #${newProfitPaidCount}/60, ৳${profitAmount.toLocaleString()}`,
+      });
+    } catch (ledgerErr) {
+      console.error(`[LEDGER ERROR] investment_profit_paid for investmentId=${investment._id}:`, ledgerErr);
+    }
 
     res.json({ message: "Profit distributed", profitAmount });
   } catch (err) { next(err); }

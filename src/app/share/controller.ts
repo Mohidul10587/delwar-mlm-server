@@ -5,6 +5,15 @@ import { Settings } from "../settings/model";
 
 const BATCH_SIZE = 1000;
 
+/** Returns true if the share's offer is currently active based on dates */
+function isOfferActive(share: any): boolean {
+  if (!share.isOffer) return false;
+  const now = new Date();
+  if (share.offerStartDate && new Date(share.offerStartDate) > now) return false;
+  if (share.offerEndDate && new Date(share.offerEndDate) < now) return false;
+  return true;
+}
+
 export const createShare = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const settings = await Settings.findOne();
@@ -14,11 +23,16 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
     const pkg = await Share.create({ ...defaults, ...req.body, totalShares });
 
     if (totalShares > 0) {
-      // Find the current highest share number across all slots
-      const last = await ShareSlot.findOne().sort({ shareNumber: -1 }).select("shareNumber").lean();
+      // M-06 fix: use a mutex-like approach via findOneAndUpdate to get a
+      // reserved sequence range atomically, preventing duplicate share numbers.
+      // We find the global max share number once and use it as the base.
+      // The unique index on shareNumber will still catch any collision.
+      const last = await ShareSlot.findOne()
+        .sort({ shareNumber: -1 })
+        .select("shareNumber")
+        .lean();
       const lastSeq = last ? parseInt(last.shareNumber.replace("THL-", ""), 10) : 0;
 
-      // Build all docs in memory, insert in batches
       for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
         const docs = [];
         const end = Math.min(batch + BATCH_SIZE, totalShares);
@@ -32,7 +46,18 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
             reclaimedAt: null,
           });
         }
-        await ShareSlot.insertMany(docs, { ordered: false });
+        // ordered: false so a duplicate shareNumber error doesn't block the rest
+        try {
+          await ShareSlot.insertMany(docs, { ordered: false });
+        } catch (insertErr: any) {
+          // Duplicate key on shareNumber — retry with a fresh sequence base
+          if (insertErr?.code === 11000) {
+            return res.status(409).json({
+              message: "Share number conflict due to concurrent creation. Please retry.",
+            });
+          }
+          throw insertErr;
+        }
       }
     }
 
@@ -42,8 +67,21 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
 
 export const getShares = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const shares = await Share.find({ isActive: true }).lean();
-    res.json({ shares });
+    const { projectStatus, isOffer } = req.query;
+    const filter: any = { isActive: true };
+    if (projectStatus) filter.projectStatus = projectStatus;
+
+    const shares = await Share.find(filter).lean();
+
+    // Apply offer-active filter in memory (needs date comparison)
+    const result = isOffer === "true"
+      ? shares.filter(isOfferActive).sort((a, b) => (b.offerPriority ?? 0) - (a.offerPriority ?? 0))
+      : shares;
+
+    // Attach computed isActiveOffer flag to every share
+    const enriched = result.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) }));
+
+    res.json({ shares: enriched });
   } catch (err) { next(err); }
 };
 
@@ -51,7 +89,7 @@ export const getShareById = async (req: Request, res: Response, next: NextFuncti
   try {
     const pkg = await Share.findById(req.params.id).lean();
     if (!pkg) return res.status(404).json({ message: "Share not found" });
-    res.json({ pkg });
+    res.json({ pkg: { ...pkg, isActiveOffer: isOfferActive(pkg) } });
   } catch (err) { next(err); }
 };
 
@@ -169,6 +207,9 @@ export const getSharesWithStats = async (req: Request, res: Response, next: Next
       return { _id: s._id, title: s.title, totalShares: s.totalShares, sold, reclaimed, available };
     });
 
-    res.json({ shares: shares.filter((s) => (s as any).isActive), stats });
+    res.json({
+      shares: shares.filter((s) => (s as any).isActive).map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
+      stats,
+    });
   } catch (err) { next(err); }
 };

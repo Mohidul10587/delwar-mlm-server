@@ -19,28 +19,51 @@ const model_4 = require("../ledger/model");
 const shareSlot_model_1 = require("../share/shareSlot.model");
 // ── Share allocation helpers ──────────────────────────────────────────────────
 /**
- * Allocates available share slots to a purchase.
- * Returns error string if not enough available, otherwise null.
+ * Fix F-01: Allocates share slots atomically to prevent race conditions.
+ * Each slot is updated one-by-one with a status=available guard so that
+ * two concurrent approvals cannot grab the same slot.
  */
 function allocateShares(purchase) {
     return __awaiter(this, void 0, void 0, function* () {
+        // Find available slot IDs first
         const available = yield shareSlot_model_1.ShareSlot.find({
             shareId: purchase.shareId,
             status: "available",
         })
             .sort({ shareNumber: 1 })
             .limit(purchase.quantity)
-            .select("_id");
+            .select("_id")
+            .lean();
         if (available.length < purchase.quantity) {
-            return { error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required` };
+            return {
+                error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required`,
+            };
         }
-        yield shareSlot_model_1.ShareSlot.updateMany({ _id: { $in: available.map((s) => s._id) } }, { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } });
+        // Fix F-01: Atomically claim each slot — only succeeds if status is still "available"
+        let claimed = 0;
+        const claimedIds = [];
+        for (const slot of available) {
+            const updated = yield shareSlot_model_1.ShareSlot.findOneAndUpdate({ _id: slot._id, status: "available" }, // atomic guard
+            { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } }, { new: true });
+            if (updated) {
+                claimed++;
+                claimedIds.push(slot._id);
+            }
+        }
+        if (claimed < purchase.quantity) {
+            // Roll back whatever we already claimed
+            if (claimedIds.length > 0) {
+                yield shareSlot_model_1.ShareSlot.updateMany({ _id: { $in: claimedIds } }, { $set: { status: "available", userId: null, purchaseId: null } });
+            }
+            return {
+                error: `Only ${claimed} slot(s) could be allocated (concurrent conflict). Please retry.`,
+            };
+        }
         return null;
     });
 }
 /**
  * Reclaims all sold share slots belonging to a purchase.
- * Returns number of slots reclaimed.
  */
 function reclaimPurchaseShares(purchaseId) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -88,23 +111,29 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             yield model_3.User.findByIdAndUpdate(purchase.userId, {
                 $inc: { personalSharesCount: purchase.quantity },
             });
-            // Step 5 — Distribute commissions
+            // Step 5 — Fix P-02: await commission distribution so errors are caught
             if (!purchase.commissionProcessed) {
-                (0, commissions_1.distributeCommissions)(purchase._id.toString());
+                yield (0, commissions_1.distributeCommissions)(purchase._id.toString());
             }
             // Step 6 — Ledger entry
             const buyer = yield model_3.User.findById(purchase.userId).select("name username").lean();
             const buyerName = (_a = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _a !== void 0 ? _a : "";
             const buyerUsername = (_b = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _b !== void 0 ? _b : "";
-            yield model_4.CompanyLedger.create({
-                date: new Date(),
-                type: "purchase_received",
-                amount: purchase.amountPaid,
-                relatedId: purchase._id,
-                relatedModel: "Purchase",
-                userId: purchase.userId,
-                note: `Purchase approved — ${(_d = (_c = purchase.snapshot) === null || _c === void 0 ? void 0 : _c.shareTitle) !== null && _d !== void 0 ? _d : ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
-            }).catch(() => { });
+            try {
+                yield model_4.CompanyLedger.create({
+                    date: new Date(),
+                    type: "purchase_received",
+                    amount: purchase.amountPaid,
+                    relatedId: purchase._id,
+                    relatedModel: "Purchase",
+                    userId: purchase.userId,
+                    note: `Purchase approved — ${(_d = (_c = purchase.snapshot) === null || _c === void 0 ? void 0 : _c.shareTitle) !== null && _d !== void 0 ? _d : ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+                });
+            }
+            catch (ledgerErr) {
+                // Fix E-02: log ledger failures — do not silently swallow
+                console.error(`[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`, ledgerErr);
+            }
         }
         // Step 7 — Update certificate status
         const purchaseWithShare = yield model_1.Purchase.findById(purchase._id)

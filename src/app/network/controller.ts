@@ -8,22 +8,42 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-const buildTreeFromFlat = (nodes: any[], parentId: string): TreeNode[] =>
-  nodes
-    .filter(n => n.generationAncestors?.[0]?.userId?.toString() === parentId)
-    .map(n => ({
+// M-07 fix: O(n) tree build using a pre-indexed map instead of O(n²) filter per node
+const buildTreeFromFlat = (nodes: any[], parentId: string): TreeNode[] => {
+  // Build parent→children map once
+  const childMap = new Map<string, any[]>();
+  for (const n of nodes) {
+    const pid = n.generationAncestors?.[0]?.userId?.toString();
+    if (!pid) continue;
+    if (!childMap.has(pid)) childMap.set(pid, []);
+    childMap.get(pid)!.push(n);
+  }
+  const buildNode = (pid: string): TreeNode[] =>
+    (childMap.get(pid) ?? []).map((n) => ({
       _id: n._id.toString(),
       username: n.username,
       name: n.name,
-      children: buildTreeFromFlat(nodes, n._id.toString()),
+      children: buildNode(n._id.toString()),
     }));
+  return buildNode(parentId);
+};
 
 export const getDownline = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const all = await User.find({ "generationAncestors.userId": req.user!._id })
-      .select("_id username name generationAncestors")
-      .lean();
-    res.json({ tree: buildTreeFromFlat(all, req.user!._id.toString()) });
+    // M-14 fix: pagination added — large networks won't crash
+    const page  = parseInt(req.query.page  as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 100;
+    const skip  = (page - 1) * limit;
+
+    const [all, total] = await Promise.all([
+      User.find({ "generationAncestors.userId": req.user!._id })
+        .select("_id username name generationAncestors")
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments({ "generationAncestors.userId": req.user!._id }),
+    ]);
+    res.json({ tree: buildTreeFromFlat(all, req.user!._id.toString()), total, page, pages: Math.ceil(total / limit) });
   } catch (err) { next(err); }
 };
 

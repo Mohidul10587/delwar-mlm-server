@@ -27,6 +27,16 @@ const ShareSchema = new mongoose_1.Schema({
     developer: { type: String, default: "" },
     videoLink: { type: String, default: "" },
     categoryId: { type: String, default: "" },
-    projectStatus: { type: String, enum: ["complete", "running", "upcoming"], default: "upcoming" },
+    projectStatus: {
+        type: String,
+        enum: ["complete", "running", "upcoming"],
+        default: "running",
+    },
+    // Offer fields
+    isOffer: { type: Boolean, default: false },
+    offerText: { type: String, default: null },
+    offerStartDate: { type: Date, default: null },
+    offerEndDate: { type: Date, default: null },
+    offerPriority: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.Share = (0, mongoose_1.model)("Share", ShareSchema);

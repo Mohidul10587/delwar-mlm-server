@@ -18,7 +18,9 @@ const model_3 = require("../wallet/model");
 const model_4 = require("../user/model");
 const commissions_1 = require("./commissions");
 const model_5 = require("../ledger/model");
-const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
+const isTransactionIdUsed_1 = require("../../utils/isTransactionIdUsed");
+// Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
+const getWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     return yield model_3.Wallet.findOne({ userId });
 });
 const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
@@ -36,13 +38,36 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
                 message: "This purchase is not installment type",
             });
         }
+        if (purchase.status !== "approved") {
+            return res.status(400).json({
+                message: "Cannot submit installment for a non-approved purchase",
+            });
+        }
+        // Fix V-03: validate installmentNo
+        const instNo = parseInt(String(installmentNo), 10);
+        if (!Number.isInteger(instNo) || instNo < 1) {
+            return res.status(400).json({ message: "Invalid installment number" });
+        }
+        // Fix F-09: check transactionId uniqueness for installments
+        if (!transactionId || !String(transactionId).trim()) {
+            return res.status(400).json({ message: "Transaction ID is required" });
+        }
+        const duplicate = yield (0, isTransactionIdUsed_1.isTransactionIdUsed)(String(transactionId).trim());
+        if (duplicate) {
+            return res.status(400).json({ message: "This transaction ID has already been used" });
+        }
+        // Validate amount
+        const parsedAmount = Number(amount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ message: "Amount must be greater than 0" });
+        }
         const payment = yield installment_model_1.InstallmentPayment.create({
             purchaseId: purchase._id,
             userId: req.user._id,
-            installmentNo: Number(installmentNo),
-            amount: Number(amount),
+            installmentNo: instNo,
+            amount: parsedAmount,
             senderAccount,
-            transactionId,
+            transactionId: String(transactionId).trim(),
         });
         res.status(201).json({
             message: "Installment payment submitted",
@@ -151,10 +176,9 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
         payment.reviewedAt = new Date();
         yield payment.save();
         if (status === "approved") {
-            const purchase = yield model_1.Purchase.findById(payment.purchaseId).populate("shareId", "cashPrice installment commissions");
+            // Fix F-04: use atomic $inc to avoid race condition on amountPaid
+            const purchase = yield model_1.Purchase.findByIdAndUpdate(payment.purchaseId, { $inc: { amountPaid: payment.amount } }, { new: true }).populate("shareId", "cashPrice installment commissions");
             if (purchase) {
-                purchase.amountPaid += payment.amount;
-                yield purchase.save();
                 const share = purchase.shareId;
                 const sharePrice = Number((_a = share === null || share === void 0 ? void 0 : share.cashPrice) !== null && _a !== void 0 ? _a : 0);
                 const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchase.quantity);
@@ -173,23 +197,28 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                     yield (0, commissions_1.distributeInstallmentPaymentCommission)(purchase._id.toString(), payment.amount, payment.installmentNo);
                 }
                 catch (e) {
-                    console.error("Installment commission error:", e);
+                    console.error("[COMMISSION ERROR] Installment commission error:", e);
                 }
-                // Ledger: inflow for this installment payment
+                // Fix E-02: Ledger — inflow for this installment payment (log failure, don't swallow)
                 const buyer = yield model_4.User.findById(purchase.userId)
                     .select("name username")
                     .lean();
                 const buyerName = (_b = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _b !== void 0 ? _b : "";
                 const buyerUsername = (_c = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _c !== void 0 ? _c : "";
-                yield model_5.CompanyLedger.create({
-                    date: new Date(),
-                    type: "installment_received",
-                    amount: payment.amount,
-                    relatedId: payment._id,
-                    relatedModel: "InstallmentPayment",
-                    userId: purchase.userId,
-                    note: `Installment #${payment.installmentNo} received — ${(_e = (_d = purchase.snapshot) === null || _d === void 0 ? void 0 : _d.shareTitle) !== null && _e !== void 0 ? _e : ""} — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
-                }).catch(() => { });
+                try {
+                    yield model_5.CompanyLedger.create({
+                        date: new Date(),
+                        type: "installment_received",
+                        amount: payment.amount,
+                        relatedId: payment._id,
+                        relatedModel: "InstallmentPayment",
+                        userId: purchase.userId,
+                        note: `Installment #${payment.installmentNo} received — ${(_e = (_d = purchase.snapshot) === null || _d === void 0 ? void 0 : _d.shareTitle) !== null && _e !== void 0 ? _e : ""} — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
+                    });
+                }
+                catch (ledgerErr) {
+                    console.error(`[LEDGER ERROR] installment_received for paymentId=${payment._id}:`, ledgerErr);
+                }
                 yield model_3.TransactionLog.create({
                     userId: purchase.userId,
                     type: "installment_received",
@@ -197,7 +226,9 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                     balanceAfter: 0,
                     note: `Installment #${payment.installmentNo} approved — ${(_g = (_f = purchase.snapshot) === null || _f === void 0 ? void 0 : _f.shareTitle) !== null && _g !== void 0 ? _g : ""}, ৳${payment.amount.toLocaleString()}`,
                     relatedPurchaseId: purchase._id,
-                }).catch(() => { });
+                }).catch((err) => {
+                    console.error(`[TXLOG ERROR] installment_received log failed for paymentId=${payment._id}:`, err);
+                });
             }
         }
         res.json({
