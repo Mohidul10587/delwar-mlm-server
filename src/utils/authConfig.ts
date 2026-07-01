@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 /**
  * Central config — JWT secrets and cookie options.
  * Throws at startup if required env vars are missing.
