@@ -43,6 +43,7 @@ const routes_15 = __importDefault(require("./app/category/routes"));
 const routes_16 = __importDefault(require("./app/ledger/routes"));
 const routes_17 = __importDefault(require("./app/notice/routes"));
 const routes_18 = __importDefault(require("./app/transfer/routes"));
+const routes_19 = __importDefault(require("./app/expense/routes"));
 const controller_1 = require("./app/notice/controller");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -126,6 +127,7 @@ app.use("/category", routes_15.default);
 app.use("/ledger", routes_16.default);
 app.use("/notice", routes_17.default);
 app.use("/transfer", routes_18.default);
+app.use("/expense", routes_19.default);
 app.use(errorHandler_1.errorHandler);
 if (process.env.VERCEL !== "1") {
     httpServer.listen(port, () => console.log(`Server running on port ${port}`));

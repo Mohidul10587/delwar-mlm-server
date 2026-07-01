@@ -16,6 +16,9 @@ import { Schema, model, Document, Types } from "mongoose";
  *   investment_profit_paid   — monthly / partial / maturity profit distributed
  *   withdrawal_paid          — withdrawal request approved (money leaves company)
  *   incentive_bonus_paid     — incentive bonus granted by admin
+ *   loan_given               — loan given to a user by admin
+ *   loan_adjusted            — loan balance adjusted by admin
+ *   expense_recorded         — company operating expense logged by admin
  */
 export type LedgerType =
   | "purchase_received"
@@ -27,7 +30,10 @@ export type LedgerType =
   | "reward_paid"
   | "investment_profit_paid"
   | "withdrawal_paid"
-  | "incentive_bonus_paid";
+  | "incentive_bonus_paid"
+  | "loan_given"
+  | "loan_adjusted"
+  | "expense_recorded";
 
 export const INFLOW_TYPES: LedgerType[] = [
   "purchase_received",
@@ -43,6 +49,9 @@ export const OUTFLOW_TYPES: LedgerType[] = [
   "investment_profit_paid",
   "withdrawal_paid",
   "incentive_bonus_paid",
+  "loan_given",
+  "loan_adjusted",
+  "expense_recorded",
 ];
 
 export interface ICompanyLedger extends Document {
@@ -50,7 +59,7 @@ export interface ICompanyLedger extends Document {
   type: LedgerType;
   amount: number;
   relatedId?: Types.ObjectId;
-  relatedModel?: "Purchase" | "InstallmentPayment" | "Investment" | "Withdrawal" | "TransactionLog";
+  relatedModel?: "Purchase" | "InstallmentPayment" | "Investment" | "Withdrawal" | "TransactionLog" | "Expense";
   userId?: Types.ObjectId; // the user involved
   note?: string;
 }

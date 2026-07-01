@@ -12,6 +12,7 @@ const WalletSchema = new mongoose_1.Schema({
     rewardBalance: { type: Number, default: 0 },
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
+    loanBalance: { type: Number, default: 0 },
 }, { timestamps: true });
 // Fix F-12: totalBalance is recomputed on every save (for .save() calls)
 // For $inc operations callers MUST also $inc totalBalance by the same amount.
@@ -47,6 +48,8 @@ const TransactionLogSchema = new mongoose_1.Schema({
             "incentive_bonus",
             "transfer_sent",
             "transfer_received",
+            "loan_given",
+            "loan_adjusted",
         ],
         required: true,
     },

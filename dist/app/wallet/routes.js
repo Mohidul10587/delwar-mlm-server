@@ -10,4 +10,5 @@ router.get("/:userId", auth_1.verifyAdmin, controller_1.getWalletByUser);
 router.post("/admin/credit/:userId", auth_1.verifySuperAdmin, controller_1.adminCredit);
 router.post("/admin/debit/:userId", auth_1.verifySuperAdmin, controller_1.adminDebit);
 router.post("/admin/incentive-bonus/:userId", auth_1.verifySuperAdmin, controller_1.adminGiveIncentiveBonus);
+router.post("/admin/loan/:userId", auth_1.verifySuperAdmin, controller_1.adminAdjustLoanBalance);
 exports.default = router;

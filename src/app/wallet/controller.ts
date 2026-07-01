@@ -153,3 +153,57 @@ export const adminGiveIncentiveBonus = async (req: Request, res: Response, next:
     res.json({ message: "Incentive bonus granted successfully", wallet });
   } catch (err) { next(err); }
 };
+
+// Admin loan balance adjustment: positive amount = give loan, negative = deduct from loan
+export const adminAdjustLoanBalance = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { amount, note } = req.body;
+
+    const amt = Number(amount);
+    if (isNaN(amt) || amt === 0) {
+      return res.status(400).json({ message: "Amount must be a non-zero number" });
+    }
+
+    const wallet = await Wallet.findOne({ userId: req.params.userId });
+    if (!wallet) return res.status(404).json({ message: "Wallet not found" });
+
+    // Prevent loan balance from going below zero
+    const currentLoan = wallet.loanBalance ?? 0;
+    if (amt < 0 && Math.abs(amt) > currentLoan) {
+      return res.status(400).json({
+        message: `Cannot deduct ৳${Math.abs(amt)} — current loan balance is only ৳${currentLoan}`,
+      });
+    }
+
+    const transactionType = amt > 0 ? "loan_given" : "loan_adjusted";
+
+    // loanBalance is tracked separately, not added to totalBalance
+    const updated = await Wallet.findOneAndUpdate(
+      { userId: req.params.userId },
+      { $inc: { loanBalance: amt } },
+      { new: true, upsert: true }
+    );
+
+    await TransactionLog.create({
+      userId: req.params.userId,
+      type: transactionType,
+      amount: Math.abs(amt),
+      balanceAfter: updated!.loanBalance,
+      note: note || (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
+    });
+
+    try {
+      await CompanyLedger.create({
+        date: new Date(),
+        type: transactionType,
+        amount: Math.abs(amt),
+        userId: req.params.userId,
+        note: note || (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
+      });
+    } catch (ledgerErr) {
+      console.error(`[LEDGER ERROR] ${transactionType} for userId=${req.params.userId}:`, ledgerErr);
+    }
+
+    res.json({ message: amt > 0 ? "Loan granted successfully" : "Loan balance adjusted", wallet: updated });
+  } catch (err) { next(err); }
+};

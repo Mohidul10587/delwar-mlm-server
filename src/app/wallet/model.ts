@@ -10,6 +10,7 @@ export interface IWallet extends Document {
   rewardBalance: number;
   incentiveBonus: number;  // admin-granted, non-withdrawable
   transferBalance: number; // received via balance transfer
+  loanBalance: number;     // admin-granted loan, tracked separately
 }
 
 export interface ITransactionLog extends Document {
@@ -28,7 +29,9 @@ export interface ITransactionLog extends Document {
     | "installment_received"
     | "incentive_bonus"
     | "transfer_sent"
-    | "transfer_received";
+    | "transfer_received"
+    | "loan_given"
+    | "loan_adjusted";
   amount: number;
   balanceAfter: number;
   note: string;
@@ -46,6 +49,7 @@ const WalletSchema = new Schema<IWallet>(
     rewardBalance: { type: Number, default: 0 },
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
+    loanBalance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -86,6 +90,8 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
         "incentive_bonus",
         "transfer_sent",
         "transfer_received",
+        "loan_given",
+        "loan_adjusted",
       ],
       required: true,
     },

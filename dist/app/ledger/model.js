@@ -15,6 +15,9 @@ exports.OUTFLOW_TYPES = [
     "investment_profit_paid",
     "withdrawal_paid",
     "incentive_bonus_paid",
+    "loan_given",
+    "loan_adjusted",
+    "expense_recorded",
 ];
 const CompanyLedgerSchema = new mongoose_1.Schema({
     date: { type: Date, required: true, index: true },

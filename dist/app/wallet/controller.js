@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminGiveIncentiveBonus = exports.adminDebit = exports.adminCredit = exports.getMyTransactions = exports.getWalletByUser = exports.getMyWallet = void 0;
+exports.adminAdjustLoanBalance = exports.adminGiveIncentiveBonus = exports.adminDebit = exports.adminCredit = exports.getMyTransactions = exports.getWalletByUser = exports.getMyWallet = void 0;
 const model_1 = require("./model");
 const model_2 = require("../ledger/model");
 const walletUtils_1 = require("../../utils/walletUtils");
@@ -155,3 +155,51 @@ const adminGiveIncentiveBonus = (req, res, next) => __awaiter(void 0, void 0, vo
     }
 });
 exports.adminGiveIncentiveBonus = adminGiveIncentiveBonus;
+// Admin loan balance adjustment: positive amount = give loan, negative = deduct from loan
+const adminAdjustLoanBalance = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { amount, note } = req.body;
+        const amt = Number(amount);
+        if (isNaN(amt) || amt === 0) {
+            return res.status(400).json({ message: "Amount must be a non-zero number" });
+        }
+        const wallet = yield model_1.Wallet.findOne({ userId: req.params.userId });
+        if (!wallet)
+            return res.status(404).json({ message: "Wallet not found" });
+        // Prevent loan balance from going below zero
+        const currentLoan = (_a = wallet.loanBalance) !== null && _a !== void 0 ? _a : 0;
+        if (amt < 0 && Math.abs(amt) > currentLoan) {
+            return res.status(400).json({
+                message: `Cannot deduct ৳${Math.abs(amt)} — current loan balance is only ৳${currentLoan}`,
+            });
+        }
+        const transactionType = amt > 0 ? "loan_given" : "loan_adjusted";
+        // loanBalance is tracked separately, not added to totalBalance
+        const updated = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { loanBalance: amt } }, { new: true, upsert: true });
+        yield model_1.TransactionLog.create({
+            userId: req.params.userId,
+            type: transactionType,
+            amount: Math.abs(amt),
+            balanceAfter: updated.loanBalance,
+            note: note || (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
+        });
+        try {
+            yield model_2.CompanyLedger.create({
+                date: new Date(),
+                type: transactionType,
+                amount: Math.abs(amt),
+                userId: req.params.userId,
+                note: note || (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
+            });
+        }
+        catch (ledgerErr) {
+            console.error(`[LEDGER ERROR] ${transactionType} for userId=${req.params.userId}:`, ledgerErr);
+        }
+        res.json({ message: amt > 0 ? "Loan granted successfully" : "Loan balance adjusted", wallet: updated });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.adminAdjustLoanBalance = adminAdjustLoanBalance;
