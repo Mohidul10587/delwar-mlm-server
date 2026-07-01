@@ -19,6 +19,7 @@ import {
   changePassword,
   updatePermissions,
   updateInfo,
+  getLinkedAccounts,
 } from "./controller";
 import { getSuperAdminStats } from "./stats.controller";
 import {
@@ -37,6 +38,7 @@ router.post("/refresh", refresh);
 router.post("/logout", verifyUser, logout);
 
 router.post("/switch/:targetUserId", verifyUser, switchAccount);
+router.get("/linked-accounts", verifyUser, getLinkedAccounts);
 
 router.get("/stats", verifySuperAdmin, getSuperAdminStats);
 router.get("/details/:id", verifyAdmin, getUserDetails);

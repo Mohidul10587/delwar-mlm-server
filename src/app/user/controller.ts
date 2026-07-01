@@ -590,6 +590,29 @@ export const updateInfo = async (
   }
 };
 
+export const getLinkedAccounts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const currentUser = req.user!;
+    const ids: mongoose.Types.ObjectId[] = currentUser.linkedPhoneAccounts;
+
+    if (!ids || ids.length === 0) {
+      return res.json({ users: [] });
+    }
+
+    const users = await Model.find({ _id: { $in: ids } })
+      .select("_id username name image role isActive")
+      .lean();
+
+    res.json({ users });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const updatePermissions = async (
   req: Request,
   res: Response,
