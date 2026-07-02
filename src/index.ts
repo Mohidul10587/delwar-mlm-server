@@ -70,11 +70,12 @@ app.use(
 );
 
 // Fix S-06: Rate limiting
+const isDev = process.env.NODE_ENV !== "production";
 
-// General API rate limit — 200 requests per 15 minutes per IP
+// General API rate limit — relaxed in dev to avoid hitting limits during hot reload
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: isDev ? 2000 : 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later" },
