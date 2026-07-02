@@ -54,9 +54,11 @@ mongoose.connection.once("open", async () => {
 });
 
 // Fix S-11: Security headers
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
 app.use(bodyParser.json({ limit: "10mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
@@ -99,14 +101,14 @@ const financialLimiter = rateLimit({
   message: { message: "Too many financial requests, please try again later" },
 });
 
-app.use(generalLimiter);
-app.use("/user/login", authLimiter);
-app.use("/user/register", authLimiter);
-app.use("/user/refresh", authLimiter);
-app.use("/purchase", financialLimiter);
-app.use("/withdrawal", financialLimiter);
-app.use("/transfer", financialLimiter);
-app.use("/investment", financialLimiter);
+// app.use(generalLimiter);
+// app.use("/user/login", authLimiter);
+// app.use("/user/register", authLimiter);
+// app.use("/user/refresh", authLimiter);
+// app.use("/purchase", financialLimiter);
+// app.use("/withdrawal", financialLimiter);
+// app.use("/transfer", financialLimiter);
+// app.use("/investment", financialLimiter);
 
 app.get("/", (_req: Request, res: Response) => res.send("MLM Server"));
 

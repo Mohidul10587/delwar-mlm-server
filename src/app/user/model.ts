@@ -29,6 +29,7 @@ export interface IUser extends Document {
   role: "superadmin" | "admin" | "staff" | "user";
   isActive: boolean;
   image: string | null;
+  coverImage?: string | null;
   linkedPhoneAccounts: mongoose.Types.ObjectId[];
   permissions: string[];
   generationAncestors: IAncestorEntry[];
@@ -67,6 +68,7 @@ const UserSchema = new Schema<IUser>(
     },
     isActive: { type: Boolean, default: true },
     image: { type: String, default: null },
+    coverImage: { type: String, default: null },
     linkedPhoneAccounts: [{ type: Schema.Types.ObjectId, ref: "User" }],
     permissions: [{ type: String }],
     generationAncestors: [AncestorEntrySchema],

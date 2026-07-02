@@ -16,6 +16,7 @@ import {
   adminUpdateRelations,
   updatePhone,
   updateImage,
+  updateCoverImage,
   changePassword,
   updatePermissions,
   updateInfo,
@@ -51,6 +52,7 @@ router.put("/admin/relations/:id", verifySuperAdmin, adminUpdateRelations);
 router.put("/admin/permissions/:id", verifySuperAdmin, updatePermissions);
 router.put("/update-phone", verifyUser, updatePhone);
 router.put("/update-image", verifyUser, updateImage);
+router.put("/update-cover-image", verifyUser, updateCoverImage);
 router.put("/change-password", verifyUser, changePassword);
 router.put("/update-info", verifyUser, updateInfo);
 

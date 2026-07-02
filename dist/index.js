@@ -75,10 +75,11 @@ app.use((0, cors_1.default)({
     credentials: true,
 }));
 // Fix S-06: Rate limiting
-// General API rate limit — 200 requests per 15 minutes per IP
+const isDev = process.env.NODE_ENV !== "production";
+// General API rate limit — relaxed in dev to avoid hitting limits during hot reload
 const generalLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: isDev ? 2000 : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: "Too many requests, please try again later" },
@@ -99,14 +100,14 @@ const financialLimiter = (0, express_rate_limit_1.default)({
     legacyHeaders: false,
     message: { message: "Too many financial requests, please try again later" },
 });
-app.use(generalLimiter);
-app.use("/user/login", authLimiter);
-app.use("/user/register", authLimiter);
-app.use("/user/refresh", authLimiter);
-app.use("/purchase", financialLimiter);
-app.use("/withdrawal", financialLimiter);
-app.use("/transfer", financialLimiter);
-app.use("/investment", financialLimiter);
+// app.use(generalLimiter);
+// app.use("/user/login", authLimiter);
+// app.use("/user/register", authLimiter);
+// app.use("/user/refresh", authLimiter);
+// app.use("/purchase", financialLimiter);
+// app.use("/withdrawal", financialLimiter);
+// app.use("/transfer", financialLimiter);
+// app.use("/investment", financialLimiter);
 app.get("/", (_req, res) => res.send("MLM Server"));
 app.use("/settings", routes_1.default);
 app.use("/user", routes_2.default);

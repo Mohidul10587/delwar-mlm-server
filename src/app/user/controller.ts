@@ -312,6 +312,26 @@ export const switchAccount = async (
   }
 };
 
+export const updateCoverImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { coverImage } = req.body;
+    if (!coverImage) return res.status(400).json({ message: "Cover image URL required" });
+    const user = await Model.findByIdAndUpdate(
+      req.user?._id,
+      { $set: { coverImage } },
+      { new: true }
+    ).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "Cover image updated", user });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const updateImage = async (
   req: Request,
   res: Response,
@@ -501,8 +521,9 @@ export const deleteUser = async (
   try {
     const user = await Model.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "superadmin")
-      return res.status(403).json({ message: "Cannot delete superadmin" });
+    // ⚠️ FUTURE: if admin deletion should be allowed, remove "admin" from this guard.
+    if (user.role === "superadmin" || user.role === "admin")
+      return res.status(403).json({ message: "Cannot delete superadmin or admin" });
     await Model.findByIdAndDelete(req.params.id);
     res.json({ message: "User deleted" });
   } catch (err) {
@@ -625,9 +646,10 @@ export const updatePermissions = async (
 
     const user = await Model.findById(req.params.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.role === "superadmin") {
+    // ⚠️ FUTURE: when admin/superadmin permissions diverge, allow editing admin permissions here.
+    if (user.role === "superadmin" || user.role === "admin") {
       return res.status(400).json({
-        message: "Superadmin permissions are implicit",
+        message: "Superadmin/admin permissions are implicit",
       });
     }
 

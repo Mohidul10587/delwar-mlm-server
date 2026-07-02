@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePermissions = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
+exports.updatePermissions = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.updateCoverImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -253,6 +253,22 @@ const switchAccount = (req, res, next) => __awaiter(void 0, void 0, void 0, func
     }
 });
 exports.switchAccount = switchAccount;
+const updateCoverImage = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { coverImage } = req.body;
+        if (!coverImage)
+            return res.status(400).json({ message: "Cover image URL required" });
+        const user = yield model_1.User.findByIdAndUpdate((_a = req.user) === null || _a === void 0 ? void 0 : _a._id, { $set: { coverImage } }, { new: true }).select("-password");
+        if (!user)
+            return res.status(404).json({ message: "User not found" });
+        res.json({ message: "Cover image updated", user });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.updateCoverImage = updateCoverImage;
 const updateImage = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -405,8 +421,9 @@ const deleteUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         const user = yield model_1.User.findById(req.params.id);
         if (!user)
             return res.status(404).json({ message: "User not found" });
-        if (user.role === "superadmin")
-            return res.status(403).json({ message: "Cannot delete superadmin" });
+        // ⚠️ FUTURE: if admin deletion should be allowed, remove "admin" from this guard.
+        if (user.role === "superadmin" || user.role === "admin")
+            return res.status(403).json({ message: "Cannot delete superadmin or admin" });
         yield model_1.User.findByIdAndDelete(req.params.id);
         res.json({ message: "User deleted" });
     }
@@ -504,9 +521,10 @@ const updatePermissions = (req, res, next) => __awaiter(void 0, void 0, void 0, 
         const user = yield model_1.User.findById(req.params.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
-        if (user.role === "superadmin") {
+        // ⚠️ FUTURE: when admin/superadmin permissions diverge, allow editing admin permissions here.
+        if (user.role === "superadmin" || user.role === "admin") {
             return res.status(400).json({
-                message: "Superadmin permissions are implicit",
+                message: "Superadmin/admin permissions are implicit",
             });
         }
         user.permissions = permissions;

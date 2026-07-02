@@ -16,6 +16,8 @@ const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
 const cloudinary_1 = require("cloudinary");
 const auth_1 = require("../../middleware/auth");
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 // Fix S-02: use env vars — NOT hardcoded credentials
 cloudinary_1.v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

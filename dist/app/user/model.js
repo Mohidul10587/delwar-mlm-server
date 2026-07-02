@@ -18,6 +18,7 @@ const UserSchema = new mongoose_1.Schema({
     },
     isActive: { type: Boolean, default: true },
     image: { type: String, default: null },
+    coverImage: { type: String, default: null },
     linkedPhoneAccounts: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
     permissions: [{ type: String }],
     generationAncestors: [AncestorEntrySchema],

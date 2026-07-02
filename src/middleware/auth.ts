@@ -3,6 +3,18 @@ import jwt from "jsonwebtoken";
 import { User } from "../app/user/model";
 import { JWT_SECRET } from "../utils/authConfig";
 
+// ─── Role helpers ─────────────────────────────────────────────────────────────
+// Centralised so future divergence between superadmin/admin only needs changes here.
+
+/** Roles that have full super-admin level access. */
+const SUPER_ROLES = ["superadmin", "admin"] as const;
+type SuperRole = (typeof SUPER_ROLES)[number];
+
+const isSuperRole = (role: string): role is SuperRole =>
+  (SUPER_ROLES as readonly string[]).includes(role);
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
+
 export const verifyUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.cookies.accessToken;
@@ -34,7 +46,8 @@ export const verifySuperAdmin = async (req: Request, res: Response, next: NextFu
     if (!user.isActive)
       return res.status(403).json({ message: "Account is disabled" });
 
-    if (user.role !== "superadmin")
+    // ⚠️ FUTURE: when admin/superadmin permissions diverge, split this check.
+    if (!isSuperRole(user.role))
       return res.status(403).json({ message: "Superadmin access required" });
 
     req.user = user;
@@ -92,7 +105,9 @@ export const requirePermission = (permission: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     if (!user) return res.status(401).json({ message: "Unauthorized" });
-    if (user.role === "superadmin") return next();
+
+    // ⚠️ FUTURE: when admin/superadmin permissions diverge, remove admin from this bypass.
+    if (isSuperRole(user.role)) return next();
 
     const granted = Array.isArray(user.permissions) && user.permissions.includes(permission);
     if (!granted) {

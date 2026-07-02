@@ -16,6 +16,12 @@ exports.requirePermission = exports.verifyStaff = exports.verifyAdmin = exports.
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const model_1 = require("../app/user/model");
 const authConfig_1 = require("../utils/authConfig");
+// ─── Role helpers ─────────────────────────────────────────────────────────────
+// Centralised so future divergence between superadmin/admin only needs changes here.
+/** Roles that have full super-admin level access. */
+const SUPER_ROLES = ["superadmin", "admin"];
+const isSuperRole = (role) => SUPER_ROLES.includes(role);
+// ─── Middleware ───────────────────────────────────────────────────────────────
 const verifyUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const token = req.cookies.accessToken;
@@ -46,7 +52,8 @@ const verifySuperAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
             return res.status(403).json({ message: "Account is disabled" });
-        if (user.role !== "superadmin")
+        // ⚠️ FUTURE: when admin/superadmin permissions diverge, split this check.
+        if (!isSuperRole(user.role))
             return res.status(403).json({ message: "Superadmin access required" });
         req.user = user;
         next();
@@ -103,7 +110,8 @@ const requirePermission = (permission) => {
         const user = req.user;
         if (!user)
             return res.status(401).json({ message: "Unauthorized" });
-        if (user.role === "superadmin")
+        // ⚠️ FUTURE: when admin/superadmin permissions diverge, remove admin from this bypass.
+        if (isSuperRole(user.role))
             return next();
         const granted = Array.isArray(user.permissions) && user.permissions.includes(permission);
         if (!granted) {
