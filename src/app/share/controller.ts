@@ -68,6 +68,7 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
 export const getShares = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { projectStatus, isOffer } = req.query;
+    // Public endpoint: only show active shares to users
     const filter: any = { isActive: true };
     if (projectStatus) filter.projectStatus = projectStatus;
 
@@ -81,6 +82,19 @@ export const getShares = async (req: Request, res: Response, next: NextFunction)
     // Attach computed isActiveOffer flag to every share
     const enriched = result.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) }));
 
+    res.json({ shares: enriched });
+  } catch (err) { next(err); }
+};
+
+// GET /share/admin — returns ALL shares (including inactive) for admin panel
+export const getSharesAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { projectStatus } = req.query;
+    const filter: any = {};
+    if (projectStatus) filter.projectStatus = projectStatus;
+
+    const shares = await Share.find(filter).lean();
+    const enriched = shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) }));
     res.json({ shares: enriched });
   } catch (err) { next(err); }
 };
@@ -150,6 +164,102 @@ export const deleteShare = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
+// GET /share/cover-slider — public endpoint, returns images of the active cover slider share
+export const getCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const share = await Share.findOne({ isCoverSlider: true, isActive: true }).lean();
+    if (!share) return res.json({ images: [], shareId: null, title: null });
+    // Combine main image + images array, deduplicate
+    const all = [...(share.images ?? [])];
+    if (share.image && !all.includes(share.image)) all.unshift(share.image);
+    res.json({ images: all, shareId: share._id, title: share.title });
+  } catch (err) { next(err); }
+};
+
+// PATCH /share/:id/set-cover-slider — admin/super-admin sets which share is the cover slider
+export const setCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const share = await Share.findById(req.params.id);
+    if (!share) return res.status(404).json({ message: "Share not found" });
+    if (!share.isActive) return res.status(400).json({ message: "Cannot set an inactive share as cover slider" });
+
+    // Unset all others first
+    await Share.updateMany({ isCoverSlider: true }, { $set: { isCoverSlider: false } });
+    share.isCoverSlider = true;
+    await share.save();
+
+    res.json({ message: "Cover slider updated", shareId: share._id });
+  } catch (err) { next(err); }
+};
+
+// PATCH /share/:id/unset-cover-slider — remove cover slider designation
+export const unsetCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const share = await Share.findByIdAndUpdate(
+      req.params.id,
+      { $set: { isCoverSlider: false } },
+      { new: true }
+    );
+    if (!share) return res.status(404).json({ message: "Share not found" });
+    res.json({ message: "Cover slider removed" });
+  } catch (err) { next(err); }
+};
+
+// POST /share/:id/backfill-slots — creates missing available slots so that
+// the total slot count matches share.totalShares. Safe to call multiple times.
+export const backfillSlots = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const share = await Share.findById(req.params.id);
+    if (!share) return res.status(404).json({ message: "Share not found" });
+
+    const desired = share.totalShares ?? 0;
+    if (desired === 0) return res.json({ message: "Share has 0 totalShares — nothing to backfill", created: 0 });
+
+    const existing = await ShareSlot.countDocuments({ shareId: share._id });
+    const diff = desired - existing;
+
+    if (diff <= 0) {
+      return res.json({ message: "Slots already up to date", created: 0, total: existing });
+    }
+
+    // Find the global max sequence to avoid collisions
+    const last = await ShareSlot.findOne()
+      .sort({ shareNumber: -1 })
+      .select("shareNumber")
+      .lean();
+    const lastSeq = last ? parseInt(last.shareNumber.replace("THL-", ""), 10) : 0;
+
+    let created = 0;
+    for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
+      const docs = [];
+      const end = Math.min(batch + BATCH_SIZE, diff);
+      for (let i = batch; i < end; i++) {
+        docs.push({
+          shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+          shareId: share._id,
+          status: "available",
+          userId: null,
+          purchaseId: null,
+          reclaimedAt: null,
+        });
+      }
+      try {
+        const result = await ShareSlot.insertMany(docs, { ordered: false });
+        created += result.length;
+      } catch (insertErr: any) {
+        if (insertErr?.code === 11000) {
+          // Count how many actually inserted before the collision
+          created += insertErr?.result?.nInserted ?? 0;
+          break;
+        }
+        throw insertErr;
+      }
+    }
+
+    res.json({ message: `Backfilled ${created} slots`, created, total: existing + created });
+  } catch (err) { next(err); }
+};
+
 export const getShareStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [shares, counts] = await Promise.all([
@@ -184,10 +294,11 @@ export const getShareStats = async (req: Request, res: Response, next: NextFunct
   } catch (err) { next(err); }
 };
 
-// GET /share/with-stats — returns active shares + slot stats for all shares
+// GET /share/with-stats — returns active shares + slot stats for all shares (admin panel)
 export const getSharesWithStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [shares, counts] = await Promise.all([
+      // Admin panel sees ALL shares (including inactive)
       Share.find().lean(),
       ShareSlot.aggregate([
         { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
@@ -208,7 +319,8 @@ export const getSharesWithStats = async (req: Request, res: Response, next: Next
     });
 
     res.json({
-      shares: shares.filter((s) => (s as any).isActive).map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
+      // Return all shares to admin (both active and inactive), with isActiveOffer flag
+      shares: shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
       stats,
     });
   } catch (err) { next(err); }

@@ -31,6 +31,7 @@ import noticeRoutes from "./app/notice/routes";
 import transferRoutes from "./app/transfer/routes";
 import expenseRoutes from "./app/expense/routes";
 import achieversRoutes from "./app/achievers/routes";
+import adminSalaryRoutes from "./app/admin-salary/routes";
 import { setSocketIO } from "./app/notice/controller";
 
 dotenv.config();
@@ -134,6 +135,7 @@ app.use("/notice", noticeRoutes);
 app.use("/transfer", transferRoutes);
 app.use("/expense", expenseRoutes);
 app.use("/achievers", achieversRoutes);
+app.use("/admin-salary", adminSalaryRoutes);
 app.use(errorHandler);
 
 if (process.env.VERCEL !== "1") {

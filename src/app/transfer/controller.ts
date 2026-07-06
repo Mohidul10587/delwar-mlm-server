@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { CompanyLedger } from "../ledger/model";
 import { Settings } from "../settings/model";
@@ -27,11 +28,29 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
   session.startTransaction();
   try {
     const senderId = req.user!._id.toString();
-    const { receiverUsername, amount, sourceBalance } = req.body;
+    const { receiverUsername, amount, sourceBalance, password } = req.body;
 
     if (!receiverUsername || !amount || !sourceBalance) {
       await session.abortTransaction();
       return res.status(400).json({ message: "receiverUsername, amount and sourceBalance are required" });
+    }
+
+    // Password verification — required before any transfer
+    if (!password) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "Password is required to confirm transfer" });
+    }
+
+    const senderUser = await User.findById(senderId).select("password").lean();
+    if (!senderUser) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Sender not found" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(String(password), senderUser.password);
+    if (!isPasswordValid) {
+      await session.abortTransaction();
+      return res.status(401).json({ message: "Incorrect password. Transfer cancelled." });
     }
 
     const transferAmount = Number(amount);

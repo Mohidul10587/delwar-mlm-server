@@ -2,25 +2,25 @@ import { Schema, model, Document, Types } from "mongoose";
 
 export type PaymentType = "cash" | "installment";
 export type PurchaseStatus = "pending" | "approved" | "rejected";
+export type PaymentMethod = "cash" | "bank" | "mobile_banking";
+
+export interface IBuyerNominee {
+  name: string;
+  relation: string;
+  phone: string;
+  nid?: string;
+  image?: string;
+}
 
 export interface IBuyerInfo {
   name: string;
   phone: string;
   nid?: string;
-  nominee?: {
-    name: string;
-    relation: string;
-    phone: string;
-    nid?: string;
-    image?: string;
-  };
-  nominee2?: {
-    name: string;
-    relation: string;
-    phone: string;
-    nid?: string;
-    image?: string;
-  };
+  /** Legacy fixed fields – kept for backward compatibility */
+  nominee?: IBuyerNominee;
+  nominee2?: IBuyerNominee;
+  /** New: dynamic nominees array */
+  nominees?: IBuyerNominee[];
 }
 
 export interface IPurchaseSnapshot {
@@ -31,7 +31,9 @@ export interface IPurchaseSnapshot {
   maxDownPayment: number;
   directSaleCommissionValue: number;
   downPaymentGenerationRates: { generation: number; rate: number }[];
+  /** @deprecated use installmentGenerationRates — kept for backward compat with old records */
   installmentCommissionRate: number;
+  installmentGenerationRates: { generation: number; rate: number }[];
   rankQualification: {
     rankName: string;
     order: number;
@@ -51,6 +53,8 @@ export interface IPurchase extends Document {
   shareId: Types.ObjectId;
   quantity: number;
   paymentType: PaymentType;
+  paymentMethod: PaymentMethod;
+  receiptImage?: string;
   downPayment: number;
   installmentCount: number;
   installmentAmount: number;
@@ -84,8 +88,11 @@ const BuyerInfoSchema = new Schema(
     name: { type: String },
     phone: { type: String },
     nid: { type: String },
+    // Legacy fixed fields – kept for backward compatibility with existing records
     nominee: { type: NomineeSchema },
     nominee2: { type: NomineeSchema },
+    // New dynamic nominees array
+    nominees: { type: [NomineeSchema], default: undefined },
   },
   { _id: false }
 );
@@ -101,7 +108,12 @@ const SnapshotSchema = new Schema(
     downPaymentGenerationRates: [
       { generation: { type: Number }, rate: { type: Number }, _id: false },
     ],
+    // Legacy flat rate — kept so old purchase records remain readable
     installmentCommissionRate: { type: Number },
+    // New per-generation rates (mirrors downPaymentGenerationRates)
+    installmentGenerationRates: [
+      { generation: { type: Number }, rate: { type: Number }, _id: false },
+    ],
     rankQualification: [
       {
         rankName: { type: String },
@@ -134,6 +146,12 @@ const PurchaseSchema = new Schema<IPurchase>(
       enum: ["cash", "installment"],
       required: true,
     },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "bank", "mobile_banking"],
+      default: "cash",
+    },
+    receiptImage: { type: String, default: null },
     downPayment: { type: Number, required: true },
     installmentCount: { type: Number, required: true },
     installmentAmount: { type: Number, required: true },

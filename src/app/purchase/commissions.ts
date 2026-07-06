@@ -145,26 +145,51 @@ export const distributeCommissions = async (purchaseId: string) => {
     }
 
     // ── 3. Installment Portion Managerial Commission ──────────────────────────
-    if (installmentPortion > 0 && snap.installmentCommissionRate > 0) {
-      const maxGen = snap.downPaymentGenerationRates.length || 5;
-      for (let gen = 1; gen <= maxGen; gen++) {
-        const ancestor = buyer.generationAncestors.find((a: any) => a.level === gen);
-        if (!ancestor) break;
-        const currentId = ancestor.userId.toString();
+    // Uses per-generation rates from snap.installmentGenerationRates.
+    // Falls back to the legacy flat snap.installmentCommissionRate for old records
+    // that were created before the per-gen array was introduced.
+    if (installmentPortion > 0) {
+      const instGenRates: { generation: number; rate: number }[] =
+        snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0
+          ? snap.installmentGenerationRates
+          : [];
 
-        const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
-        if (commission > 0) {
-          const wallet = await atomicCreditWallet(currentId, "manCommFromInstallment", commission);
-          const note = `Gen ${gen} managerial commission — Installment portion (${snap.installmentCommissionRate}% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
-          const tx = await TransactionLog.create({
-            userId: currentId,
-            type: "managerial_installment_commission",
-            amount: commission,
-            balanceAfter: wallet.manCommFromInstallment,
-            relatedPurchaseId: purchase._id,
-            note,
-          });
-          await ledgerCommission(tx._id, currentId, commission, note);
+      // Legacy flat-rate fallback: build a synthetic per-gen array where every gen
+      // shares the same rate (old behaviour), but only when the new array is absent.
+      const effectiveRates =
+        instGenRates.length > 0
+          ? instGenRates
+          : snap.installmentCommissionRate > 0
+          ? snap.downPaymentGenerationRates.map((g) => ({
+              generation: g.generation,
+              rate: snap.installmentCommissionRate,
+            }))
+          : [];
+
+      if (effectiveRates.length > 0) {
+        const maxGen = effectiveRates.length;
+        for (let gen = 1; gen <= maxGen; gen++) {
+          const ancestor = buyer.generationAncestors.find((a: any) => a.level === gen);
+          if (!ancestor) break;
+          const currentId = ancestor.userId.toString();
+
+          const genConfig = effectiveRates.find((g) => g.generation === gen);
+          if (!genConfig || genConfig.rate <= 0) continue;
+
+          const commission = (genConfig.rate / 100) * installmentPortion;
+          if (commission > 0) {
+            const wallet = await atomicCreditWallet(currentId, "manCommFromInstallment", commission);
+            const note = `Gen ${gen} managerial commission — Installment portion (${genConfig.rate}% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
+            const tx = await TransactionLog.create({
+              userId: currentId,
+              type: "managerial_installment_commission",
+              amount: commission,
+              balanceAfter: wallet.manCommFromInstallment,
+              relatedPurchaseId: purchase._id,
+              note,
+            });
+            await ledgerCommission(tx._id, currentId, commission, note);
+          }
         }
       }
     }
@@ -188,7 +213,7 @@ export const distributeInstallmentPaymentCommission = async (
     if (!purchase) return;
 
     const snap = purchase.snapshot;
-    if (!snap || snap.installmentCommissionRate <= 0) return;
+    if (!snap) return;
 
     const buyer = await User.findById(purchase.userId).select("generationAncestors name username");
     if (!buyer) return;
@@ -198,18 +223,42 @@ export const distributeInstallmentPaymentCommission = async (
     const shareTitle = snap.shareTitle ?? "";
     const instLabel = installmentNo ? `Installment #${installmentNo}` : "Installment payment";
 
-    const maxGen = snap.downPaymentGenerationRates.length || 5;
+    // Resolve effective per-generation rates.
+    // New records: use snap.installmentGenerationRates.
+    // Old records (created before this feature): fall back to the legacy flat rate
+    // applied uniformly across all generations that have a DP rate configured.
+    const instGenRates: { generation: number; rate: number }[] =
+      snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0
+        ? snap.installmentGenerationRates
+        : [];
+
+    const effectiveRates =
+      instGenRates.length > 0
+        ? instGenRates
+        : snap.installmentCommissionRate > 0
+        ? snap.downPaymentGenerationRates.map((g) => ({
+            generation: g.generation,
+            rate: snap.installmentCommissionRate,
+          }))
+        : [];
+
+    if (effectiveRates.length === 0) return;
+
+    const maxGen = effectiveRates.length;
     for (let gen = 1; gen <= maxGen; gen++) {
       const ancestor = buyer.generationAncestors.find((a: any) => a.level === gen);
       if (!ancestor) break;
       const currentId = ancestor.userId.toString();
 
-      const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
+      const genConfig = effectiveRates.find((g) => g.generation === gen);
+      if (!genConfig || genConfig.rate <= 0) continue;
+
+      const commission = (genConfig.rate / 100) * installmentAmount;
       if (commission > 0) {
         // Fix F-03: atomic $inc
         const wallet = await atomicCreditWallet(currentId, "manCommFromInstallment", commission);
 
-        const note = `Gen ${gen} managerial commission — ${instLabel} (${snap.installmentCommissionRate}% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
+        const note = `Gen ${gen} managerial commission — ${instLabel} (${genConfig.rate}% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
         const tx = await TransactionLog.create({
           userId: currentId,
           type: "managerial_installment_commission",

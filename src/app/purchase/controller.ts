@@ -29,7 +29,7 @@ async function fetchSlotsByPurchase(purchaseIds: any[]): Promise<Record<string, 
 // POST /purchase  — logged-in user submits a purchase request
 export const createPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo } = req.body;
+    const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage } = req.body;
 
     // Fix V-01: validate quantity
     const qty = parseInt(String(quantity), 10);
@@ -45,6 +45,17 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     const duplicate = await isTransactionIdUsed(String(transactionId).trim());
     if (duplicate) {
       return res.status(400).json({ message: "This transaction ID has already been used" });
+    }
+
+    // Validate payment method
+    const resolvedPaymentMethod = paymentMethod ?? "cash";
+    if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
+      return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+    }
+
+    // Receipt image is required for bank and mobile_banking payments
+    if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
+      return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
     }
 
     if (!["cash", "installment"].includes(paymentType)) {
@@ -76,12 +87,55 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     }
 
     const buyer = await User.findById(req.user!._id).select("name phone nominee nominee2");
-    const resolvedBuyerInfo = buyerInfo ?? (buyer ? {
-      name: buyer.name,
-      phone: buyer.phone,
-      nominee: buyer.nominee ?? undefined,
-      nominee2: buyer.nominee2 ?? undefined,
-    } : null);
+
+    // Build resolvedBuyerInfo:
+    // - If frontend sends buyerInfo.nominees array → use it (new behaviour)
+    // - If frontend sends legacy buyerInfo.nominee/nominee2 → normalise into nominees array
+    // - If no buyerInfo sent → fall back to user's stored nominees
+    let resolvedBuyerInfo: any = null;
+    if (buyerInfo) {
+      const incomingNominees: any[] = [];
+
+      if (Array.isArray(buyerInfo.nominees) && buyerInfo.nominees.length > 0) {
+        // New path: nominees array provided
+        for (const n of buyerInfo.nominees) {
+          if (n && typeof n === "object") {
+            incomingNominees.push({
+              name: String(n.name ?? "").trim(),
+              relation: String(n.relation ?? "").trim(),
+              phone: String(n.phone ?? "").trim(),
+              nid: n.nid ? String(n.nid).trim() : undefined,
+              image: n.image ? String(n.image).trim() : undefined,
+            });
+          }
+        }
+      } else {
+        // Legacy path: nominee / nominee2 fixed fields
+        if (buyerInfo.nominee?.name) incomingNominees.push(buyerInfo.nominee);
+        if (buyerInfo.nominee2?.name) incomingNominees.push(buyerInfo.nominee2);
+      }
+
+      resolvedBuyerInfo = {
+        name: buyerInfo.name ?? buyer?.name,
+        phone: buyerInfo.phone ?? buyer?.phone,
+        nominees: incomingNominees.length ? incomingNominees : undefined,
+        // Keep legacy fields as well for backward compat with older receipt renders
+        nominee: incomingNominees[0] ?? undefined,
+        nominee2: incomingNominees[1] ?? undefined,
+      };
+    } else if (buyer) {
+      // Fall back to user's stored nominees
+      const fallbackNominees: any[] = [];
+      if (buyer.nominee?.name) fallbackNominees.push(buyer.nominee);
+      if (buyer.nominee2?.name) fallbackNominees.push(buyer.nominee2);
+      resolvedBuyerInfo = {
+        name: buyer.name,
+        phone: buyer.phone,
+        nominees: fallbackNominees.length ? fallbackNominees : undefined,
+        nominee: buyer.nominee ?? undefined,
+        nominee2: buyer.nominee2 ?? undefined,
+      };
+    }
 
     const totalPayable = share.cashPrice * qty;
 
@@ -102,6 +156,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       directSaleCommissionValue: share.directSaleCommissionValue,
       downPaymentGenerationRates: share.downPaymentGenerationRates,
       installmentCommissionRate: share.installmentCommissionRate,
+      installmentGenerationRates: share.installmentGenerationRates ?? [],
       rankQualification: ranks.map((r: any) => ({
         rankName: r.name,
         order: r.order,
@@ -123,6 +178,8 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       shareId,
       quantity: qty,
       paymentType,
+      paymentMethod: resolvedPaymentMethod,
+      receiptImage: receiptImage ?? null,
       downPayment: resolvedDP,
       installmentCount: resolvedCount,
       installmentAmount: resolvedInstallmentAmount,
@@ -263,17 +320,18 @@ export const getPurchaseById = async (req: Request, res: Response, next: NextFun
   }
 };
 
-// GET /purchase/:id/receipt  — logged-in user gets receipt for an approved purchase
+// GET /purchase/:id/receipt  — logged-in user (or staff) gets receipt for an approved purchase
 export const getPurchaseReceipt = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const purchase = await Purchase.findById(req.params.id)
       .populate("userId", "name username phone")
       .populate("shareId", "title cashPrice image")
+      .populate("reviewedBy", "name username")   // cashier / receiver
       .lean();
 
     if (!purchase) return res.status(404).json({ message: "Purchase not found" });
 
-    // Only the owner or admin can access
+    // Only the owner or staff can access
     const isOwner = purchase.userId && (purchase.userId as any)._id?.toString() === req.user!._id.toString();
     const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
     if (!isOwner && !isStaff) return res.status(403).json({ message: "Forbidden" });
@@ -323,7 +381,9 @@ export const getInstallmentReceipt = async (req: Request, res: Response, next: N
     const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
     if (!isOwner && !isStaff) return res.status(403).json({ message: "Forbidden" });
 
-    const installment = await InstallmentPayment.findById(installmentId).lean();
+    const installment = await InstallmentPayment.findById(installmentId)
+      .populate("reviewedBy", "name username")   // cashier / receiver
+      .lean();
     if (!installment) return res.status(404).json({ message: "Installment not found" });
 
     if (installment.status !== "approved")

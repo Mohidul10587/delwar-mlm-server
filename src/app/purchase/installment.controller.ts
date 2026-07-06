@@ -20,7 +20,7 @@ export const createInstallmentPayment = async (
   next: NextFunction
 ) => {
   try {
-    const { installmentNo, amount, senderAccount, transactionId } = req.body;
+    const { installmentNo, amount, senderAccount, transactionId, paymentMethod, receiptImage } = req.body;
     const purchase = await Purchase.findById(req.params.purchaseId).populate(
       "shareId",
       "installment"
@@ -57,6 +57,17 @@ export const createInstallmentPayment = async (
       return res.status(400).json({ message: "This transaction ID has already been used" });
     }
 
+    // Validate payment method
+    const resolvedPaymentMethod = paymentMethod ?? "cash";
+    if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
+      return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+    }
+
+    // Receipt image is required for bank and mobile_banking payments
+    if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
+      return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+    }
+
     // Validate amount
     const parsedAmount = Number(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -70,6 +81,8 @@ export const createInstallmentPayment = async (
       amount: parsedAmount,
       senderAccount,
       transactionId: String(transactionId).trim(),
+      paymentMethod: resolvedPaymentMethod,
+      receiptImage: receiptImage ?? null,
     });
 
     res.status(201).json({

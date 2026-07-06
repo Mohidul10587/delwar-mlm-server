@@ -105,6 +105,7 @@ export const register = async (
       phone,
       password: hashedPassword,
       generationAncestors,
+      currentRank: "Brand Ambassador",
     });
 
     await Wallet.create({ userId: user._id });
@@ -177,6 +178,7 @@ export const adminRegister = async (
       role,
       permissions: defaultPermissionsByRole[role] ?? [],
       generationAncestors,
+      currentRank: "Brand Ambassador",
     });
 
     await Wallet.create({ userId: user._id });

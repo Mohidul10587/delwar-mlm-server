@@ -11,6 +11,8 @@ export interface IWallet extends Document {
   incentiveBonus: number;  // admin-granted, non-withdrawable
   transferBalance: number; // received via balance transfer
   loanBalance: number;     // admin-granted loan, tracked separately
+  adminMonthlySalaryBalance: number; // salary released by super admin
+  expenseReimbursementBalance: number; // approved expense reimbursements
 }
 
 export interface ITransactionLog extends Document {
@@ -31,7 +33,9 @@ export interface ITransactionLog extends Document {
     | "transfer_sent"
     | "transfer_received"
     | "loan_given"
-    | "loan_adjusted";
+    | "loan_adjusted"
+    | "admin_monthly_salary"
+    | "expense_reimbursement";
   amount: number;
   balanceAfter: number;
   note: string;
@@ -50,6 +54,8 @@ const WalletSchema = new Schema<IWallet>(
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
     loanBalance: { type: Number, default: 0 },
+    adminMonthlySalaryBalance: { type: Number, default: 0 },
+    expenseReimbursementBalance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -64,7 +70,10 @@ WalletSchema.pre("save", function () {
     (this.salaryBalance ?? 0) +
     (this.rewardBalance ?? 0) +
     (this.incentiveBonus ?? 0) +
-    (this.transferBalance ?? 0);
+    (this.transferBalance ?? 0) +
+    (this.adminMonthlySalaryBalance ?? 0) +
+    (this.expenseReimbursementBalance ?? 0);
+    // Note: loanBalance is NOT included in totalBalance (tracked separately)
 });
 
 // Index for fast userId lookups
@@ -92,6 +101,8 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
         "transfer_received",
         "loan_given",
         "loan_adjusted",
+        "admin_monthly_salary",
+        "expense_reimbursement",
       ],
       required: true,
     },

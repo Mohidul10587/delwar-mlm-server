@@ -6,6 +6,8 @@ import { distributeCommissions } from "./commissions";
 import { User } from "../user/model";
 import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../share/shareSlot.model";
+import { Share } from "../share/model";
+import { applyPurchaseBasedRank } from "../rank/controller";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
 
@@ -73,6 +75,31 @@ async function reclaimPurchaseShares(purchaseId: any): Promise<number> {
   return result.modifiedCount;
 }
 
+/**
+ * After a purchase approval allocates slots, check whether all slots for the
+ * parent share are now sold. If so, automatically set projectStatus = "complete".
+ *
+ * Rules (per requirement):
+ * - Full/cash purchase: slots are allocated on purchase approval → check here.
+ * - Installment purchase: down payment approval = purchase approval → same path.
+ * - Only "sold" slots count; "available" and "reclaimed" do not.
+ */
+async function checkAndCompleteShare(shareId: any): Promise<void> {
+  try {
+    const share = await Share.findById(shareId).select("totalShares projectStatus").lean();
+    if (!share || share.projectStatus === "complete") return;
+    if (!share.totalShares || share.totalShares <= 0) return;
+
+    const soldCount = await ShareSlot.countDocuments({ shareId, status: "sold" });
+    if (soldCount >= share.totalShares) {
+      await Share.findByIdAndUpdate(shareId, { $set: { projectStatus: "complete" } });
+    }
+  } catch (err) {
+    // Non-critical — log and continue; do not block the approval response
+    console.error(`[SHARE COMPLETE] checkAndCompleteShare failed for shareId=${shareId}:`, err);
+  }
+}
+
 // ── Update Purchase Status (Approve / Reject) ─────────────────────────────────
 
 export const updatePurchaseStatus = async (
@@ -125,6 +152,9 @@ export const updatePurchaseStatus = async (
         $inc: { personalSharesCount: purchase.quantity },
       });
 
+      // Step 4b — Apply purchase-based rank (Entrepreneur) if no sales rank yet
+      await applyPurchaseBasedRank(purchase.userId.toString());
+
       // Step 5 — Fix P-02: await commission distribution so errors are caught
       if (!purchase.commissionProcessed) {
         await distributeCommissions((purchase._id as any).toString());
@@ -148,9 +178,12 @@ export const updatePurchaseStatus = async (
         // Fix E-02: log ledger failures — do not silently swallow
         console.error(`[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`, ledgerErr);
       }
+
+      // Step 7 — Auto-complete share if all slots are now sold
+      await checkAndCompleteShare(purchase.shareId);
     }
 
-    // Step 7 — Update certificate status
+    // Step 8 — Update certificate status
     const purchaseWithShare = await Purchase.findById(purchase._id)
       .populate("shareId", "cashPrice")
       .lean();

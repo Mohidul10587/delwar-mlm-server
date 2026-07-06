@@ -28,6 +28,8 @@ export interface ISettings extends Document {
     maxInstallments: number;
     directSaleCommissionValue: number;
     downPaymentGenerationRates: { generation: number; rate: number }[];
+    installmentGenerationRates: { generation: number; rate: number }[];
+    /** @deprecated use installmentGenerationRates */
     installmentCommissionRate: number;
   };
   managerialCommissionWeeklyProcessDay: number;
@@ -87,6 +89,7 @@ const SettingsSchema = new Schema<ISettings>({
       directSaleCommissionValue: { type: Number, default: 0 },
       downPaymentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
       installmentCommissionRate: { type: Number, default: 0 },
+      installmentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
     },
     default: () => ({
       minDownPayment: 15000,
@@ -96,6 +99,7 @@ const SettingsSchema = new Schema<ISettings>({
       directSaleCommissionValue: 0,
       downPaymentGenerationRates: [],
       installmentCommissionRate: 0,
+      installmentGenerationRates: [],
     }),
   },
   managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },

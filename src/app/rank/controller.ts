@@ -160,9 +160,29 @@ export const getMyRank = async (
       .lean();
     const s = await getSettings();
     const allRanks = (s.ranks ?? []);
-    const currentRankName = (user as any)?.currentRank ?? null;
-    const currentRank = allRanks.find((r: any) => r.name === currentRankName) ?? null;
-    // L-01 fix: removed dead nextRank = null
+    const currentRankName = (user as any)?.currentRank ?? "Brand Ambassador";
+
+    // Sales-based ranks live in Settings.ranks.
+    // Brand Ambassador and Entrepreneur are system ranks not stored in Settings,
+    // so we synthesise a rank object when the user is on one of those.
+    const SYSTEM_RANKS: Record<string, any> = {
+      "Brand Ambassador": {
+        _id: "system-brand-ambassador",
+        name: "Brand Ambassador",
+        requiredApprovedSales: 0,
+      },
+      "Entrepreneur": {
+        _id: "system-entrepreneur",
+        name: "Entrepreneur",
+        requiredApprovedSales: 0,
+      },
+    };
+
+    const currentRank =
+      allRanks.find((r: any) => r.name === currentRankName) ??
+      SYSTEM_RANKS[currentRankName] ??
+      null;
+
     res.json({ currentRank, allRanks });
   } catch (err) {
     next(err);
@@ -195,6 +215,44 @@ async function getTotalApprovedSalesByGeneration(
 
   return count;
 }
+
+// ── Purchase-based rank (Entrepreneur) ───────────────────────────────────────
+
+/**
+ * Called after a purchase is approved for the buyer.
+ *
+ * Rules:
+ *  - If the user already has at least one sales-based rank in earnedRanks,
+ *    do nothing (Sales-based rank always takes priority).
+ *  - Otherwise, promote currentRank to "Entrepreneur" (purchase-based rank).
+ *    Uses an atomic findOneAndUpdate so concurrent approvals are safe.
+ */
+export const applyPurchaseBasedRank = async (userId: string): Promise<void> => {
+  try {
+    // Only promote to Entrepreneur when the user has NO sales-based ranks yet.
+    // earnedRanks contains only sales-based ranks (populated by recalcUserRank).
+    await User.findOneAndUpdate(
+      {
+        _id: userId,
+        // Guard: earnedRanks must be empty (no sales-based rank ever earned)
+        $or: [
+          { earnedRanks: { $exists: false } },
+          { earnedRanks: { $size: 0 } },
+        ],
+        // Only upgrade from Brand Ambassador (never demote from a higher state)
+        currentRank: "Brand Ambassador",
+      },
+      {
+        $set: {
+          currentRank: "Entrepreneur",
+          currentRankAchievedAt: new Date(),
+        },
+      }
+    );
+  } catch (err) {
+    console.error("[RANK] applyPurchaseBasedRank error:", err);
+  }
+};
 
 // ── Recalculate and update user rank ─────────────────────────────────────────
 
