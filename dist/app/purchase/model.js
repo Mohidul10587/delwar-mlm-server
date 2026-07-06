@@ -13,8 +13,11 @@ const BuyerInfoSchema = new mongoose_1.Schema({
     name: { type: String },
     phone: { type: String },
     nid: { type: String },
+    // Legacy fixed fields – kept for backward compatibility with existing records
     nominee: { type: NomineeSchema },
     nominee2: { type: NomineeSchema },
+    // New dynamic nominees array
+    nominees: { type: [NomineeSchema], default: undefined },
 }, { _id: false });
 const SnapshotSchema = new mongoose_1.Schema({
     shareTitle: { type: String },
@@ -26,7 +29,12 @@ const SnapshotSchema = new mongoose_1.Schema({
     downPaymentGenerationRates: [
         { generation: { type: Number }, rate: { type: Number }, _id: false },
     ],
+    // Legacy flat rate — kept so old purchase records remain readable
     installmentCommissionRate: { type: Number },
+    // New per-generation rates (mirrors downPaymentGenerationRates)
+    installmentGenerationRates: [
+        { generation: { type: Number }, rate: { type: Number }, _id: false },
+    ],
     rankQualification: [
         {
             rankName: { type: String },
@@ -48,13 +56,19 @@ const SnapshotSchema = new mongoose_1.Schema({
 }, { _id: false });
 const PurchaseSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
-    shareId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Share", required: true },
+    shareId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Project", required: true },
     quantity: { type: Number, required: true, min: 1 },
     paymentType: {
         type: String,
         enum: ["cash", "installment"],
         required: true,
     },
+    paymentMethod: {
+        type: String,
+        enum: ["cash", "bank", "mobile_banking"],
+        default: "cash",
+    },
+    receiptImage: { type: String, default: null },
     downPayment: { type: Number, required: true },
     installmentCount: { type: Number, required: true },
     installmentAmount: { type: Number, required: true },

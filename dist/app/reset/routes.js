@@ -17,7 +17,7 @@ const model_3 = require("../wallet/model");
 const model_4 = require("../user/model");
 const salary_log_model_1 = require("../rank/salary-log.model");
 const model_5 = require("../ledger/model");
-const shareSlot_model_1 = require("../share/shareSlot.model");
+const shareSlot_model_1 = require("../project/shareSlot.model");
 const router = (0, express_1.Router)();
 // Fix S-03: protected by superadmin auth + blocked in production
 router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {

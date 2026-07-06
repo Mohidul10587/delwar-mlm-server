@@ -11,7 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSuperAdminStats = void 0;
 const model_1 = require("./model");
-const model_2 = require("../share/model");
+const model_2 = require("../project/model");
 const model_3 = require("../purchase/model");
 const model_4 = require("../withdrawal/model");
 const model_5 = require("../wallet/model");
@@ -22,7 +22,7 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
         const [totalUsers, activeUsers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
             model_1.User.countDocuments({ role: "user" }),
             model_1.User.countDocuments({ role: "user", isActive: true }),
-            model_2.Share.countDocuments(),
+            model_2.Project.countDocuments(),
             model_3.Purchase.countDocuments(),
             model_3.Purchase.countDocuments({ status: "pending" }),
             model_3.Purchase.countDocuments({ status: "approved" }),

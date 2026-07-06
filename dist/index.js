@@ -26,7 +26,7 @@ const errorHandler_1 = require("./middleware/errorHandler");
 const seedAdmin_1 = require("./utils/seedAdmin");
 const routes_1 = __importDefault(require("./app/settings/routes"));
 const routes_2 = __importDefault(require("./app/user/routes"));
-const routes_3 = __importDefault(require("./app/share/routes"));
+const routes_3 = __importDefault(require("./app/project/routes"));
 const routes_4 = __importDefault(require("./app/purchase/routes"));
 const route_1 = __importDefault(require("./app/upload-video/route"));
 const routes_5 = __importDefault(require("./app/upload-image/routes"));
@@ -45,7 +45,10 @@ const routes_17 = __importDefault(require("./app/notice/routes"));
 const routes_18 = __importDefault(require("./app/transfer/routes"));
 const routes_19 = __importDefault(require("./app/expense/routes"));
 const routes_20 = __importDefault(require("./app/achievers/routes"));
-const controller_1 = require("./app/notice/controller");
+const routes_21 = __importDefault(require("./app/admin-salary/routes"));
+const controller_1 = require("./app/admin-salary/controller");
+const controller_2 = require("./app/notice/controller");
+const node_cron_1 = __importDefault(require("node-cron"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -55,12 +58,25 @@ const io = new socket_io_1.Server(httpServer, {
         credentials: true,
     },
 });
-(0, controller_1.setSocketIO)(io);
+(0, controller_2.setSocketIO)(io);
 const port = process.env.PORT || 5000;
 mongoose_1.default.connect(process.env.MONGODB_URI);
 mongoose_1.default.connection.once("open", () => __awaiter(void 0, void 0, void 0, function* () {
     console.log("Connected to MongoDB");
     yield (0, seedAdmin_1.seedAdmin)();
+    // ── Monthly salary auto-release cron ──────────────────────────────────────
+    // Runs at 23:59 on the last day of every month.
+    // "59 23 28-31 * *" + day-of-month check ensures last day only.
+    node_cron_1.default.schedule("59 23 28-31 * *", () => __awaiter(void 0, void 0, void 0, function* () {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        // Only execute on the actual last day of the month
+        if (tomorrow.getDate() === 1) {
+            yield (0, controller_1.autoReleaseMonthlySalaries)();
+        }
+    }));
+    console.log("[CRON] Monthly salary scheduler registered");
 }));
 // Fix S-11: Security headers
 app.use((0, helmet_1.default)({
@@ -131,6 +147,7 @@ app.use("/notice", routes_17.default);
 app.use("/transfer", routes_18.default);
 app.use("/expense", routes_19.default);
 app.use("/achievers", routes_20.default);
+app.use("/admin-salary", routes_21.default);
 app.use(errorHandler_1.errorHandler);
 if (process.env.VERCEL !== "1") {
     httpServer.listen(port, () => console.log(`Server running on port ${port}`));

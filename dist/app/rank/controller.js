@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processMonthlySalaries = exports.releaseMonthlySalaries = exports.recalcUserRank = exports.getMyRank = exports.deleteRank = exports.replaceAllRanks = exports.updateRank = exports.createRank = exports.getRanks = void 0;
+exports.processMonthlySalaries = exports.releaseMonthlySalaries = exports.recalcUserRank = exports.applyPurchaseBasedRank = exports.getMyRank = exports.deleteRank = exports.replaceAllRanks = exports.updateRank = exports.createRank = exports.getRanks = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const model_1 = require("../settings/model");
 const model_2 = require("../user/model");
@@ -120,16 +120,30 @@ const deleteRank = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
 exports.deleteRank = deleteRank;
 // ── User rank info ────────────────────────────────────────────────────────────
 const getMyRank = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     try {
         const user = yield model_2.User.findById(req.user._id)
             .select("currentRank currentRankAchievedAt earnedRanks")
             .lean();
         const s = yield getSettings();
         const allRanks = ((_a = s.ranks) !== null && _a !== void 0 ? _a : []);
-        const currentRankName = (_b = user === null || user === void 0 ? void 0 : user.currentRank) !== null && _b !== void 0 ? _b : null;
-        const currentRank = (_c = allRanks.find((r) => r.name === currentRankName)) !== null && _c !== void 0 ? _c : null;
-        // L-01 fix: removed dead nextRank = null
+        const currentRankName = (_b = user === null || user === void 0 ? void 0 : user.currentRank) !== null && _b !== void 0 ? _b : "Brand Ambassador";
+        // Sales-based ranks live in Settings.ranks.
+        // Brand Ambassador and Entrepreneur are system ranks not stored in Settings,
+        // so we synthesise a rank object when the user is on one of those.
+        const SYSTEM_RANKS = {
+            "Brand Ambassador": {
+                _id: "system-brand-ambassador",
+                name: "Brand Ambassador",
+                requiredApprovedSales: 0,
+            },
+            "Entrepreneur": {
+                _id: "system-entrepreneur",
+                name: "Entrepreneur",
+                requiredApprovedSales: 0,
+            },
+        };
+        const currentRank = (_d = (_c = allRanks.find((r) => r.name === currentRankName)) !== null && _c !== void 0 ? _c : SYSTEM_RANKS[currentRankName]) !== null && _d !== void 0 ? _d : null;
         res.json({ currentRank, allRanks });
     }
     catch (err) {
@@ -158,6 +172,41 @@ function getTotalApprovedSalesByGeneration(userId, generation) {
         return count;
     });
 }
+// ── Purchase-based rank (Entrepreneur) ───────────────────────────────────────
+/**
+ * Called after a purchase is approved for the buyer.
+ *
+ * Rules:
+ *  - If the user already has at least one sales-based rank in earnedRanks,
+ *    do nothing (Sales-based rank always takes priority).
+ *  - Otherwise, promote currentRank to "Entrepreneur" (purchase-based rank).
+ *    Uses an atomic findOneAndUpdate so concurrent approvals are safe.
+ */
+const applyPurchaseBasedRank = (userId) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // Only promote to Entrepreneur when the user has NO sales-based ranks yet.
+        // earnedRanks contains only sales-based ranks (populated by recalcUserRank).
+        yield model_2.User.findOneAndUpdate({
+            _id: userId,
+            // Guard: earnedRanks must be empty (no sales-based rank ever earned)
+            $or: [
+                { earnedRanks: { $exists: false } },
+                { earnedRanks: { $size: 0 } },
+            ],
+            // Only upgrade from Brand Ambassador (never demote from a higher state)
+            currentRank: "Brand Ambassador",
+        }, {
+            $set: {
+                currentRank: "Entrepreneur",
+                currentRankAchievedAt: new Date(),
+            },
+        });
+    }
+    catch (err) {
+        console.error("[RANK] applyPurchaseBasedRank error:", err);
+    }
+});
+exports.applyPurchaseBasedRank = applyPurchaseBasedRank;
 // ── Recalculate and update user rank ─────────────────────────────────────────
 // M-09 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor
 // C-04 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor

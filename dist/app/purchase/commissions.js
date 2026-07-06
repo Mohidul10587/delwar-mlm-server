@@ -167,26 +167,47 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
             }
         }
         // ── 3. Installment Portion Managerial Commission ──────────────────────────
-        if (installmentPortion > 0 && snap.installmentCommissionRate > 0) {
-            const maxGen = snap.downPaymentGenerationRates.length || 5;
-            for (let gen = 1; gen <= maxGen; gen++) {
-                const ancestor = buyer.generationAncestors.find((a) => a.level === gen);
-                if (!ancestor)
-                    break;
-                const currentId = ancestor.userId.toString();
-                const commission = (snap.installmentCommissionRate / 100) * installmentPortion;
-                if (commission > 0) {
-                    const wallet = yield atomicCreditWallet(currentId, "manCommFromInstallment", commission);
-                    const note = `Gen ${gen} managerial commission — Installment portion (${snap.installmentCommissionRate}% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
-                    const tx = yield model_2.TransactionLog.create({
-                        userId: currentId,
-                        type: "managerial_installment_commission",
-                        amount: commission,
-                        balanceAfter: wallet.manCommFromInstallment,
-                        relatedPurchaseId: purchase._id,
-                        note,
-                    });
-                    yield ledgerCommission(tx._id, currentId, commission, note);
+        // Uses per-generation rates from snap.installmentGenerationRates.
+        // Falls back to the legacy flat snap.installmentCommissionRate for old records
+        // that were created before the per-gen array was introduced.
+        if (installmentPortion > 0) {
+            const instGenRates = snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0
+                ? snap.installmentGenerationRates
+                : [];
+            // Legacy flat-rate fallback: build a synthetic per-gen array where every gen
+            // shares the same rate (old behaviour), but only when the new array is absent.
+            const effectiveRates = instGenRates.length > 0
+                ? instGenRates
+                : snap.installmentCommissionRate > 0
+                    ? snap.downPaymentGenerationRates.map((g) => ({
+                        generation: g.generation,
+                        rate: snap.installmentCommissionRate,
+                    }))
+                    : [];
+            if (effectiveRates.length > 0) {
+                const maxGen = effectiveRates.length;
+                for (let gen = 1; gen <= maxGen; gen++) {
+                    const ancestor = buyer.generationAncestors.find((a) => a.level === gen);
+                    if (!ancestor)
+                        break;
+                    const currentId = ancestor.userId.toString();
+                    const genConfig = effectiveRates.find((g) => g.generation === gen);
+                    if (!genConfig || genConfig.rate <= 0)
+                        continue;
+                    const commission = (genConfig.rate / 100) * installmentPortion;
+                    if (commission > 0) {
+                        const wallet = yield atomicCreditWallet(currentId, "manCommFromInstallment", commission);
+                        const note = `Gen ${gen} managerial commission — Installment portion (${genConfig.rate}% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
+                        const tx = yield model_2.TransactionLog.create({
+                            userId: currentId,
+                            type: "managerial_installment_commission",
+                            amount: commission,
+                            balanceAfter: wallet.manCommFromInstallment,
+                            relatedPurchaseId: purchase._id,
+                            note,
+                        });
+                        yield ledgerCommission(tx._id, currentId, commission, note);
+                    }
                 }
             }
         }
@@ -209,7 +230,7 @@ const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount, i
         if (!purchase)
             return;
         const snap = purchase.snapshot;
-        if (!snap || snap.installmentCommissionRate <= 0)
+        if (!snap)
             return;
         const buyer = yield model_3.User.findById(purchase.userId).select("generationAncestors name username");
         if (!buyer)
@@ -218,17 +239,37 @@ const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount, i
         const buyerUsername = (_b = buyer.username) !== null && _b !== void 0 ? _b : "";
         const shareTitle = (_c = snap.shareTitle) !== null && _c !== void 0 ? _c : "";
         const instLabel = installmentNo ? `Installment #${installmentNo}` : "Installment payment";
-        const maxGen = snap.downPaymentGenerationRates.length || 5;
+        // Resolve effective per-generation rates.
+        // New records: use snap.installmentGenerationRates.
+        // Old records (created before this feature): fall back to the legacy flat rate
+        // applied uniformly across all generations that have a DP rate configured.
+        const instGenRates = snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0
+            ? snap.installmentGenerationRates
+            : [];
+        const effectiveRates = instGenRates.length > 0
+            ? instGenRates
+            : snap.installmentCommissionRate > 0
+                ? snap.downPaymentGenerationRates.map((g) => ({
+                    generation: g.generation,
+                    rate: snap.installmentCommissionRate,
+                }))
+                : [];
+        if (effectiveRates.length === 0)
+            return;
+        const maxGen = effectiveRates.length;
         for (let gen = 1; gen <= maxGen; gen++) {
             const ancestor = buyer.generationAncestors.find((a) => a.level === gen);
             if (!ancestor)
                 break;
             const currentId = ancestor.userId.toString();
-            const commission = (snap.installmentCommissionRate / 100) * installmentAmount;
+            const genConfig = effectiveRates.find((g) => g.generation === gen);
+            if (!genConfig || genConfig.rate <= 0)
+                continue;
+            const commission = (genConfig.rate / 100) * installmentAmount;
             if (commission > 0) {
                 // Fix F-03: atomic $inc
                 const wallet = yield atomicCreditWallet(currentId, "manCommFromInstallment", commission);
-                const note = `Gen ${gen} managerial commission — ${instLabel} (${snap.installmentCommissionRate}% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
+                const note = `Gen ${gen} managerial commission — ${instLabel} (${genConfig.rate}% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
                 const tx = yield model_2.TransactionLog.create({
                     userId: currentId,
                     type: "managerial_installment_commission",

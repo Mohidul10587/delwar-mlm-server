@@ -45,12 +45,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMyPurchases = exports.getInstallmentReceipt = exports.getPurchaseReceipt = exports.getPurchaseById = exports.getPurchases = exports.createPurchase = void 0;
 const model_1 = require("./model");
 const installment_model_1 = require("./installment.model");
-const model_2 = require("../share/model");
+const model_2 = require("../project/model");
 const model_3 = require("../user/model");
 const model_4 = require("../settings/model");
 const service_1 = require("./service");
 const model_5 = require("../certificate/model");
-const shareSlot_model_1 = require("../share/shareSlot.model");
+const shareSlot_model_1 = require("../project/shareSlot.model");
 // Helper — build slotsByPurchase map from a list of purchaseIds
 function fetchSlotsByPurchase(purchaseIds) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -74,9 +74,9 @@ function fetchSlotsByPurchase(purchaseIds) {
 }
 // POST /purchase  — logged-in user submits a purchase request
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
     try {
-        const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo } = req.body;
+        const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage } = req.body;
         // Fix V-01: validate quantity
         const qty = parseInt(String(quantity), 10);
         if (!Number.isInteger(qty) || qty < 1) {
@@ -91,10 +91,19 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         if (duplicate) {
             return res.status(400).json({ message: "This transaction ID has already been used" });
         }
+        // Validate payment method
+        const resolvedPaymentMethod = paymentMethod !== null && paymentMethod !== void 0 ? paymentMethod : "cash";
+        if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
+            return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+        }
+        // Receipt image is required for bank and mobile_banking payments
+        if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
+            return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+        }
         if (!["cash", "installment"].includes(paymentType)) {
             return res.status(400).json({ message: "Invalid payment type" });
         }
-        const share = yield model_2.Share.findById(shareId);
+        const share = yield model_2.Project.findById(shareId);
         if (!share)
             return res.status(404).json({ message: "Share not found" });
         if (!share.isActive)
@@ -116,28 +125,75 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             }
         }
         const buyer = yield model_3.User.findById(req.user._id).select("name phone nominee nominee2");
-        const resolvedBuyerInfo = buyerInfo !== null && buyerInfo !== void 0 ? buyerInfo : (buyer ? {
-            name: buyer.name,
-            phone: buyer.phone,
-            nominee: (_a = buyer.nominee) !== null && _a !== void 0 ? _a : undefined,
-            nominee2: (_b = buyer.nominee2) !== null && _b !== void 0 ? _b : undefined,
-        } : null);
+        // Build resolvedBuyerInfo:
+        // - If frontend sends buyerInfo.nominees array → use it (new behaviour)
+        // - If frontend sends legacy buyerInfo.nominee/nominee2 → normalise into nominees array
+        // - If no buyerInfo sent → fall back to user's stored nominees
+        let resolvedBuyerInfo = null;
+        if (buyerInfo) {
+            const incomingNominees = [];
+            if (Array.isArray(buyerInfo.nominees) && buyerInfo.nominees.length > 0) {
+                // New path: nominees array provided
+                for (const n of buyerInfo.nominees) {
+                    if (n && typeof n === "object") {
+                        incomingNominees.push({
+                            name: String((_a = n.name) !== null && _a !== void 0 ? _a : "").trim(),
+                            relation: String((_b = n.relation) !== null && _b !== void 0 ? _b : "").trim(),
+                            phone: String((_c = n.phone) !== null && _c !== void 0 ? _c : "").trim(),
+                            nid: n.nid ? String(n.nid).trim() : undefined,
+                            image: n.image ? String(n.image).trim() : undefined,
+                        });
+                    }
+                }
+            }
+            else {
+                // Legacy path: nominee / nominee2 fixed fields
+                if ((_d = buyerInfo.nominee) === null || _d === void 0 ? void 0 : _d.name)
+                    incomingNominees.push(buyerInfo.nominee);
+                if ((_e = buyerInfo.nominee2) === null || _e === void 0 ? void 0 : _e.name)
+                    incomingNominees.push(buyerInfo.nominee2);
+            }
+            resolvedBuyerInfo = {
+                name: (_f = buyerInfo.name) !== null && _f !== void 0 ? _f : buyer === null || buyer === void 0 ? void 0 : buyer.name,
+                phone: (_g = buyerInfo.phone) !== null && _g !== void 0 ? _g : buyer === null || buyer === void 0 ? void 0 : buyer.phone,
+                nominees: incomingNominees.length ? incomingNominees : undefined,
+                // Keep legacy fields as well for backward compat with older receipt renders
+                nominee: (_h = incomingNominees[0]) !== null && _h !== void 0 ? _h : undefined,
+                nominee2: (_j = incomingNominees[1]) !== null && _j !== void 0 ? _j : undefined,
+            };
+        }
+        else if (buyer) {
+            // Fall back to user's stored nominees
+            const fallbackNominees = [];
+            if ((_k = buyer.nominee) === null || _k === void 0 ? void 0 : _k.name)
+                fallbackNominees.push(buyer.nominee);
+            if ((_l = buyer.nominee2) === null || _l === void 0 ? void 0 : _l.name)
+                fallbackNominees.push(buyer.nominee2);
+            resolvedBuyerInfo = {
+                name: buyer.name,
+                phone: buyer.phone,
+                nominees: fallbackNominees.length ? fallbackNominees : undefined,
+                nominee: (_m = buyer.nominee) !== null && _m !== void 0 ? _m : undefined,
+                nominee2: (_o = buyer.nominee2) !== null && _o !== void 0 ? _o : undefined,
+            };
+        }
         const totalPayable = share.cashPrice * qty;
         const resolvedDP = paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
         const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
         const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
         const amountPaid = resolvedDP;
         const settings = yield model_4.Settings.findOne().lean();
-        const ranks = ((_c = settings === null || settings === void 0 ? void 0 : settings.ranks) !== null && _c !== void 0 ? _c : []);
+        const ranks = ((_p = settings === null || settings === void 0 ? void 0 : settings.ranks) !== null && _p !== void 0 ? _p : []);
         const snapshot = {
             shareTitle: share.title,
-            shareImage: share.image,
+            shareImage: (_r = (_q = share.images) === null || _q === void 0 ? void 0 : _q[0]) !== null && _r !== void 0 ? _r : "",
             cashPrice: share.cashPrice,
             minDownPayment: share.minDownPayment,
             maxDownPayment: share.maxDownPayment,
             directSaleCommissionValue: share.directSaleCommissionValue,
             downPaymentGenerationRates: share.downPaymentGenerationRates,
             installmentCommissionRate: share.installmentCommissionRate,
+            installmentGenerationRates: (_s = share.installmentGenerationRates) !== null && _s !== void 0 ? _s : [],
             rankQualification: ranks.map((r) => {
                 var _a;
                 return ({
@@ -161,6 +217,8 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             shareId,
             quantity: qty,
             paymentType,
+            paymentMethod: resolvedPaymentMethod,
+            receiptImage: receiptImage !== null && receiptImage !== void 0 ? receiptImage : null,
             downPayment: resolvedDP,
             installmentCount: resolvedCount,
             installmentAmount: resolvedInstallmentAmount,
@@ -287,17 +345,18 @@ const getPurchaseById = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.getPurchaseById = getPurchaseById;
-// GET /purchase/:id/receipt  — logged-in user gets receipt for an approved purchase
+// GET /purchase/:id/receipt  — logged-in user (or staff) gets receipt for an approved purchase
 const getPurchaseReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f;
     try {
         const purchase = yield model_1.Purchase.findById(req.params.id)
             .populate("userId", "name username phone")
             .populate("shareId", "title cashPrice image")
+            .populate("reviewedBy", "name username") // cashier / receiver
             .lean();
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
-        // Only the owner or admin can access
+        // Only the owner or staff can access
         const isOwner = purchase.userId && ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
         const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
         if (!isOwner && !isStaff)
@@ -345,7 +404,9 @@ const getInstallmentReceipt = (req, res, next) => __awaiter(void 0, void 0, void
         const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
         if (!isOwner && !isStaff)
             return res.status(403).json({ message: "Forbidden" });
-        const installment = yield installment_model_1.InstallmentPayment.findById(installmentId).lean();
+        const installment = yield installment_model_1.InstallmentPayment.findById(installmentId)
+            .populate("reviewedBy", "name username") // cashier / receiver
+            .lean();
         if (!installment)
             return res.status(404).json({ message: "Installment not found" });
         if (installment.status !== "approved")

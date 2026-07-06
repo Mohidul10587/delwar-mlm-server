@@ -14,7 +14,7 @@ const model_1 = require("../wallet/model");
 const model_2 = require("../purchase/model");
 const model_3 = require("../settings/model");
 const model_4 = require("../user/model");
-const model_5 = require("../share/model");
+const model_5 = require("../project/model");
 const model_6 = require("../event/model");
 // M-08 fix: O(n) tree build using pre-indexed parent→children map
 const buildTree = (nodes, parentId) => {
@@ -54,7 +54,7 @@ const getUserDashboard = (req, res, next) => __awaiter(void 0, void 0, void 0, f
                 .limit(500)
                 .lean(),
             model_3.Settings.findOne().lean(),
-            model_5.Share.find({ isActive: true }).lean(),
+            model_5.Project.find({ isActive: true }).lean(),
             model_6.Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),
         ]);
         const allRanks = ((_a = settings === null || settings === void 0 ? void 0 : settings.ranks) !== null && _a !== void 0 ? _a : []).sort((a, b) => a.order - b.order);

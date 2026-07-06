@@ -9,6 +9,12 @@ const InstallmentPaymentSchema = new mongoose_1.Schema({
     amount: { type: Number, required: true, min: 1 },
     senderAccount: { type: String, required: true },
     transactionId: { type: String, required: true },
+    paymentMethod: {
+        type: String,
+        enum: ["cash", "bank", "mobile_banking"],
+        default: "cash",
+    },
+    receiptImage: { type: String, default: null },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
     reviewNote: { type: String, default: "" },
     reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },

@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePermissions = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.updateCoverImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = void 0;
+exports.updatePermissions = exports.changeUserRole = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.updateCoverImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = exports.ALL_PERMISSIONS = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -23,6 +23,8 @@ const defaultPermissionsByRole = {
     admin: ["purchase.review"],
     staff: ["purchase.review"],
 };
+// All recognised permission keys
+exports.ALL_PERMISSIONS = ["purchase.review", "expense.submit"];
 const generateTokens = (id) => {
     const accessToken = jsonwebtoken_1.default.sign({ id }, authConfig_1.JWT_SECRET, { expiresIn: "30m" });
     const refreshToken = jsonwebtoken_1.default.sign({ id }, authConfig_1.JWT_REFRESH_SECRET, {
@@ -96,6 +98,7 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
             phone,
             password: hashedPassword,
             generationAncestors,
+            currentRank: "Brand Ambassador",
         });
         yield model_2.Wallet.create({ userId: user._id });
         const siblings = yield model_1.User.find({ phone, _id: { $ne: user._id } }).select("_id");
@@ -146,6 +149,7 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
             role,
             permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [],
             generationAncestors,
+            currentRank: "Brand Ambassador",
         });
         yield model_2.Wallet.create({ userId: user._id });
         const siblings = yield model_1.User.find({ phone, _id: { $ne: user._id } }).select("_id");
@@ -423,7 +427,9 @@ const deleteUser = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
             return res.status(404).json({ message: "User not found" });
         // ⚠️ FUTURE: if admin deletion should be allowed, remove "admin" from this guard.
         if (user.role === "superadmin" || user.role === "admin")
-            return res.status(403).json({ message: "Cannot delete superadmin or admin" });
+            return res
+                .status(403)
+                .json({ message: "Cannot delete superadmin or admin" });
         yield model_1.User.findByIdAndDelete(req.params.id);
         res.json({ message: "User deleted" });
     }
@@ -509,6 +515,51 @@ const getLinkedAccounts = (req, res, next) => __awaiter(void 0, void 0, void 0, 
     }
 });
 exports.getLinkedAccounts = getLinkedAccounts;
+/**
+ * Change a user's role between "user" and "admin".
+ * Only superadmin can call this. Cannot touch superadmin or staff accounts.
+ */
+const changeUserRole = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { role } = req.body;
+        if (!role || !["user", "admin"].includes(role)) {
+            return res
+                .status(400)
+                .json({ message: "role must be either 'user' or 'admin'" });
+        }
+        const target = yield model_1.User.findById(req.params.id).select("-password");
+        if (!target)
+            return res.status(404).json({ message: "User not found" });
+        if (target.role === "superadmin") {
+            return res
+                .status(403)
+                .json({ message: "Cannot change role of superadmin or staff" });
+        }
+        // Prevent superadmin from demoting themselves
+        if (target._id.toString() === req.user._id.toString()) {
+            return res.status(403).json({ message: "Cannot change your own role" });
+        }
+        target.role = role;
+        // When promoting to admin, assign default admin permissions
+        if (role === "admin") {
+            target.permissions = (_a = defaultPermissionsByRole["admin"]) !== null && _a !== void 0 ? _a : [];
+        }
+        // When demoting to user, clear admin permissions
+        if (role === "user") {
+            target.permissions = [];
+        }
+        yield target.save();
+        res.json({
+            message: `Role changed to ${role} successfully`,
+            user: target,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.changeUserRole = changeUserRole;
 const updatePermissions = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { permissions } = req.body;
@@ -521,10 +572,9 @@ const updatePermissions = (req, res, next) => __awaiter(void 0, void 0, void 0, 
         const user = yield model_1.User.findById(req.params.id).select("-password");
         if (!user)
             return res.status(404).json({ message: "User not found" });
-        // ⚠️ FUTURE: when admin/superadmin permissions diverge, allow editing admin permissions here.
-        if (user.role === "superadmin" || user.role === "admin") {
+        if (user.role === "superadmin") {
             return res.status(400).json({
-                message: "Superadmin/admin permissions are implicit",
+                message: "Superadmin permissions are implicit and cannot be changed",
             });
         }
         user.permissions = permissions;

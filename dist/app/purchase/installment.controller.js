@@ -25,7 +25,7 @@ const getWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
 });
 const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { installmentNo, amount, senderAccount, transactionId } = req.body;
+        const { installmentNo, amount, senderAccount, transactionId, paymentMethod, receiptImage } = req.body;
         const purchase = yield model_1.Purchase.findById(req.params.purchaseId).populate("shareId", "installment");
         if (!purchase) {
             return res.status(404).json({ message: "Purchase not found" });
@@ -56,6 +56,15 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
         if (duplicate) {
             return res.status(400).json({ message: "This transaction ID has already been used" });
         }
+        // Validate payment method
+        const resolvedPaymentMethod = paymentMethod !== null && paymentMethod !== void 0 ? paymentMethod : "cash";
+        if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
+            return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+        }
+        // Receipt image is required for bank and mobile_banking payments
+        if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
+            return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+        }
         // Validate amount
         const parsedAmount = Number(amount);
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -68,6 +77,8 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
             amount: parsedAmount,
             senderAccount,
             transactionId: String(transactionId).trim(),
+            paymentMethod: resolvedPaymentMethod,
+            receiptImage: receiptImage !== null && receiptImage !== void 0 ? receiptImage : null,
         });
         res.status(201).json({
             message: "Installment payment submitted",

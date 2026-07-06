@@ -22,6 +22,7 @@ router.put("/admin/update/:id", auth_1.verifyAdmin, controller_1.adminUpdatePhon
 router.put("/admin/password/:id", auth_1.verifyAdmin, controller_1.adminUpdatePassword);
 router.put("/admin/relations/:id", auth_1.verifySuperAdmin, controller_1.adminUpdateRelations);
 router.put("/admin/permissions/:id", auth_1.verifySuperAdmin, controller_1.updatePermissions);
+router.patch("/admin/role/:id", auth_1.verifySuperAdmin, controller_1.changeUserRole);
 router.put("/update-phone", auth_1.verifyUser, controller_1.updatePhone);
 router.put("/update-image", auth_1.verifyUser, controller_1.updateImage);
 router.put("/update-cover-image", auth_1.verifyUser, controller_1.updateCoverImage);

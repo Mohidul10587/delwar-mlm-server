@@ -13,11 +13,13 @@ const WalletSchema = new mongoose_1.Schema({
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
     loanBalance: { type: Number, default: 0 },
+    adminMonthlySalaryBalance: { type: Number, default: 0 },
+    expenseReimbursementBalance: { type: Number, default: 0 },
 }, { timestamps: true });
 // Fix F-12: totalBalance is recomputed on every save (for .save() calls)
 // For $inc operations callers MUST also $inc totalBalance by the same amount.
 WalletSchema.pre("save", function () {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     this.totalBalance =
         ((_a = this.directCommissionBalance) !== null && _a !== void 0 ? _a : 0) +
             ((_b = this.manCommFromDownPayment) !== null && _b !== void 0 ? _b : 0) +
@@ -25,7 +27,10 @@ WalletSchema.pre("save", function () {
             ((_d = this.salaryBalance) !== null && _d !== void 0 ? _d : 0) +
             ((_e = this.rewardBalance) !== null && _e !== void 0 ? _e : 0) +
             ((_f = this.incentiveBonus) !== null && _f !== void 0 ? _f : 0) +
-            ((_g = this.transferBalance) !== null && _g !== void 0 ? _g : 0);
+            ((_g = this.transferBalance) !== null && _g !== void 0 ? _g : 0) +
+            ((_h = this.adminMonthlySalaryBalance) !== null && _h !== void 0 ? _h : 0) +
+            ((_j = this.expenseReimbursementBalance) !== null && _j !== void 0 ? _j : 0);
+    // Note: loanBalance is NOT included in totalBalance (tracked separately)
 });
 // Index for fast userId lookups
 WalletSchema.index({ userId: 1 }, { unique: true });
@@ -50,6 +55,8 @@ const TransactionLogSchema = new mongoose_1.Schema({
             "transfer_received",
             "loan_given",
             "loan_adjusted",
+            "admin_monthly_salary",
+            "expense_reimbursement",
         ],
         required: true,
     },

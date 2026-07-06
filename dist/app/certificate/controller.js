@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.downloadCertificate = exports.getMyCertificates = void 0;
 const model_1 = require("./model");
 const service_1 = require("../purchase/service");
-const shareSlot_model_1 = require("../share/shareSlot.model");
+const shareSlot_model_1 = require("../project/shareSlot.model");
 const generateCertificate_1 = require("./generateCertificate");
 // GET /certificate/my — logged-in user's own certificates with share & purchase info
 const getMyCertificates = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {

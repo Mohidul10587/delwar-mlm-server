@@ -19,7 +19,7 @@ const authConfig_1 = require("../utils/authConfig");
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 // Centralised so future divergence between superadmin/admin only needs changes here.
 /** Roles that have full super-admin level access. */
-const SUPER_ROLES = ["superadmin", "admin"];
+const SUPER_ROLES = ["superadmin"];
 const isSuperRole = (role) => SUPER_ROLES.includes(role);
 // ─── Middleware ───────────────────────────────────────────────────────────────
 const verifyUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {

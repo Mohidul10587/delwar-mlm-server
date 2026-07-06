@@ -24,7 +24,7 @@ const UserSchema = new mongoose_1.Schema({
     generationAncestors: [AncestorEntrySchema],
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
-    currentRank: { type: String, default: null },
+    currentRank: { type: String, default: "Brand Ambassador" },
     currentRankAchievedAt: { type: Date, default: null },
     earnedRanks: [{ type: String }],
     personalSharesCount: { type: Number, default: 0 },
