@@ -26,7 +26,7 @@ export interface IUser extends Document {
   name: string;
   phone: string;
   password: string;
-  role: "superadmin" | "admin" | "staff" | "user";
+  role: "superadmin" | "admin" | "user";
   isActive: boolean;
   image: string | null;
   coverImage?: string | null;

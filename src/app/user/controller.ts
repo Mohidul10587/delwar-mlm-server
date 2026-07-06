@@ -5,7 +5,11 @@ import { Wallet } from "../wallet/model";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { registerSchema, adminRegisterSchema, loginSchema } from "./validation";
-import { JWT_SECRET, JWT_REFRESH_SECRET, cookieOpts } from "../../utils/authConfig";
+import {
+  JWT_SECRET,
+  JWT_REFRESH_SECRET,
+  cookieOpts,
+} from "../../utils/authConfig";
 
 declare module "express" {
   interface Request {
@@ -17,6 +21,9 @@ const defaultPermissionsByRole: Record<string, string[]> = {
   admin: ["purchase.review"],
   staff: ["purchase.review"],
 };
+
+// All recognised permission keys
+export const ALL_PERMISSIONS = ["purchase.review", "expense.submit"] as const;
 
 const generateTokens = (id: string) => {
   const accessToken = jwt.sign({ id }, JWT_SECRET, { expiresIn: "30m" });
@@ -321,7 +328,8 @@ export const updateCoverImage = async (
 ) => {
   try {
     const { coverImage } = req.body;
-    if (!coverImage) return res.status(400).json({ message: "Cover image URL required" });
+    if (!coverImage)
+      return res.status(400).json({ message: "Cover image URL required" });
     const user = await Model.findByIdAndUpdate(
       req.user?._id,
       { $set: { coverImage } },
@@ -525,7 +533,9 @@ export const deleteUser = async (
     if (!user) return res.status(404).json({ message: "User not found" });
     // ⚠️ FUTURE: if admin deletion should be allowed, remove "admin" from this guard.
     if (user.role === "superadmin" || user.role === "admin")
-      return res.status(403).json({ message: "Cannot delete superadmin or admin" });
+      return res
+        .status(403)
+        .json({ message: "Cannot delete superadmin or admin" });
     await Model.findByIdAndDelete(req.params.id);
     res.json({ message: "User deleted" });
   } catch (err) {
@@ -630,6 +640,60 @@ export const getLinkedAccounts = async (
   }
 };
 
+/**
+ * Change a user's role between "user" and "admin".
+ * Only superadmin can call this. Cannot touch superadmin or staff accounts.
+ */
+export const changeUserRole = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { role } = req.body as { role?: string };
+
+    if (!role || !["user", "admin"].includes(role)) {
+      return res
+        .status(400)
+        .json({ message: "role must be either 'user' or 'admin'" });
+    }
+
+    const target = await Model.findById(req.params.id).select("-password");
+    if (!target) return res.status(404).json({ message: "User not found" });
+
+    if (target.role === "superadmin") {
+      return res
+        .status(403)
+        .json({ message: "Cannot change role of superadmin or staff" });
+    }
+
+    // Prevent superadmin from demoting themselves
+    if (target._id.toString() === req.user!._id.toString()) {
+      return res.status(403).json({ message: "Cannot change your own role" });
+    }
+
+    target.role = role as "user" | "admin";
+
+    // When promoting to admin, assign default admin permissions
+    if (role === "admin") {
+      target.permissions = defaultPermissionsByRole["admin"] ?? [];
+    }
+    // When demoting to user, clear admin permissions
+    if (role === "user") {
+      target.permissions = [];
+    }
+
+    await target.save();
+
+    res.json({
+      message: `Role changed to ${role} successfully`,
+      user: target,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const updatePermissions = async (
   req: Request,
   res: Response,
@@ -648,10 +712,9 @@ export const updatePermissions = async (
 
     const user = await Model.findById(req.params.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
-    // ⚠️ FUTURE: when admin/superadmin permissions diverge, allow editing admin permissions here.
-    if (user.role === "superadmin" || user.role === "admin") {
+    if (user.role === "superadmin") {
       return res.status(400).json({
-        message: "Superadmin/admin permissions are implicit",
+        message: "Superadmin permissions are implicit and cannot be changed",
       });
     }
 

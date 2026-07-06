@@ -7,7 +7,7 @@ import { JWT_SECRET } from "../utils/authConfig";
 // Centralised so future divergence between superadmin/admin only needs changes here.
 
 /** Roles that have full super-admin level access. */
-const SUPER_ROLES = ["superadmin", "admin"] as const;
+const SUPER_ROLES = ["superadmin"] as const;
 type SuperRole = (typeof SUPER_ROLES)[number];
 
 const isSuperRole = (role: string): role is SuperRole =>

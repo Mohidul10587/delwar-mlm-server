@@ -32,7 +32,9 @@ import transferRoutes from "./app/transfer/routes";
 import expenseRoutes from "./app/expense/routes";
 import achieversRoutes from "./app/achievers/routes";
 import adminSalaryRoutes from "./app/admin-salary/routes";
+import { autoReleaseMonthlySalaries } from "./app/admin-salary/controller";
 import { setSocketIO } from "./app/notice/controller";
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -52,6 +54,20 @@ mongoose.connect(process.env.MONGODB_URI as string);
 mongoose.connection.once("open", async () => {
   console.log("Connected to MongoDB");
   await seedAdmin();
+
+  // ── Monthly salary auto-release cron ──────────────────────────────────────
+  // Runs at 23:59 on the last day of every month.
+  // "59 23 28-31 * *" + day-of-month check ensures last day only.
+  cron.schedule("59 23 28-31 * *", async () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    // Only execute on the actual last day of the month
+    if (tomorrow.getDate() === 1) {
+      await autoReleaseMonthlySalaries();
+    }
+  });
+  console.log("[CRON] Monthly salary scheduler registered");
 });
 
 // Fix S-11: Security headers

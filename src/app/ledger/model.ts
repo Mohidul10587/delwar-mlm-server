@@ -59,7 +59,7 @@ export interface ICompanyLedger extends Document {
   type: LedgerType;
   amount: number;
   relatedId?: Types.ObjectId;
-  relatedModel?: "Purchase" | "InstallmentPayment" | "Investment" | "Withdrawal" | "TransactionLog" | "Expense";
+  relatedModel?: "Purchase" | "InstallmentPayment" | "Investment" | "Withdrawal" | "TransactionLog" | "AdminExpense";
   userId?: Types.ObjectId; // the user involved
   note?: string;
 }

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { AdminSalaryConfig, AdminSalaryRelease } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
+import { CompanyLedger } from "../ledger/model";
 
 // GET /admin-salary/configs — list all admin salary configurations
 export const getSalaryConfigs = async (req: Request, res: Response, next: NextFunction) => {
@@ -104,6 +105,19 @@ export const releaseSalary = async (req: Request, res: Response, next: NextFunct
       note: note ? note.trim() : `Monthly salary for ${month} released by super admin`,
     });
 
+    // Company ledger — outflow
+    try {
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "salary_paid",
+        amount,
+        userId: adminId,
+        note: `Admin monthly salary released: ${month}${note ? ` — ${note.trim()}` : ""}`,
+      });
+    } catch (ledgerErr) {
+      console.error(`[LEDGER ERROR] salary_paid for adminId=${adminId}:`, ledgerErr);
+    }
+
     // Record the release
     const release = await AdminSalaryRelease.create({
       adminId,
@@ -158,4 +172,102 @@ export const getMyHistory = async (req: Request, res: Response, next: NextFuncti
 
     res.json({ releases, monthlySalary: config?.monthlySalary ?? 0 });
   } catch (err) { next(err); }
+};
+
+// ─── Auto monthly salary release (called by cron job) ────────────────────────
+// Runs at end of each month. Releases salary for every admin with monthlySalary > 0.
+// Skips admins that have already received salary for the current month.
+export const autoReleaseMonthlySalaries = async (): Promise<void> => {
+  const now = new Date();
+  // Format "YYYY-MM" for the month being paid (current month)
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  console.log(`[AUTO SALARY] Starting auto release for month: ${month}`);
+
+  const configs = await AdminSalaryConfig.find({ monthlySalary: { $gt: 0 } })
+    .populate<{ adminId: { _id: import("mongoose").Types.ObjectId; name: string; username: string; role: string } }>(
+      "adminId",
+      "name username role"
+    )
+    .lean();
+
+  if (!configs.length) {
+    console.log("[AUTO SALARY] No salary configs found. Skipping.");
+    return;
+  }
+
+  let released = 0;
+  let skipped = 0;
+
+  for (const config of configs) {
+    const adminId = config.adminId._id;
+
+    // Skip if already released this month
+    const existing = await AdminSalaryRelease.findOne({ adminId, month }).lean();
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    const amount = config.monthlySalary;
+
+    try {
+      // 1. Credit wallet
+      await Wallet.findOneAndUpdate(
+        { userId: adminId },
+        {
+          $inc: {
+            adminMonthlySalaryBalance: amount,
+            totalBalance: amount,
+          },
+        },
+        { upsert: true }
+      );
+
+      const updatedWallet = await Wallet.findOne({ userId: adminId }).lean();
+
+      // 2. Transaction log
+      await TransactionLog.create({
+        userId: adminId,
+        type: "admin_monthly_salary",
+        amount,
+        balanceAfter: updatedWallet?.totalBalance ?? 0,
+        note: `Monthly salary auto-released for ${month}`,
+      });
+
+      // 3. Salary release record (prevents duplicate)
+      await AdminSalaryRelease.create({
+        adminId,
+        amount,
+        month,
+        releasedBy: adminId, // system release — self reference as placeholder
+        note: `Auto-released for ${month}`,
+      });
+
+      // 4. Company ledger — outflow
+      try {
+        await CompanyLedger.create({
+          date: now,
+          type: "salary_paid",
+          amount,
+          userId: adminId,
+          note: `Admin monthly salary auto-released: ${config.adminId.name} (@${config.adminId.username}) — ${month}`,
+        });
+      } catch (ledgerErr) {
+        console.error(`[AUTO SALARY] Ledger error for adminId=${adminId}:`, ledgerErr);
+      }
+
+      released++;
+      console.log(`[AUTO SALARY] Released ৳${amount} to ${config.adminId.username} for ${month}`);
+    } catch (err: any) {
+      if (err.code === 11000) {
+        // Duplicate key — already released, safe to skip
+        skipped++;
+      } else {
+        console.error(`[AUTO SALARY] Error releasing for adminId=${adminId}:`, err);
+      }
+    }
+  }
+
+  console.log(`[AUTO SALARY] Done. Released: ${released}, Skipped (already paid): ${skipped}`);
 };

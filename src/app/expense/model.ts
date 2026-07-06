@@ -1,60 +1,18 @@
 import { Schema, model, Document, Types } from "mongoose";
 
-// ─── Legacy Expense (company-level, still supported for old records) ───────────
-// This is kept for backward compatibility. New submissions use AdminExpense.
-
-export const EXPENSE_CATEGORIES = [
-  "office_rent",
-  "salaries_staff",
-  "utilities",
-  "marketing",
-  "software",
-  "hardware",
-  "travel",
-  "maintenance",
-  "legal",
-  "miscellaneous",
-] as const;
-
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
-
-export interface IExpense extends Document {
-  date: Date;
-  category: ExpenseCategory;
-  amount: number;
-  description: string;
-  recordedBy: string; // admin username
-}
-
-const ExpenseSchema = new Schema<IExpense>(
-  {
-    date:        { type: Date, required: true, index: true },
-    category:    { type: String, enum: EXPENSE_CATEGORIES, required: true, index: true },
-    amount:      { type: Number, required: true, min: 0 },
-    description: { type: String, required: true, trim: true },
-    recordedBy:  { type: String, required: true },
-  },
-  { timestamps: true }
-);
-
-ExpenseSchema.index({ date: -1, category: 1 });
-
-export const Expense = model<IExpense>("Expense", ExpenseSchema);
-
-// ─── Admin Expense (new approval-based system) ────────────────────────────────
 // Admin submits → Super Admin approves/rejects → Wallet updated on approval.
 
 export type AdminExpenseStatus = "pending" | "approved" | "rejected";
 
 export interface IAdminExpense extends Document {
-  submittedBy: Types.ObjectId;   // admin user id
+  submittedBy: Types.ObjectId;   // admin/superadmin user id
   amount: number;
   description: string;
   expenseDate: Date;
   receiptImage?: string;          // Cloudinary URL (optional)
   status: AdminExpenseStatus;
   reviewNote?: string;
-  reviewedBy?: Types.ObjectId;   // super admin user id
+  reviewedBy?: Types.ObjectId;   // reviewer user id
   reviewedAt?: Date;
   createdAt: Date;
   updatedAt: Date;

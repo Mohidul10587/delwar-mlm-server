@@ -21,6 +21,7 @@ import {
   updatePermissions,
   updateInfo,
   getLinkedAccounts,
+  changeUserRole,
 } from "./controller";
 import { getSuperAdminStats } from "./stats.controller";
 import {
@@ -50,6 +51,7 @@ router.put("/admin/update/:id", verifyAdmin, adminUpdatePhone);
 router.put("/admin/password/:id", verifyAdmin, adminUpdatePassword);
 router.put("/admin/relations/:id", verifySuperAdmin, adminUpdateRelations);
 router.put("/admin/permissions/:id", verifySuperAdmin, updatePermissions);
+router.patch("/admin/role/:id", verifySuperAdmin, changeUserRole);
 router.put("/update-phone", verifyUser, updatePhone);
 router.put("/update-image", verifyUser, updateImage);
 router.put("/update-cover-image", verifyUser, updateCoverImage);
