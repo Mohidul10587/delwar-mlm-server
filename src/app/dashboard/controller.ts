@@ -3,7 +3,7 @@ import { Wallet } from "../wallet/model";
 import { Purchase } from "../purchase/model";
 import { Settings } from "../settings/model";
 import { User } from "../user/model";
-import { Share } from "../share/model";
+import { Project } from "../project/model";
 import { Event } from "../event/model";
 
 // M-08 fix: O(n) tree build using pre-indexed parent→children map
@@ -40,7 +40,7 @@ export const getUserDashboard = async (req: Request, res: Response, next: NextFu
         .limit(500)
         .lean(),
       Settings.findOne().lean(),
-      Share.find({ isActive: true }).lean(),
+      Project.find({ isActive: true }).lean(),
       Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),
     ]);
 

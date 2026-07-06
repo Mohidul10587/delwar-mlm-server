@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { User } from "./model";
-import { Share } from "../share/model";
+import { Project } from "../project/model";
 import { Purchase } from "../purchase/model";
 import { Withdrawal } from "../withdrawal/model";
 import { Wallet } from "../wallet/model";
@@ -21,7 +21,7 @@ export const getSuperAdminStats = async (_req: Request, res: Response, next: Nex
     ] = await Promise.all([
       User.countDocuments({ role: "user" }),
       User.countDocuments({ role: "user", isActive: true }),
-      Share.countDocuments(),
+      Project.countDocuments(),
       Purchase.countDocuments(),
       Purchase.countDocuments({ status: "pending" }),
       Purchase.countDocuments({ status: "approved" }),

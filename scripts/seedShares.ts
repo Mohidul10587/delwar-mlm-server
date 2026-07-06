@@ -6,7 +6,7 @@
 
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { Share } from "../src/app/share/model";
+import { Project } from "../src/app/project/model";
 
 dotenv.config();
 
@@ -422,13 +422,13 @@ async function seed() {
   await mongoose.connect(process.env.MONGODB_URI as string);
   console.log("Connected to MongoDB");
 
-  const existing = await Share.countDocuments();
+  const existing = await Project.countDocuments();
   if (existing > 0) {
-    await Share.deleteMany({});
+    await Project.deleteMany({});
     console.log(`🗑  Cleared ${existing} existing share(s).`);
   }
 
-  const inserted = await Share.insertMany(shares);
+  const inserted = await Project.insertMany(shares);
   console.log(`✅ Seeded ${inserted.length} shares.\n`);
 
   console.table(

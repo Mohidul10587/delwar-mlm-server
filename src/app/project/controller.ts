@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { Share } from "./model";
+import { Project } from "./model";
 import { ShareSlot } from "./shareSlot.model";
 import { Settings } from "../settings/model";
 
@@ -20,7 +20,7 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
     const defaults = settings?.defaultShareConfig ?? {};
     const totalShares: number = Number(req.body.totalShares ?? 0);
 
-    const pkg = await Share.create({ ...defaults, ...req.body, totalShares });
+    const pkg = await Project.create({ ...defaults, ...req.body, totalShares });
 
     if (totalShares > 0) {
       // M-06 fix: use a mutex-like approach via findOneAndUpdate to get a
@@ -72,7 +72,7 @@ export const getShares = async (req: Request, res: Response, next: NextFunction)
     const filter: any = { isActive: true };
     if (projectStatus) filter.projectStatus = projectStatus;
 
-    const shares = await Share.find(filter).lean();
+    const shares = await Project.find(filter).lean();
 
     // Apply offer-active filter in memory (needs date comparison)
     const result = isOffer === "true"
@@ -93,7 +93,7 @@ export const getSharesAdmin = async (req: Request, res: Response, next: NextFunc
     const filter: any = {};
     if (projectStatus) filter.projectStatus = projectStatus;
 
-    const shares = await Share.find(filter).lean();
+    const shares = await Project.find(filter).lean();
     const enriched = shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) }));
     res.json({ shares: enriched });
   } catch (err) { next(err); }
@@ -101,7 +101,7 @@ export const getSharesAdmin = async (req: Request, res: Response, next: NextFunc
 
 export const getShareById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const pkg = await Share.findById(req.params.id).lean();
+    const pkg = await Project.findById(req.params.id).lean();
     if (!pkg) return res.status(404).json({ message: "Share not found" });
     res.json({ pkg: { ...pkg, isActiveOffer: isOfferActive(pkg) } });
   } catch (err) { next(err); }
@@ -109,10 +109,10 @@ export const getShareById = async (req: Request, res: Response, next: NextFuncti
 
 export const updateShare = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const old = await Share.findById(req.params.id);
+    const old = await Project.findById(req.params.id);
     if (!old) return res.status(404).json({ message: "Share not found" });
 
-    const pkg = await Share.findByIdAndUpdate(
+    const pkg = await Project.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
       { new: true, runValidators: true }
@@ -157,7 +157,7 @@ export const updateShare = async (req: Request, res: Response, next: NextFunctio
 
 export const deleteShare = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const pkg = await Share.findByIdAndDelete(req.params.id);
+    const pkg = await Project.findByIdAndDelete(req.params.id);
     if (!pkg) return res.status(404).json({ message: "Share not found" });
     await ShareSlot.deleteMany({ shareId: req.params.id });
     res.json({ message: "Share deleted" });
@@ -167,24 +167,21 @@ export const deleteShare = async (req: Request, res: Response, next: NextFunctio
 // GET /share/cover-slider — public endpoint, returns images of the active cover slider share
 export const getCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const share = await Share.findOne({ isCoverSlider: true, isActive: true }).lean();
+    const share = await Project.findOne({ isCoverSlider: true, isActive: true }).lean();
     if (!share) return res.json({ images: [], shareId: null, title: null });
-    // Combine main image + images array, deduplicate
-    const all = [...(share.images ?? [])];
-    if (share.image && !all.includes(share.image)) all.unshift(share.image);
-    res.json({ images: all, shareId: share._id, title: share.title });
+    res.json({ images: share.images ?? [], shareId: share._id, title: share.title });
   } catch (err) { next(err); }
 };
 
 // PATCH /share/:id/set-cover-slider — admin/super-admin sets which share is the cover slider
 export const setCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const share = await Share.findById(req.params.id);
+    const share = await Project.findById(req.params.id);
     if (!share) return res.status(404).json({ message: "Share not found" });
     if (!share.isActive) return res.status(400).json({ message: "Cannot set an inactive share as cover slider" });
 
     // Unset all others first
-    await Share.updateMany({ isCoverSlider: true }, { $set: { isCoverSlider: false } });
+    await Project.updateMany({ isCoverSlider: true }, { $set: { isCoverSlider: false } });
     share.isCoverSlider = true;
     await share.save();
 
@@ -195,7 +192,7 @@ export const setCoverSlider = async (req: Request, res: Response, next: NextFunc
 // PATCH /share/:id/unset-cover-slider — remove cover slider designation
 export const unsetCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const share = await Share.findByIdAndUpdate(
+    const share = await Project.findByIdAndUpdate(
       req.params.id,
       { $set: { isCoverSlider: false } },
       { new: true }
@@ -209,7 +206,7 @@ export const unsetCoverSlider = async (req: Request, res: Response, next: NextFu
 // the total slot count matches share.totalShares. Safe to call multiple times.
 export const backfillSlots = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const share = await Share.findById(req.params.id);
+    const share = await Project.findById(req.params.id);
     if (!share) return res.status(404).json({ message: "Share not found" });
 
     const desired = share.totalShares ?? 0;
@@ -263,7 +260,7 @@ export const backfillSlots = async (req: Request, res: Response, next: NextFunct
 export const getShareStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [shares, counts] = await Promise.all([
-      Share.find().lean(),
+      Project.find().lean(),
       ShareSlot.aggregate([
         { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
       ]),
@@ -299,7 +296,7 @@ export const getSharesWithStats = async (req: Request, res: Response, next: Next
   try {
     const [shares, counts] = await Promise.all([
       // Admin panel sees ALL shares (including inactive)
-      Share.find().lean(),
+      Project.find().lean(),
       ShareSlot.aggregate([
         { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
       ]),

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Certificate } from "./model";
 import { calculateTotalPayable } from "../purchase/service";
-import { ShareSlot } from "../share/shareSlot.model";
+import { ShareSlot } from "../project/shareSlot.model";
 import { generateCertificatePng } from "./generateCertificate";
 
 // GET /certificate/my — logged-in user's own certificates with share & purchase info

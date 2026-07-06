@@ -139,7 +139,7 @@ const SnapshotSchema = new Schema(
 const PurchaseSchema = new Schema<IPurchase>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    shareId: { type: Schema.Types.ObjectId, ref: "Share", required: true },
+    shareId: { type: Schema.Types.ObjectId, ref: "Project", required: true },
     quantity: { type: Number, required: true, min: 1 },
     paymentType: {
       type: String,

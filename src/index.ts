@@ -12,7 +12,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { seedAdmin } from "./utils/seedAdmin";
 import settingsRoutes from "./app/settings/routes";
 import userRoutes from "./app/user/routes";
-import shareRoutes from "./app/share/routes";
+import shareRoutes from "./app/project/routes";
 import purchaseRoutes from "./app/purchase/routes";
 import uploadVideoRoutes from "./app/upload-video/route";
 import uploadImageRoutes from "./app/upload-image/routes";

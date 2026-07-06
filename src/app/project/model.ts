@@ -5,10 +5,9 @@ export interface IGenerationCommissionRate {
   rate: number; // % of down payment portion
 }
 
-export interface IShare extends Document {
+export interface IProject extends Document {
   title: string;
   description?: string;
-  image: string;
   images: string[];
   cashPrice: number;
   regularPrice?: number;
@@ -52,11 +51,10 @@ export interface IShare extends Document {
   isCoverSlider: boolean;
 }
 
-const ShareSchema = new Schema<IShare>(
+const ProjectSchema = new Schema<IProject>(
   {
     title: { type: String, required: true },
     description: { type: String, default: "" },
-    image: { type: String, required: true },
     images: [{ type: String }],
     cashPrice: { type: Number, required: true },
     regularPrice: { type: Number },
@@ -113,4 +111,4 @@ const ShareSchema = new Schema<IShare>(
   { timestamps: true }
 );
 
-export const Share = model<IShare>("Share", ShareSchema);
+export const Project = model<IProject>("Project", ProjectSchema);

@@ -5,8 +5,8 @@ import { Certificate } from "../certificate/model";
 import { distributeCommissions } from "./commissions";
 import { User } from "../user/model";
 import { CompanyLedger } from "../ledger/model";
-import { ShareSlot } from "../share/shareSlot.model";
-import { Share } from "../share/model";
+import { ShareSlot } from "../project/shareSlot.model";
+import { Project } from "../project/model";
 import { applyPurchaseBasedRank } from "../rank/controller";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
@@ -86,13 +86,13 @@ async function reclaimPurchaseShares(purchaseId: any): Promise<number> {
  */
 async function checkAndCompleteShare(shareId: any): Promise<void> {
   try {
-    const share = await Share.findById(shareId).select("totalShares projectStatus").lean();
+    const share = await Project.findById(shareId).select("totalShares projectStatus").lean();
     if (!share || share.projectStatus === "complete") return;
     if (!share.totalShares || share.totalShares <= 0) return;
 
     const soldCount = await ShareSlot.countDocuments({ shareId, status: "sold" });
     if (soldCount >= share.totalShares) {
-      await Share.findByIdAndUpdate(shareId, { $set: { projectStatus: "complete" } });
+      await Project.findByIdAndUpdate(shareId, { $set: { projectStatus: "complete" } });
     }
   } catch (err) {
     // Non-critical — log and continue; do not block the approval response

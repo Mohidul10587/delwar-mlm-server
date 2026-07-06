@@ -6,7 +6,7 @@ import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { RankSalaryLog } from "../rank/salary-log.model";
 import { CompanyLedger } from "../ledger/model";
-import { ShareSlot } from "../share/shareSlot.model";
+import { ShareSlot } from "../project/shareSlot.model";
 import { verifySuperAdmin } from "../../middleware/auth";
 
 const router = Router();

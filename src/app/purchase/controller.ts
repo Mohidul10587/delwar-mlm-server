@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
 import { InstallmentPayment } from "./installment.model";
-import { Share } from "../share/model";
+import { Project } from "../project/model";
 import { User } from "../user/model";
 import { Settings } from "../settings/model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
-import { ShareSlot } from "../share/shareSlot.model";
+import { ShareSlot } from "../project/shareSlot.model";
 
 // Helper — build slotsByPurchase map from a list of purchaseIds
 async function fetchSlotsByPurchase(purchaseIds: any[]): Promise<Record<string, string[]>> {
@@ -62,7 +62,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json({ message: "Invalid payment type" });
     }
 
-    const share = await Share.findById(shareId);
+    const share = await Project.findById(shareId);
     if (!share)
       return res.status(404).json({ message: "Share not found" });
 
@@ -149,7 +149,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     const ranks = (settings?.ranks ?? []) as any[];
     const snapshot = {
       shareTitle: share.title,
-      shareImage: share.image,
+      shareImage: share.images?.[0] ?? "",
       cashPrice: share.cashPrice,
       minDownPayment: share.minDownPayment,
       maxDownPayment: share.maxDownPayment,
