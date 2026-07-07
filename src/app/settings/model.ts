@@ -35,17 +35,36 @@ export interface ISettings extends Document {
   managerialCommissionWeeklyProcessDay: number;
   // Rank definitions
   ranks: {
+    /** Display name of the rank (e.g. "Silver", "Gold") */
     name: string;
-    requiredApprovedSales: number;
+    /**
+     * Minimum total network approved-sales amount (৳) required to achieve this rank.
+     * Renamed from: requiredApprovedSales
+     */
+    minNetworkSalesAmount: number;
     reward?: {
+      /** Display name of the reward (e.g. "Gold Watch") */
       name: string;
       description: string;
     };
     salary?: {
+      /** Monthly salary amount in ৳ */
       amount: number;
-      durationMonths: number;
-      minMonthlySales: number;
-      requiredPersonalShares: number;
+      /**
+       * How many months the salary is paid after achieving the rank.
+       * Renamed from: durationMonths
+       */
+      salaryDurationMonths: number;
+      /**
+       * Minimum direct sales qty per month to keep receiving salary.
+       * Renamed from: minMonthlySales
+       */
+      minMonthlySalesQty: number;
+      /**
+       * Minimum personal purchase qty required to keep receiving salary.
+       * Renamed from: requiredPersonalShares
+       */
+      minPersonalPurchaseQty: number;
     };
   }[];
   // Branches
@@ -105,16 +124,20 @@ const SettingsSchema = new Schema<ISettings>({
   managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
   ranks: [{
     name: { type: String },
-    requiredApprovedSales: { type: Number, default: 0 },
+    // Renamed from: requiredApprovedSales
+    minNetworkSalesAmount: { type: Number, default: 0 },
     reward: {
       name: { type: String, default: "" },
       description: { type: String, default: "" },
     },
     salary: {
       amount: { type: Number, default: 0 },
-      durationMonths: { type: Number, default: 0 },
-      minMonthlySales: { type: Number, default: 0 },
-      requiredPersonalShares: { type: Number, default: 0 },
+      // Renamed from: durationMonths
+      salaryDurationMonths: { type: Number, default: 0 },
+      // Renamed from: minMonthlySales
+      minMonthlySalesQty: { type: Number, default: 0 },
+      // Renamed from: requiredPersonalShares
+      minPersonalPurchaseQty: { type: Number, default: 0 },
     },
   }],
   branches: [{ type: String }],

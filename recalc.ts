@@ -26,7 +26,7 @@ const MONGO_URI = "mongodb+srv://mohid10587:Usz0E31KP3fyyBQ3@cluster5.4relj71.mo
 
   // Settings ranks
   const s = await Settings.findOne();
-  console.log("Ranks:", JSON.stringify(s!.ranks.map((r: any) => ({ name: r.name, requiredApprovedSales: r.requiredApprovedSales }))));
+  console.log("Ranks:", JSON.stringify(s!.ranks.map((r: any) => ({ name: r.name, minNetworkSalesAmount: r.minNetworkSalesAmount }))));
 
   // Run recalc
   await recalcUserRank(mohid!._id.toString());

@@ -38,17 +38,22 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     }
 
     // Fix F-10: check transactionId uniqueness before creating purchase
-    if (!transactionId || !String(transactionId).trim()) {
-      return res.status(400).json({ message: "Transaction ID is required" });
-    }
-    const { isTransactionIdUsed } = await import("../../utils/isTransactionIdUsed");
-    const duplicate = await isTransactionIdUsed(String(transactionId).trim());
-    if (duplicate) {
-      return res.status(400).json({ message: "This transaction ID has already been used" });
+    // Cash payments don't require a transaction ID
+    const resolvedPaymentMethod = paymentMethod ?? "cash";
+    const isCashPayment = resolvedPaymentMethod === "cash";
+
+    if (!isCashPayment) {
+      if (!transactionId || !String(transactionId).trim()) {
+        return res.status(400).json({ message: "Transaction ID is required" });
+      }
+      const { isTransactionIdUsed } = await import("../../utils/isTransactionIdUsed");
+      const duplicate = await isTransactionIdUsed(String(transactionId).trim());
+      if (duplicate) {
+        return res.status(400).json({ message: "This transaction ID has already been used" });
+      }
     }
 
     // Validate payment method
-    const resolvedPaymentMethod = paymentMethod ?? "cash";
     if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
       return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
     }
@@ -160,16 +165,16 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       rankQualification: ranks.map((r: any) => ({
         rankName: r.name,
         order: r.order,
-        requiredApprovedSales: r.requiredApprovedSales ?? 0,
+        minNetworkSalesAmount: r.minNetworkSalesAmount ?? 0,
       })),
       salaryRules: ranks
         .filter((r: any) => r.salary?.amount > 0)
         .map((r: any) => ({
           rankName: r.name,
           amount: r.salary.amount,
-          durationMonths: r.salary.durationMonths,
-          minMonthlySales: r.salary.minMonthlySales,
-          requiredPersonalShares: r.salary.requiredPersonalShares,
+          salaryDurationMonths: r.salary.salaryDurationMonths,
+          minMonthlySalesQty: r.salary.minMonthlySalesQty,
+          minPersonalPurchaseQty: r.salary.minPersonalPurchaseQty,
         })),
     };
 
@@ -184,8 +189,12 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       installmentCount: resolvedCount,
       installmentAmount: resolvedInstallmentAmount,
       amountPaid,
-      senderAccount,
-      transactionId: String(transactionId).trim(),
+      senderAccount: isCashPayment ? "" : (senderAccount ?? ""),
+      // Cash payments have no transaction ID — generate a unique placeholder so
+      // the sparse unique index does not reject multiple cash purchases.
+      transactionId: isCashPayment
+        ? `CASH-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        : String(transactionId).trim(),
       buyerInfo: resolvedBuyerInfo,
       snapshot,
     });

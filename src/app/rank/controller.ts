@@ -39,7 +39,7 @@ export const createRank = async (
     const {
       name,
       requiredGeneration = 1,
-      requiredApprovedSales = 0,
+      minNetworkSalesAmount = 0,
       reward,
       salary,
     } = req.body;
@@ -58,7 +58,7 @@ export const createRank = async (
     (s.ranks as any[]).push({
       name: String(name).trim(),
       requiredGeneration,
-      requiredApprovedSales,
+      minNetworkSalesAmount,
       reward,
       salary,
     });
@@ -84,7 +84,7 @@ export const updateRank = async (
     
     const {
       name,
-      requiredApprovedSales,
+      minNetworkSalesAmount,
       reward,
       salary,
     } = req.body;
@@ -92,7 +92,7 @@ export const updateRank = async (
     s.ranks[idx] = {
       ...s.ranks[idx],
       name,
-      requiredApprovedSales,
+      minNetworkSalesAmount,
       reward,
       salary,
     };
@@ -156,10 +156,13 @@ export const getMyRank = async (
 ) => {
   try {
     const user = await User.findById(req.user!._id)
-      .select("currentRank currentRankAchievedAt earnedRanks")
+      .select("currentRank currentRankAchievedAt earnedRanks directSalesCount teamSalesCount")
       .lean();
     const s = await getSettings();
-    const allRanks = (s.ranks ?? []);
+    // Sort ranks by minNetworkSalesAmount ascending so nextRank is reliable
+    const allRanks = [...(s.ranks ?? [])].sort(
+      (a: any, b: any) => (a.minNetworkSalesAmount ?? 0) - (b.minNetworkSalesAmount ?? 0)
+    );
     const currentRankName = (user as any)?.currentRank ?? "Brand Ambassador";
 
     // Sales-based ranks live in Settings.ranks.
@@ -169,12 +172,12 @@ export const getMyRank = async (
       "Brand Ambassador": {
         _id: "system-brand-ambassador",
         name: "Brand Ambassador",
-        requiredApprovedSales: 0,
+        minNetworkSalesAmount: 0,
       },
       "Entrepreneur": {
         _id: "system-entrepreneur",
         name: "Entrepreneur",
-        requiredApprovedSales: 0,
+        minNetworkSalesAmount: 0,
       },
     };
 
@@ -183,7 +186,15 @@ export const getMyRank = async (
       SYSTEM_RANKS[currentRankName] ??
       null;
 
-    res.json({ currentRank, allRanks });
+    // Next rank = first rank whose minNetworkSalesAmount > currentRank's
+    const currentRequired = (currentRank as any)?.minNetworkSalesAmount ?? 0;
+    const nextRank =
+      allRanks.find((r: any) => (r.minNetworkSalesAmount ?? 0) > currentRequired) ?? null;
+
+    const directSalesCount = (user as any)?.directSalesCount ?? 0;
+    const teamSalesCount = (user as any)?.teamSalesCount ?? 0;
+
+    res.json({ currentRank, nextRank, allRanks, directSalesCount, teamSalesCount });
   } catch (err) {
     next(err);
   }
@@ -281,7 +292,7 @@ export const recalcUserRank = async (userId: string, preloadedRanks?: any[]) => 
     for (let i = 0; i < ranks.length; i++) {
       const rank = ranks[i];
       const generation = i + 1;
-      const threshold: number = rank.requiredApprovedSales ?? 0;
+      const threshold: number = rank.minNetworkSalesAmount ?? 0;
 
       if (i > 0 && !currentEarnedRanks.includes(ranks[i - 1].name)) {
         break;
@@ -425,7 +436,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       userId: user._id,
       rankName: rank.name,
     });
-    const maxDuration: number = sal.durationMonths ?? 3;
+    const maxDuration: number = sal.salaryDurationMonths ?? 3;
     if (paidCount >= maxDuration) continue;
 
     // Dedup: already paid this month for this rank?
@@ -470,7 +481,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       },
     ]);
     const monthlySalesCount: number = monthlySalesResult[0]?.count ?? 0;
-    if (monthlySalesCount < (sal.minMonthlySales ?? 0)) continue;
+    if (monthlySalesCount < (sal.minMonthlySalesQty ?? 0)) continue;
 
     // Fix F-05: atomic $inc — prevents race condition if cron runs twice concurrently
     const updatedWallet = await Wallet.findOneAndUpdate(
@@ -484,7 +495,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       type: "salary",
       amount: sal.amount,
       balanceAfter: updatedWallet.salaryBalance,
-      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
+      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
     });
 
     try {
@@ -493,7 +504,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
         type: "salary_paid",
         amount: sal.amount,
         userId: user._id,
-        note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.durationMonths ?? 3})`,
+        note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
       });
     } catch (ledgerErr) {
       console.error(`[LEDGER ERROR] salary_paid for userId=${user._id}:`, ledgerErr);

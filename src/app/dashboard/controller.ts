@@ -44,12 +44,15 @@ export const getUserDashboard = async (req: Request, res: Response, next: NextFu
       Event.find({ isActive: true }).sort({ createdAt: -1 }).limit(3).lean(),
     ]);
 
-    const allRanks = ((settings as any)?.ranks ?? []).sort((a: any, b: any) => a.order - b.order);
+    const allRanks = [...((settings as any)?.ranks ?? [])].sort(
+      (a: any, b: any) => (a.minNetworkSalesAmount ?? 0) - (b.minNetworkSalesAmount ?? 0)
+    );
     const directSalesCount = (user as any)?.directSalesCount ?? 0;
     const teamSalesCount = (user as any)?.teamSalesCount ?? 0;
     const currentRankName = (user as any)?.currentRank ?? null;
     const currentRank = allRanks.find((r: any) => r.name === currentRankName) ?? null;
-    const nextRank = allRanks.find((r: any) => r.order > ((currentRank as any)?.order ?? -1)) ?? null;
+    const currentRequired = (currentRank as any)?.minNetworkSalesAmount ?? 0;
+    const nextRank = allRanks.find((r: any) => (r.minNetworkSalesAmount ?? 0) > currentRequired) ?? null;
 
     res.json({
       wallet,
