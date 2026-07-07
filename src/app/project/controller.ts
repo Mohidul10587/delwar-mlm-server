@@ -164,24 +164,29 @@ export const deleteShare = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-// GET /share/cover-slider — public endpoint, returns images of the active cover slider share
+// GET /share/cover-slider — public endpoint, returns merged images of all active cover slider shares
 export const getCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const share = await Project.findOne({ isCoverSlider: true, isActive: true }).lean();
-    if (!share) return res.json({ images: [], shareId: null, title: null });
-    res.json({ images: share.images ?? [], shareId: share._id, title: share.title });
+    const shares = await Project.find({ isCoverSlider: true, isActive: true }).lean();
+    if (!shares.length) return res.json({ images: [], shareIds: [], titles: [] });
+
+    // Merge all images from all selected cover slider shares
+    const images = shares.flatMap((s) => s.images ?? []);
+    const shareIds = shares.map((s) => s._id);
+    const titles = shares.map((s) => s.title);
+
+    res.json({ images, shareIds, titles });
   } catch (err) { next(err); }
 };
 
-// PATCH /share/:id/set-cover-slider — admin/super-admin sets which share is the cover slider
+// PATCH /share/:id/set-cover-slider — admin toggles a share in/out of the cover slider
 export const setCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const share = await Project.findById(req.params.id);
     if (!share) return res.status(404).json({ message: "Share not found" });
     if (!share.isActive) return res.status(400).json({ message: "Cannot set an inactive share as cover slider" });
 
-    // Unset all others first
-    await Project.updateMany({ isCoverSlider: true }, { $set: { isCoverSlider: false } });
+    // Toggle: if already set, unset it; otherwise add it to the cover slider
     share.isCoverSlider = true;
     await share.save();
 
