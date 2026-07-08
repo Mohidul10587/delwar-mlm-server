@@ -5,7 +5,7 @@
  *   requiredApprovedSales  → minNetworkSalesAmount
  *   salary.durationMonths  → salary.salaryDurationMonths
  *   salary.minMonthlySales → salary.minMonthlySalesQty
- *   salary.requiredPersonalShares → salary.minPersonalPurchaseQty
+ *   salary.requiredPersonalShares → salary.minPersonalPurchaseQty → salary.minMonthlyPersonalPurchaseQtyForSalary
  *
  * purchases[].snapshot.rankQualification[]:
  *   requiredApprovedSales  → minNetworkSalesAmount
@@ -13,7 +13,7 @@
  * purchases[].snapshot.salaryRules[]:
  *   durationMonths         → salaryDurationMonths
  *   minMonthlySales        → minMonthlySalesQty
- *   requiredPersonalShares → minPersonalPurchaseQty
+ *   requiredPersonalShares → minMonthlyPersonalPurchaseQtyForSalary
  */
 
 import mongoose from "mongoose";
@@ -60,7 +60,7 @@ const MONGO_URI =
           delete s.minMonthlySales;
         }
         if ("requiredPersonalShares" in s) {
-          s.minPersonalPurchaseQty = s.requiredPersonalShares;
+          s.minMonthlyPersonalPurchaseQtyForSalary = s.requiredPersonalShares;
           delete s.requiredPersonalShares;
         }
 
@@ -133,7 +133,7 @@ const MONGO_URI =
         delete n.minMonthlySales;
       }
       if ("requiredPersonalShares" in n) {
-        n.minPersonalPurchaseQty = n.requiredPersonalShares;
+        n.minMonthlyPersonalPurchaseQtyForSalary = n.requiredPersonalShares;
         delete n.requiredPersonalShares;
       }
 

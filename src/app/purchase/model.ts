@@ -47,8 +47,8 @@ export interface IPurchaseSnapshot {
     salaryDurationMonths: number;
     /** Renamed from: minMonthlySales */
     minMonthlySalesQty: number;
-    /** Renamed from: requiredPersonalShares */
-    minPersonalPurchaseQty: number;
+    /** Renamed from: requiredPersonalShares → minPersonalPurchaseQty → minMonthlyPersonalPurchaseQtyForSalary */
+    minMonthlyPersonalPurchaseQtyForSalary: number;
   }[];
 }
 
@@ -135,8 +135,8 @@ const SnapshotSchema = new Schema(
         salaryDurationMonths: { type: Number },
         // Renamed from: minMonthlySales
         minMonthlySalesQty: { type: Number },
-        // Renamed from: requiredPersonalShares
-        minPersonalPurchaseQty: { type: Number },
+        // Renamed from: requiredPersonalShares → minPersonalPurchaseQty → minMonthlyPersonalPurchaseQtyForSalary
+        minMonthlyPersonalPurchaseQtyForSalary: { type: Number },
         _id: false,
       },
     ],

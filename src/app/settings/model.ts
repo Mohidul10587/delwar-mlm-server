@@ -64,7 +64,7 @@ export interface ISettings extends Document {
        * Minimum personal purchase qty required to keep receiving salary.
        * Renamed from: requiredPersonalShares
        */
-      minPersonalPurchaseQty: number;
+      minMonthlyPersonalPurchaseQtyForSalary: number;
     };
   }[];
   // Branches
@@ -136,8 +136,8 @@ const SettingsSchema = new Schema<ISettings>({
       salaryDurationMonths: { type: Number, default: 0 },
       // Renamed from: minMonthlySales
       minMonthlySalesQty: { type: Number, default: 0 },
-      // Renamed from: requiredPersonalShares
-      minPersonalPurchaseQty: { type: Number, default: 0 },
+      // Renamed from: requiredPersonalShares → minPersonalPurchaseQty → minMonthlyPersonalPurchaseQtyForSalary
+      minMonthlyPersonalPurchaseQtyForSalary: { type: Number, default: 0 },
     },
   }],
   branches: [{ type: String }],

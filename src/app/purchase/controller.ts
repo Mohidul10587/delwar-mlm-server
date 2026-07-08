@@ -174,7 +174,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
           amount: r.salary.amount,
           salaryDurationMonths: r.salary.salaryDurationMonths,
           minMonthlySalesQty: r.salary.minMonthlySalesQty,
-          minPersonalPurchaseQty: r.salary.minPersonalPurchaseQty,
+          minMonthlyPersonalPurchaseQtyForSalary: r.salary.minMonthlyPersonalPurchaseQtyForSalary,
         })),
     };
 
