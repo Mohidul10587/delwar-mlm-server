@@ -42,6 +42,11 @@ export interface ISettings extends Document {
      * Renamed from: requiredApprovedSales
      */
     minNetworkSalesAmount: number;
+    /**
+     * Minimum number of personal (own) approved purchases required to achieve this rank.
+     * One-time requirement checked at the time of rank calculation.
+     */
+    minPersonalPurchaseQtyToAchieve: number;
     reward?: {
       /** Display name of the reward (e.g. "Gold Watch") */
       name: string;
@@ -126,6 +131,8 @@ const SettingsSchema = new Schema<ISettings>({
     name: { type: String },
     // Renamed from: requiredApprovedSales
     minNetworkSalesAmount: { type: Number, default: 0 },
+    // Minimum personal (own) approved purchases to achieve this rank (one-time check)
+    minPersonalPurchaseQtyToAchieve: { type: Number, default: 0 },
     reward: {
       name: { type: String, default: "" },
       description: { type: String, default: "" },

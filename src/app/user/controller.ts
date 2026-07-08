@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { IUser, User as Model } from "./model";
 import { Wallet } from "../wallet/model";
+import { Settings } from "../settings/model";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { registerSchema, adminRegisterSchema, loginSchema } from "./validation";
@@ -49,6 +50,16 @@ async function buildGenerationAncestors(
     })
   );
   return [{ level: 1, userId: referrerId }, ...parentAncestors];
+}
+
+/**
+ * Returns the name of the first rank in Settings.ranks[], or null if no ranks configured.
+ * Used to auto-assign Rank 1 at registration.
+ */
+async function getFirstRankName(): Promise<string | null> {
+  const s = await Settings.findOne().select("ranks").lean();
+  const ranks = (s as any)?.ranks ?? [];
+  return ranks.length > 0 ? ranks[0].name : null;
 }
 
 /**
@@ -106,13 +117,18 @@ export const register = async (
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const generationAncestors = await buildGenerationAncestors(referrerId);
+    const firstRankName = await getFirstRankName();
     const user = await Model.create({
       name,
       username,
       phone,
       password: hashedPassword,
       generationAncestors,
-      currentRank: "Brand Ambassador",
+      ...(firstRankName && {
+        currentRank: firstRankName,
+        currentRankAchievedAt: new Date(),
+        earnedRanks: [firstRankName],
+      }),
     });
 
     await Wallet.create({ userId: user._id });
@@ -177,6 +193,7 @@ export const adminRegister = async (
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const generationAncestors = await buildGenerationAncestors(referrerId);
+    const firstRankName = await getFirstRankName();
     const user = await Model.create({
       name,
       username,
@@ -185,7 +202,11 @@ export const adminRegister = async (
       role,
       permissions: defaultPermissionsByRole[role] ?? [],
       generationAncestors,
-      currentRank: "Brand Ambassador",
+      ...(firstRankName && {
+        currentRank: firstRankName,
+        currentRankAchievedAt: new Date(),
+        earnedRanks: [firstRankName],
+      }),
     });
 
     await Wallet.create({ userId: user._id });

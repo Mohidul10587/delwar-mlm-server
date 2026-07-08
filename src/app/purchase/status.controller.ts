@@ -7,7 +7,7 @@ import { User } from "../user/model";
 import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Project } from "../project/model";
-import { applyPurchaseBasedRank } from "../rank/controller";
+import { recalcUserRank } from "../rank/controller";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
 
@@ -152,8 +152,8 @@ export const updatePurchaseStatus = async (
         $inc: { personalPurchaseCount: purchase.quantity },
       });
 
-      // Step 4b — Apply purchase-based rank (Entrepreneur) if no sales rank yet
-      await applyPurchaseBasedRank(purchase.userId.toString());
+      // Step 4b — Recalc buyer's own rank (Rank 2 depends on personal purchase count)
+      await recalcUserRank(purchase.userId.toString());
 
       // Step 5 — Fix P-02: await commission distribution so errors are caught
       if (!purchase.commissionProcessed) {

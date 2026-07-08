@@ -159,37 +159,36 @@ export const getMyRank = async (
       .select("currentRank currentRankAchievedAt earnedRanks directSalesCount teamSalesCount")
       .lean();
     const s = await getSettings();
-    // Sort ranks by minNetworkSalesAmount ascending so nextRank is reliable
-    const allRanks = [...(s.ranks ?? [])].sort(
-      (a: any, b: any) => (a.minNetworkSalesAmount ?? 0) - (b.minNetworkSalesAmount ?? 0)
-    );
-    const currentRankName = (user as any)?.currentRank ?? "Brand Ambassador";
+    // Keep original Settings order — order defines rank progression
+    const allRanks = [...(s.ranks ?? [])] as any[];
 
-    // Sales-based ranks live in Settings.ranks.
-    // Brand Ambassador and Entrepreneur are system ranks not stored in Settings,
-    // so we synthesise a rank object when the user is on one of those.
-    const SYSTEM_RANKS: Record<string, any> = {
-      "Brand Ambassador": {
-        _id: "system-brand-ambassador",
-        name: "Brand Ambassador",
-        minNetworkSalesAmount: 0,
-      },
-      "Entrepreneur": {
-        _id: "system-entrepreneur",
-        name: "Entrepreneur",
-        minNetworkSalesAmount: 0,
-      },
-    };
+    const currentRankName = (user as any)?.currentRank ?? null;
 
+    // currentRank is always looked up from Settings.ranks — no hardcoded system ranks
     const currentRank =
-      allRanks.find((r: any) => r.name === currentRankName) ??
-      SYSTEM_RANKS[currentRankName] ??
-      null;
+      allRanks.find((r: any) => r.name === currentRankName) ?? null;
 
-    // Next rank = first rank whose minNetworkSalesAmount > currentRank's
-    const currentRequired = (currentRank as any)?.minNetworkSalesAmount ?? 0;
-    const nextRank =
-      allRanks.find((r: any) => (r.minNetworkSalesAmount ?? 0) > currentRequired) ?? null;
+    // Next rank = the rank that comes immediately after currentRank in Settings order.
+    // Special case for Rank 2 (index 1): if user is already at Rank 3+ (index >= 2),
+    // next rank is the one after currentRank, skipping Rank 2 if already bypassed.
+    const currentIndex = currentRank
+      ? allRanks.findIndex((r: any) => r.name === currentRankName)
+      : -1;
+
+    let nextRank: any = null;
+    if (currentIndex === -1) {
+      // No rank yet — next is Rank 1
+      nextRank = allRanks[0] ?? null;
+    } else if (currentIndex === 0) {
+      // At Rank 1 — next is Rank 2
+      nextRank = allRanks[1] ?? null;
+    } else if (currentIndex >= 2) {
+      // At Rank 3+ — next is simply the rank after current in Settings order
+      nextRank = allRanks[currentIndex + 1] ?? null;
+    } else {
+      // At Rank 2 — next is Rank 3
+      nextRank = allRanks[2] ?? null;
+    }
 
     const directSalesCount = (user as any)?.directSalesCount ?? 0;
     const teamSalesCount = (user as any)?.teamSalesCount ?? 0;
@@ -227,44 +226,6 @@ async function getTotalApprovedSalesByGeneration(
   return count;
 }
 
-// ── Purchase-based rank (Entrepreneur) ───────────────────────────────────────
-
-/**
- * Called after a purchase is approved for the buyer.
- *
- * Rules:
- *  - If the user already has at least one sales-based rank in earnedRanks,
- *    do nothing (Sales-based rank always takes priority).
- *  - Otherwise, promote currentRank to "Entrepreneur" (purchase-based rank).
- *    Uses an atomic findOneAndUpdate so concurrent approvals are safe.
- */
-export const applyPurchaseBasedRank = async (userId: string): Promise<void> => {
-  try {
-    // Only promote to Entrepreneur when the user has NO sales-based ranks yet.
-    // earnedRanks contains only sales-based ranks (populated by recalcUserRank).
-    await User.findOneAndUpdate(
-      {
-        _id: userId,
-        // Guard: earnedRanks must be empty (no sales-based rank ever earned)
-        $or: [
-          { earnedRanks: { $exists: false } },
-          { earnedRanks: { $size: 0 } },
-        ],
-        // Only upgrade from Brand Ambassador (never demote from a higher state)
-        currentRank: "Brand Ambassador",
-      },
-      {
-        $set: {
-          currentRank: "Entrepreneur",
-          currentRankAchievedAt: new Date(),
-        },
-      }
-    );
-  } catch (err) {
-    console.error("[RANK] applyPurchaseBasedRank error:", err);
-  }
-};
-
 // ── Recalculate and update user rank ─────────────────────────────────────────
 
 // M-09 fix: accept pre-loaded ranks to avoid repeated Settings.findOne() per ancestor
@@ -272,7 +233,7 @@ export const applyPurchaseBasedRank = async (userId: string): Promise<void> => {
 export const recalcUserRank = async (userId: string, preloadedRanks?: any[]) => {
   try {
     const user = await User.findById(userId).select(
-      "currentRank currentRankAchievedAt earnedRanks"
+      "currentRank currentRankAchievedAt earnedRanks personalPurchaseCount"
     );
     if (!user) return;
 
@@ -287,25 +248,94 @@ export const recalcUserRank = async (userId: string, preloadedRanks?: any[]) => 
     if (!ranks.length) return;
 
     let newRank: any = null;
-    let currentEarnedRanks = (user as any).earnedRanks || [];
+    let currentEarnedRanks: string[] = (user as any).earnedRanks || [];
+    const personalPurchaseCount: number = (user as any).personalPurchaseCount ?? 0;
+
+    /**
+     * Rank promotion rules:
+     *
+     * Index 0 (Rank 1) — assigned at registration; recalc treats it as always earned.
+     *
+     * Index 1 (Rank 2) — only condition is minPersonalPurchaseQtyToAchieve (one-time
+     *   lifetime personal purchase count). Network sales are NOT checked.
+     *   Sequential gate: must hold Rank 1 (already guaranteed by registration logic).
+     *   IMPORTANT: if user is already at Rank 3+, Rank 2 is skipped silently — we
+     *   never downgrade.
+     *
+     * Index 2+ (Rank 3 and above) — checked only for network sales threshold.
+     *   Sequential gate applies ONLY among ranks at index 2+ (i.e. must hold the
+     *   previous rank at index >= 2). Rank 2 NOT required — a user can jump from
+     *   Rank 1 directly to Rank 3 if network sales conditions are met.
+     */
 
     for (let i = 0; i < ranks.length; i++) {
       const rank = ranks[i];
-      const generation = i + 1;
-      const threshold: number = rank.minNetworkSalesAmount ?? 0;
 
-      if (i > 0 && !currentEarnedRanks.includes(ranks[i - 1].name)) {
-        break;
-      }
-
+      // ── Already earned this rank — mark and continue ──────────────────────
       if (currentEarnedRanks.includes(rank.name)) {
         newRank = rank;
         continue;
       }
 
+      // ── Rank 1 (index 0): always already earned (assigned at registration) ─
+      // recalcUserRank is never responsible for awarding Rank 1.
+      if (i === 0) {
+        // Rank 1 should already be in earnedRanks (set at registration).
+        // If somehow it's missing, add it defensively but don't issue reward.
+        currentEarnedRanks.push(rank.name);
+        newRank = rank;
+        continue;
+      }
+
+      // ── Rank 2 (index 1): personal purchase only ──────────────────────────
+      if (i === 1) {
+        const minPersonalQty: number = rank.minPersonalPurchaseQtyToAchieve ?? 0;
+        if (minPersonalQty > 0 && personalPurchaseCount < minPersonalQty) {
+          // Rank 2 condition not met — but do NOT break; Rank 3+ can still be checked
+          continue;
+        }
+        // Condition met — award Rank 2 only if user doesn't already hold a higher rank
+        const currentRankIndex = ranks.findIndex(
+          (r: any) => r.name === (user as any).currentRank
+        );
+        if (currentRankIndex > 1) {
+          // Already at Rank 3+ — skip Rank 2 silently, add to earnedRanks for bookkeeping
+          currentEarnedRanks.push(rank.name);
+          continue;
+        }
+        newRank = rank;
+        currentEarnedRanks.push(rank.name);
+        continue;
+      }
+
+      // ── Rank 3+ (index >= 2): network sales, sequential among index 2+ ────
+      // Sequential gate: the previous rank at index >= 2 must have been earned.
+      // Rank 2 (index 1) is deliberately excluded from this gate.
+      if (i >= 3) {
+        // Must hold the rank at index i-1 (which is also index >= 2)
+        if (!currentEarnedRanks.includes(ranks[i - 1].name)) {
+          break;
+        }
+      } else {
+        // i === 2 (Rank 3): must hold Rank 1 (index 0). Rank 2 NOT required.
+        if (!currentEarnedRanks.includes(ranks[0].name)) {
+          break;
+        }
+      }
+
+      // Check personal purchase requirement if configured on this rank
+      const minPersonalQty: number = rank.minPersonalPurchaseQtyToAchieve ?? 0;
+      if (minPersonalQty > 0 && personalPurchaseCount < minPersonalQty) {
+        break;
+      }
+
+      // Check network sales threshold
+      const threshold: number = rank.minNetworkSalesAmount ?? 0;
       if (threshold > 0) {
-        const totalShares = await getTotalApprovedSalesByGeneration(userId, generation);
-        if (totalShares >= threshold) {
+        // Generation mapping: Rank 3 (index 2) → gen 1, Rank 4 (index 3) → gen 2, etc.
+        const generation = i - 1;
+        const totalSales = await getTotalApprovedSalesByGeneration(userId, generation);
+        if (totalSales >= threshold) {
           newRank = rank;
           currentEarnedRanks.push(rank.name);
         } else {

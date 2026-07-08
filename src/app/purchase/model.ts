@@ -164,7 +164,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     installmentCount: { type: Number, required: true },
     installmentAmount: { type: Number, required: true },
     amountPaid: { type: Number, required: true },
-    senderAccount: { type: String, required: true },
+    senderAccount: { type: String, default: "" },
     transactionId: { type: String, default: "" },
     status: {
       type: String,

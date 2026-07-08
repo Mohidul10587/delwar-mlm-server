@@ -74,7 +74,7 @@ const UserSchema = new Schema<IUser>(
     generationAncestors: [AncestorEntrySchema],
     directSalesCount: { type: Number, default: 0 },
     teamSalesCount: { type: Number, default: 0 },
-    currentRank: { type: String, default: "Brand Ambassador" },
+    currentRank: { type: String, default: null },
     currentRankAchievedAt: { type: Date, default: null },
     earnedRanks: [{ type: String }],
     personalPurchaseCount: { type: Number, default: 0 },

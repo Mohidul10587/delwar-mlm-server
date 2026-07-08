@@ -7,6 +7,7 @@ import { User } from "../user/model";
 import { RankSalaryLog } from "../rank/salary-log.model";
 import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../project/shareSlot.model";
+import { Settings } from "../settings/model";
 
 const router = Router();
 
@@ -16,6 +17,25 @@ router.get("/", async (_req: Request, res: Response) => {
   }
 
   try {
+    // Resolve first rank name before resetting users
+    const settings = await Settings.findOne().select("ranks").lean();
+    const firstRankName: string | null =
+      Array.isArray((settings as any)?.ranks) && (settings as any).ranks.length > 0
+        ? (settings as any).ranks[0].name
+        : null;
+
+    const rankResetFields = firstRankName
+      ? {
+          currentRank: firstRankName,
+          currentRankAchievedAt: new Date(),
+          earnedRanks: [firstRankName],
+        }
+      : {
+          currentRank: null,
+          currentRankAchievedAt: null,
+          earnedRanks: [],
+        };
+
     await Promise.all([
       Purchase.deleteMany({}),
       InstallmentPayment.deleteMany({}),
@@ -40,9 +60,7 @@ router.get("/", async (_req: Request, res: Response) => {
       }),
       User.updateMany({}, {
         $set: {
-          currentRank: null,
-          currentRankAchievedAt: null,
-          earnedRanks: [],
+          ...rankResetFields,
           directSalesCount: 0,
           teamSalesCount: 0,
           personalPurchaseCount: 0,
