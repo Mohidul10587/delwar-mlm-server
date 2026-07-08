@@ -74,7 +74,7 @@ export const getGenerations = async (req: Request, res: Response, next: NextFunc
     const userId = req.user!._id.toString();
 
     const all = await User.find({ "generationAncestors.userId": req.user!._id })
-      .select("_id username name phone createdAt generationAncestors directSalesCount personalSharesCount currentRank")
+      .select("_id username name phone createdAt generationAncestors directSalesCount personalPurchaseCount currentRank")
       .lean();
 
     // Group each user by the level they appear at under our user
@@ -93,7 +93,7 @@ export const getGenerations = async (req: Request, res: Response, next: NextFunc
         phone: (u as any).phone,
         createdAt: (u as any).createdAt,
         directSalesCount: (u as any).directSalesCount ?? 0,
-        personalSharesCount: (u as any).personalSharesCount ?? 0,
+        personalPurchaseCount: (u as any).personalPurchaseCount ?? 0,
         currentRank: (u as any).currentRank ?? null,
       });
     }

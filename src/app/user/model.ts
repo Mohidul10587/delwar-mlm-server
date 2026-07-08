@@ -38,7 +38,7 @@ export interface IUser extends Document {
   currentRank: string | null;
   currentRankAchievedAt?: Date;
   earnedRanks: string[];
-  personalSharesCount: number;
+  personalPurchaseCount: number;
   nominee?: INominee;
   nominee2?: INominee;
   district?: string;
@@ -77,7 +77,7 @@ const UserSchema = new Schema<IUser>(
     currentRank: { type: String, default: "Brand Ambassador" },
     currentRankAchievedAt: { type: Date, default: null },
     earnedRanks: [{ type: String }],
-    personalSharesCount: { type: Number, default: 0 },
+    personalPurchaseCount: { type: Number, default: 0 },
 
     nominee: {
       type: {

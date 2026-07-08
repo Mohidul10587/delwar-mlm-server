@@ -149,7 +149,7 @@ export const updatePurchaseStatus = async (
     if (status === "approved" && !wasAlreadyApproved) {
       // Step 4 — User personal shares count
       await User.findByIdAndUpdate(purchase.userId, {
-        $inc: { personalSharesCount: purchase.quantity },
+        $inc: { personalPurchaseCount: purchase.quantity },
       });
 
       // Step 4b — Apply purchase-based rank (Entrepreneur) if no sales rank yet
