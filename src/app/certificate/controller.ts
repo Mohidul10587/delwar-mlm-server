@@ -8,7 +8,7 @@ import { generateCertificatePng } from "./generateCertificate";
 export const getMyCertificates = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const certificates = await Certificate.find({ userId: req.user!._id })
-      .populate("shareId", "title image cashPrice")
+      .populate("projectId", "title image cashPrice")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
       .populate("userId", "name phone nominee dateOfBirth district upazila")
       .sort({ createdAt: -1 })
@@ -30,7 +30,7 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
     }
 
     const enriched = certificates.map((c) => {
-      const share    = c.shareId as any;
+      const share    = c.projectId as any;
       const purchase = c.purchaseId as any;
       const totalPayable = share?.cashPrice
         ? calculateTotalPayable(Number(share.cashPrice), purchase?.quantity ?? 1)
@@ -52,7 +52,7 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
 export const downloadCertificate = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const cert = await Certificate.findOne({ _id: req.params.id, userId: req.user!._id })
-      .populate("shareId", "title image cashPrice")
+      .populate("projectId", "title image cashPrice")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
       .populate("userId", "name phone nominee dateOfBirth district upazila")
       .lean();
@@ -62,7 +62,7 @@ export const downloadCertificate = async (req: Request, res: Response, next: Nex
     if (cert.status !== "issued")
       return res.status(403).json({ message: "Certificate not yet issued" });
 
-    const share    = cert.shareId as any;
+    const share    = cert.projectId as any;
     const purchase = cert.purchaseId as any;
     const totalPayable = share?.cashPrice
       ? calculateTotalPayable(Number(share.cashPrice), purchase?.quantity ?? 1)

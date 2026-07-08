@@ -9,7 +9,9 @@ import { Certificate } from "../certificate/model";
 import { ShareSlot } from "../project/shareSlot.model";
 
 // Helper — build slotsByPurchase map from a list of purchaseIds
-async function fetchSlotsByPurchase(purchaseIds: any[]): Promise<Record<string, string[]>> {
+async function fetchSlotsByPurchase(
+  purchaseIds: any[]
+): Promise<Record<string, string[]>> {
   if (!purchaseIds.length) return {};
   const slots = await ShareSlot.find({
     purchaseId: { $in: purchaseIds },
@@ -27,14 +29,31 @@ async function fetchSlotsByPurchase(purchaseIds: any[]): Promise<Record<string, 
 }
 
 // POST /purchase  — logged-in user submits a purchase request
-export const createPurchase = async (req: Request, res: Response, next: NextFunction) => {
+export const createPurchase = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage } = req.body;
+    const {
+      projectId,
+      quantity,
+      paymentType,
+      downPayment,
+      installmentCount,
+      senderAccount,
+      transactionId,
+      buyerInfo,
+      paymentMethod,
+      receiptImage,
+    } = req.body;
 
     // Fix V-01: validate quantity
     const qty = parseInt(String(quantity), 10);
     if (!Number.isInteger(qty) || qty < 1) {
-      return res.status(400).json({ message: "Quantity must be a positive integer" });
+      return res
+        .status(400)
+        .json({ message: "Quantity must be a positive integer" });
     }
 
     // Fix F-10: check transactionId uniqueness before creating purchase
@@ -46,33 +65,51 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       if (!transactionId || !String(transactionId).trim()) {
         return res.status(400).json({ message: "Transaction ID is required" });
       }
-      const { isTransactionIdUsed } = await import("../../utils/isTransactionIdUsed");
+      const { isTransactionIdUsed } = await import(
+        "../../utils/isTransactionIdUsed"
+      );
       const duplicate = await isTransactionIdUsed(String(transactionId).trim());
       if (duplicate) {
-        return res.status(400).json({ message: "This transaction ID has already been used" });
+        return res
+          .status(400)
+          .json({ message: "This transaction ID has already been used" });
       }
     }
 
     // Validate payment method
     if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
-      return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid payment method. Must be cash, bank, or mobile_banking",
+        });
     }
 
     // Receipt image is required for bank and mobile_banking payments
-    if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
-      return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+    if (
+      ["bank", "mobile_banking"].includes(resolvedPaymentMethod) &&
+      !receiptImage
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Receipt image is required for bank or mobile banking payments",
+        });
     }
 
     if (!["cash", "installment"].includes(paymentType)) {
       return res.status(400).json({ message: "Invalid payment type" });
     }
 
-    const share = await Project.findById(shareId);
-    if (!share)
-      return res.status(404).json({ message: "Share not found" });
+    const share = await Project.findById(projectId);
+    if (!share) return res.status(404).json({ message: "Share not found" });
 
     if (!share.isActive)
-      return res.status(400).json({ message: "This share is not available for purchase" });
+      return res
+        .status(400)
+        .json({ message: "This share is not available for purchase" });
 
     // Fix F-11: validate down payment range for installment
     if (paymentType === "installment") {
@@ -84,14 +121,20 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       }
       // Fix F-14: validate installment count range
       const ic = parseInt(String(installmentCount), 10);
-      if (!Number.isInteger(ic) || ic < share.minInstallments || ic > share.maxInstallments) {
+      if (
+        !Number.isInteger(ic) ||
+        ic < share.minInstallments ||
+        ic > share.maxInstallments
+      ) {
         return res.status(400).json({
           message: `Installment count must be between ${share.minInstallments} and ${share.maxInstallments}`,
         });
       }
     }
 
-    const buyer = await User.findById(req.user!._id).select("name phone nominee nominee2");
+    const buyer = await User.findById(req.user!._id).select(
+      "name phone nominee nominee2"
+    );
 
     // Build resolvedBuyerInfo:
     // - If frontend sends buyerInfo.nominees array → use it (new behaviour)
@@ -145,9 +188,13 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     const totalPayable = share.cashPrice * qty;
 
     const resolvedDP =
-      paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
+      paymentType === "cash"
+        ? share.maxDownPayment * qty
+        : Number(downPayment) * qty;
     const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
-    const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
+    const resolvedInstallmentAmount = Math.ceil(
+      (totalPayable - resolvedDP) / resolvedCount
+    );
     const amountPaid = resolvedDP;
 
     const settings = await Settings.findOne().lean();
@@ -174,13 +221,14 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
           amount: r.salary.amount,
           salaryDurationMonths: r.salary.salaryDurationMonths,
           minMonthlySalesQty: r.salary.minMonthlySalesQty,
-          minMonthlyPersonalPurchaseQtyForSalary: r.salary.minMonthlyPersonalPurchaseQtyForSalary,
+          minMonthlyPersonalPurchaseQtyForSalary:
+            r.salary.minMonthlyPersonalPurchaseQtyForSalary,
         })),
     };
 
     const purchase = await Purchase.create({
       userId: req.user!._id,
-      shareId,
+      projectId,
       quantity: qty,
       paymentType,
       paymentMethod: resolvedPaymentMethod,
@@ -189,7 +237,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
       installmentCount: resolvedCount,
       installmentAmount: resolvedInstallmentAmount,
       amountPaid,
-      senderAccount: isCashPayment ? "" : (senderAccount ?? ""),
+      senderAccount: isCashPayment ? "" : senderAccount ?? "",
       // Cash payments have no transaction ID — generate a unique placeholder so
       // the sparse unique index does not reject multiple cash purchases.
       transactionId: isCashPayment
@@ -202,7 +250,7 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
     await Certificate.create({
       userId: req.user!._id,
       purchaseId: purchase._id,
-      shareId,
+      projectId,
       status: "pending",
     });
 
@@ -216,12 +264,16 @@ export const createPurchase = async (req: Request, res: Response, next: NextFunc
 };
 
 // GET /purchase  — superadmin gets all purchases (populated, paginated)
-export const getPurchases = async (req: Request, res: Response, next: NextFunction) => {
+export const getPurchases = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     // H-05 fix: pagination
-    const page  = parseInt(req.query.page  as string) || 1;
+    const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 30;
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     const filter: any = {};
     if (req.query.status) filter.status = req.query.status;
@@ -229,7 +281,7 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
         .populate("userId", "name username phone")
-        .populate("shareId", "title cashPrice installment")
+        .populate("projectId", "title cashPrice installment")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -241,7 +293,9 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
       .filter((p) => p.paymentType === "installment" && p.status !== "pending")
       .map((p) => p._id);
     const allPayments = installmentPurchaseIds.length
-      ? await InstallmentPayment.find({ purchaseId: { $in: installmentPurchaseIds } }).lean()
+      ? await InstallmentPayment.find({
+          purchaseId: { $in: installmentPurchaseIds },
+        }).lean()
       : [];
     const paymentsByPurchase: Record<string, typeof allPayments> = {};
     for (const pay of allPayments) {
@@ -256,8 +310,11 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
     const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
 
     const enriched = purchases.map((purchase) => {
-      const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
+      const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
+      const totalPayable = calculateTotalPayable(
+        projectPrice,
+        purchase.quantity
+      );
       const base = {
         ...purchase,
         totalPayable,
@@ -269,7 +326,11 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
           totalPayable,
         }),
       };
-      if (purchase.paymentType !== "installment" || purchase.status === "pending") return base;
+      if (
+        purchase.paymentType !== "installment" ||
+        purchase.status === "pending"
+      )
+        return base;
       const payments = paymentsByPurchase[purchase._id.toString()] ?? [];
       const perInstallment = purchase.installmentAmount ?? 0;
       const totalInstallments = purchase.installmentCount ?? 0;
@@ -288,25 +349,38 @@ export const getPurchases = async (req: Request, res: Response, next: NextFuncti
         },
       };
     });
-    res.json({ purchases: enriched, total, page, pages: Math.ceil(total / limit) });
+    res.json({
+      purchases: enriched,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
   } catch (err) {
     next(err);
   }
 };
 
 // GET /purchase/:id  — staff gets a single purchase by id
-export const getPurchaseById = async (req: Request, res: Response, next: NextFunction) => {
+export const getPurchaseById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const purchase = await Purchase.findById(req.params.id)
       .populate("userId", "name username phone")
-      .populate("shareId", "title cashPrice installment")
+      .populate("projectId", "title cashPrice installment")
       .lean();
-    if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
 
-    const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
-    const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
+    const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
+    const totalPayable = calculateTotalPayable(projectPrice, purchase.quantity);
 
-    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+    const slots = await ShareSlot.find({
+      purchaseId: purchase._id,
+      status: "sold",
+    })
       .select("shareNumber")
       .sort({ shareNumber: 1 })
       .lean();
@@ -330,26 +404,39 @@ export const getPurchaseById = async (req: Request, res: Response, next: NextFun
 };
 
 // GET /purchase/:id/receipt  — logged-in user (or staff) gets receipt for an approved purchase
-export const getPurchaseReceipt = async (req: Request, res: Response, next: NextFunction) => {
+export const getPurchaseReceipt = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const purchase = await Purchase.findById(req.params.id)
       .populate("userId", "name username phone")
-      .populate("shareId", "title cashPrice image")
-      .populate("reviewedBy", "name username")   // cashier / receiver
+      .populate("projectId", "title cashPrice image")
+      .populate("reviewedBy", "name username") // cashier / receiver
       .lean();
 
-    if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
 
     // Only the owner or staff can access
-    const isOwner = purchase.userId && (purchase.userId as any)._id?.toString() === req.user!._id.toString();
+    const isOwner =
+      purchase.userId &&
+      (purchase.userId as any)._id?.toString() === req.user!._id.toString();
     const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
-    if (!isOwner && !isStaff) return res.status(403).json({ message: "Forbidden" });
+    if (!isOwner && !isStaff)
+      return res.status(403).json({ message: "Forbidden" });
 
     if (purchase.status !== "approved")
-      return res.status(400).json({ message: "Receipt only available for approved purchases" });
+      return res
+        .status(400)
+        .json({ message: "Receipt only available for approved purchases" });
 
     // Fetch share slot numbers
-    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+    const slots = await ShareSlot.find({
+      purchaseId: purchase._id,
+      status: "sold",
+    })
       .select("shareNumber")
       .sort({ shareNumber: 1 })
       .lean();
@@ -376,27 +463,38 @@ export const getPurchaseReceipt = async (req: Request, res: Response, next: Next
 };
 
 // GET /purchase/:purchaseId/installments/:installmentId/receipt
-export const getInstallmentReceipt = async (req: Request, res: Response, next: NextFunction) => {
+export const getInstallmentReceipt = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { purchaseId, installmentId } = req.params;
 
     const purchase = await Purchase.findById(purchaseId)
       .populate("userId", "name username phone")
-      .populate("shareId", "title cashPrice image")
+      .populate("projectId", "title cashPrice image")
       .lean();
-    if (!purchase) return res.status(404).json({ message: "Purchase not found" });
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
 
-    const isOwner = purchase.userId && (purchase.userId as any)._id?.toString() === req.user!._id.toString();
+    const isOwner =
+      purchase.userId &&
+      (purchase.userId as any)._id?.toString() === req.user!._id.toString();
     const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
-    if (!isOwner && !isStaff) return res.status(403).json({ message: "Forbidden" });
+    if (!isOwner && !isStaff)
+      return res.status(403).json({ message: "Forbidden" });
 
     const installment = await InstallmentPayment.findById(installmentId)
-      .populate("reviewedBy", "name username")   // cashier / receiver
+      .populate("reviewedBy", "name username") // cashier / receiver
       .lean();
-    if (!installment) return res.status(404).json({ message: "Installment not found" });
+    if (!installment)
+      return res.status(404).json({ message: "Installment not found" });
 
     if (installment.status !== "approved")
-      return res.status(400).json({ message: "Receipt only available for approved installments" });
+      return res
+        .status(400)
+        .json({ message: "Receipt only available for approved installments" });
 
     const settings = await Settings.findOne()
       .select("siteTitle logo contactPhone contactEmail contactAddress")
@@ -418,10 +516,14 @@ export const getInstallmentReceipt = async (req: Request, res: Response, next: N
   }
 };
 
-export const getMyPurchases = async (req: Request, res: Response, next: NextFunction) => {
+export const getMyPurchases = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const purchases = await Purchase.find({ userId: req.user!._id })
-      .populate("shareId", "title cashPrice installment image")
+      .populate("projectId", "title cashPrice installment image")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -431,8 +533,11 @@ export const getMyPurchases = async (req: Request, res: Response, next: NextFunc
     const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
 
     const enriched = purchases.map((purchase) => {
-      const sharePrice = Number((purchase as any)?.shareId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(sharePrice, purchase.quantity);
+      const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
+      const totalPayable = calculateTotalPayable(
+        projectPrice,
+        purchase.quantity
+      );
       return {
         ...purchase,
         totalPayable,

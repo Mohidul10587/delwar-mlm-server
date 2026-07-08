@@ -61,7 +61,7 @@ export const distributeCommissions = async (purchaseId: string) => {
       { _id: purchaseId, commissionProcessed: false },
       { $set: { commissionProcessed: true } },
       { new: true }
-    ).populate("shareId");
+    ).populate("projectId");
 
     if (!purchase) return;
 

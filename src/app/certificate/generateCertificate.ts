@@ -18,7 +18,7 @@ export interface CertData {
   totalPayable: number;
   amountRemaining: number;
   shareNumbers: string[];
-  shareId: {
+  projectId: {
     title: string;
     cashPrice: number;
   };
@@ -50,7 +50,7 @@ function buildHtml(c: CertData): string {
   const signUrl  = toDataUrl("Sign (1).png");
 
   const buyer   = c.purchaseId?.buyerInfo ?? c.userId;
-  const share   = c.shareId;
+  const share   = c.projectId;
   const purchase = c.purchaseId;
   const isIssued = c.status === "issued";
   const fmt      = (n: number) => Number(n).toLocaleString("en-BD");

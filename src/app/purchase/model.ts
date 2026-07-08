@@ -54,7 +54,7 @@ export interface IPurchaseSnapshot {
 
 export interface IPurchase extends Document {
   userId: Types.ObjectId;
-  shareId: Types.ObjectId;
+  projectId: Types.ObjectId;
   quantity: number;
   paymentType: PaymentType;
   paymentMethod: PaymentMethod;
@@ -147,7 +147,7 @@ const SnapshotSchema = new Schema(
 const PurchaseSchema = new Schema<IPurchase>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    shareId: { type: Schema.Types.ObjectId, ref: "Project", required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: "Project", required: true },
     quantity: { type: Number, required: true, min: 1 },
     paymentType: {
       type: String,

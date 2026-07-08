@@ -32,7 +32,7 @@ export const getUserDashboard = async (req: Request, res: Response, next: NextFu
 
     const [wallet, purchases, user, downlineNodes, settings, shares, events] = await Promise.all([
       Wallet.findOne({ userId }).lean(),
-      Purchase.find({ userId }).populate("shareId", "title cashPrice installment image").sort({ createdAt: -1 }).lean(),
+      Purchase.find({ userId }).populate("projectId", "title cashPrice installment image").sort({ createdAt: -1 }).lean(),
       User.findById(userId).select("directSalesCount teamSalesCount currentRank").lean(),
       // H-06 fix: limit downline fetch to prevent memory issues on large networks
       User.find({ "generationAncestors.userId": userId })

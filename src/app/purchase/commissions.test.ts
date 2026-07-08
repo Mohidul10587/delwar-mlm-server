@@ -17,7 +17,7 @@ const mockPurchase = (overrides = {}) => ({
   paymentType: "cash",
   quantity: 1,
   commissionProcessed: false,
-  shareId: {
+  projectId: {
     cashPrice: 100000,
     directSalesCommissionForCashSell: 10,
     directSalesCommissionForInstallmentSell: 5,

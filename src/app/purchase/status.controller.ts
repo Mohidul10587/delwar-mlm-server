@@ -16,10 +16,12 @@ import { recalcUserRank } from "../rank/controller";
  * Each slot is updated one-by-one with a status=available guard so that
  * two concurrent approvals cannot grab the same slot.
  */
-async function allocateShares(purchase: any): Promise<{ error: string } | null> {
+async function allocateShares(
+  purchase: any
+): Promise<{ error: string } | null> {
   // Find available slot IDs first
   const available = await ShareSlot.find({
-    shareId: purchase.shareId,
+    projectId: purchase.projectId,
     status: "available",
   })
     .sort({ shareNumber: 1 })
@@ -39,7 +41,13 @@ async function allocateShares(purchase: any): Promise<{ error: string } | null> 
   for (const slot of available) {
     const updated = await ShareSlot.findOneAndUpdate(
       { _id: slot._id, status: "available" }, // atomic guard
-      { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } },
+      {
+        $set: {
+          status: "sold",
+          userId: purchase.userId,
+          purchaseId: purchase._id,
+        },
+      },
       { new: true }
     );
     if (updated) {
@@ -70,7 +78,14 @@ async function allocateShares(purchase: any): Promise<{ error: string } | null> 
 async function reclaimPurchaseShares(purchaseId: any): Promise<number> {
   const result = await ShareSlot.updateMany(
     { purchaseId, status: "sold" },
-    { $set: { status: "reclaimed", reclaimedAt: new Date(), userId: null, purchaseId: null } }
+    {
+      $set: {
+        status: "reclaimed",
+        reclaimedAt: new Date(),
+        userId: null,
+        purchaseId: null,
+      },
+    }
   );
   return result.modifiedCount;
 }
@@ -84,19 +99,29 @@ async function reclaimPurchaseShares(purchaseId: any): Promise<number> {
  * - Installment purchase: down payment approval = purchase approval → same path.
  * - Only "sold" slots count; "available" and "reclaimed" do not.
  */
-async function checkAndCompleteShare(shareId: any): Promise<void> {
+async function checkAndCompleteShare(projectId: any): Promise<void> {
   try {
-    const share = await Project.findById(shareId).select("totalShares projectStatus").lean();
+    const share = await Project.findById(projectId)
+      .select("totalShares projectStatus")
+      .lean();
     if (!share || share.projectStatus === "complete") return;
     if (!share.totalShares || share.totalShares <= 0) return;
 
-    const soldCount = await ShareSlot.countDocuments({ shareId, status: "sold" });
+    const soldCount = await ShareSlot.countDocuments({
+      projectId,
+      status: "sold",
+    });
     if (soldCount >= share.totalShares) {
-      await Project.findByIdAndUpdate(shareId, { $set: { projectStatus: "complete" } });
+      await Project.findByIdAndUpdate(projectId, {
+        $set: { projectStatus: "complete" },
+      });
     }
   } catch (err) {
     // Non-critical — log and continue; do not block the approval response
-    console.error(`[SHARE COMPLETE] checkAndCompleteShare failed for shareId=${shareId}:`, err);
+    console.error(
+      `[SHARE COMPLETE] checkAndCompleteShare failed for projectId=${projectId}:`,
+      err
+    );
   }
 }
 
@@ -129,7 +154,11 @@ export const updatePurchaseStatus = async (
     }
 
     // Step 2 — For cash: mark full amount as paid
-    if (status === "approved" && !wasAlreadyApproved && purchase.paymentType === "cash") {
+    if (
+      status === "approved" &&
+      !wasAlreadyApproved &&
+      purchase.paymentType === "cash"
+    ) {
       const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
       if (fullAmount > purchase.amountPaid) {
         purchase.amountPaid = fullAmount;
@@ -161,7 +190,9 @@ export const updatePurchaseStatus = async (
       }
 
       // Step 6 — Ledger entry
-      const buyer = await User.findById(purchase.userId).select("name username").lean();
+      const buyer = await User.findById(purchase.userId)
+        .select("name username")
+        .lean();
       const buyerName = (buyer as any)?.name ?? "";
       const buyerUsername = (buyer as any)?.username ?? "";
       try {
@@ -172,24 +203,36 @@ export const updatePurchaseStatus = async (
           relatedId: purchase._id,
           relatedModel: "Purchase",
           userId: purchase.userId,
-          note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+          note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${
+            purchase.quantity
+          } [${
+            purchase.paymentType
+          }] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
         });
       } catch (ledgerErr) {
         // Fix E-02: log ledger failures — do not silently swallow
-        console.error(`[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`, ledgerErr);
+        console.error(
+          `[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`,
+          ledgerErr
+        );
       }
 
       // Step 7 — Auto-complete share if all slots are now sold
-      await checkAndCompleteShare(purchase.shareId);
+      await checkAndCompleteShare(purchase.projectId);
     }
 
     // Step 8 — Update certificate status
     const purchaseWithShare = await Purchase.findById(purchase._id)
-      .populate("shareId", "cashPrice")
+      .populate("projectId", "cashPrice")
       .lean();
     if (purchaseWithShare) {
-      const sharePrice = Number((purchaseWithShare as any)?.shareId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(sharePrice, purchaseWithShare.quantity);
+      const projectPrice = Number(
+        (purchaseWithShare as any)?.projectId?.cashPrice ?? 0
+      );
+      const totalPayable = calculateTotalPayable(
+        projectPrice,
+        purchaseWithShare.quantity
+      );
       const certificateStatus = calculateCertificateStatus({
         status: purchaseWithShare.status,
         paymentType: purchaseWithShare.paymentType,

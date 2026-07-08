@@ -4,7 +4,7 @@ export type ShareStatus = "available" | "sold" | "reclaimed";
 
 export interface IShareSlot extends Document {
   shareNumber: string;
-  shareId: Types.ObjectId;
+  projectId: Types.ObjectId;
   status: ShareStatus;
   userId?: Types.ObjectId;
   purchaseId?: Types.ObjectId;
@@ -14,7 +14,7 @@ export interface IShareSlot extends Document {
 const ShareSlotSchema = new Schema<IShareSlot>(
   {
     shareNumber: { type: String, required: true, unique: true },
-    shareId:     { type: Schema.Types.ObjectId, ref: "Project", required: true, index: true },
+    projectId:     { type: Schema.Types.ObjectId, ref: "Project", required: true, index: true },
     status:      { type: String, enum: ["available", "sold", "reclaimed"], default: "available", index: true },
     userId:      { type: Schema.Types.ObjectId, ref: "User",     default: null },
     purchaseId:  { type: Schema.Types.ObjectId, ref: "Purchase", default: null },
@@ -24,7 +24,7 @@ const ShareSlotSchema = new Schema<IShareSlot>(
 );
 
 // L-06 fix: compound indexes for frequent queries
-ShareSlotSchema.index({ shareId: 1, status: 1 });
+ShareSlotSchema.index({ projectId: 1, status: 1 });
 ShareSlotSchema.index({ purchaseId: 1, status: 1 });
 ShareSlotSchema.index({ userId: 1 });
 

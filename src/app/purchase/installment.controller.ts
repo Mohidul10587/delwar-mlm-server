@@ -20,9 +20,16 @@ export const createInstallmentPayment = async (
   next: NextFunction
 ) => {
   try {
-    const { installmentNo, amount, senderAccount, transactionId, paymentMethod, receiptImage } = req.body;
+    const {
+      installmentNo,
+      amount,
+      senderAccount,
+      transactionId,
+      paymentMethod,
+      receiptImage,
+    } = req.body;
     const purchase = await Purchase.findById(req.params.purchaseId).populate(
-      "shareId",
+      "projectId",
       "installment"
     );
     if (!purchase) {
@@ -54,18 +61,33 @@ export const createInstallmentPayment = async (
     }
     const duplicate = await isTransactionIdUsed(String(transactionId).trim());
     if (duplicate) {
-      return res.status(400).json({ message: "This transaction ID has already been used" });
+      return res
+        .status(400)
+        .json({ message: "This transaction ID has already been used" });
     }
 
     // Validate payment method
     const resolvedPaymentMethod = paymentMethod ?? "cash";
     if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
-      return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid payment method. Must be cash, bank, or mobile_banking",
+        });
     }
 
     // Receipt image is required for bank and mobile_banking payments
-    if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
-      return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+    if (
+      ["bank", "mobile_banking"].includes(resolvedPaymentMethod) &&
+      !receiptImage
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Receipt image is required for bank or mobile banking payments",
+        });
     }
 
     // Validate amount
@@ -154,7 +176,9 @@ export const getPendingInstallments = async (
       .populate("purchaseId", "snapshot quantity")
       .lean();
     res.json({ payments });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 export const getInstallmentsByPurchase = async (
@@ -225,13 +249,13 @@ export const updateInstallmentStatus = async (
         payment.purchaseId,
         { $inc: { amountPaid: payment.amount } },
         { new: true }
-      ).populate("shareId", "cashPrice installment commissions");
+      ).populate("projectId", "cashPrice installment commissions");
 
       if (purchase) {
-        const share = purchase.shareId as any;
-        const sharePrice = Number(share?.cashPrice ?? 0);
+        const share = purchase.projectId as any;
+        const projectPrice = Number(share?.cashPrice ?? 0);
         const totalPayable = calculateTotalPayable(
-          sharePrice,
+          projectPrice,
           purchase.quantity
         );
         const certificateStatus = calculateCertificateStatus({
@@ -280,7 +304,10 @@ export const updateInstallmentStatus = async (
             } — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
           });
         } catch (ledgerErr) {
-          console.error(`[LEDGER ERROR] installment_received for paymentId=${payment._id}:`, ledgerErr);
+          console.error(
+            `[LEDGER ERROR] installment_received for paymentId=${payment._id}:`,
+            ledgerErr
+          );
         }
 
         await TransactionLog.create({
@@ -288,10 +315,15 @@ export const updateInstallmentStatus = async (
           type: "installment_received",
           amount: payment.amount,
           balanceAfter: 0,
-          note: `Installment #${payment.installmentNo} approved — ${purchase.snapshot?.shareTitle ?? ""}, ৳${payment.amount.toLocaleString()}`,
+          note: `Installment #${payment.installmentNo} approved — ${
+            purchase.snapshot?.shareTitle ?? ""
+          }, ৳${payment.amount.toLocaleString()}`,
           relatedPurchaseId: purchase._id,
         }).catch((err) => {
-          console.error(`[TXLOG ERROR] installment_received log failed for paymentId=${payment._id}:`, err);
+          console.error(
+            `[TXLOG ERROR] installment_received log failed for paymentId=${payment._id}:`,
+            err
+          );
         });
       }
     }

@@ -39,7 +39,7 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
         for (let i = batch; i < end; i++) {
           docs.push({
             shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
-            shareId: pkg._id,
+            projectId: pkg._id,
             status: "available",
             userId: null,
             purchaseId: null,
@@ -131,7 +131,7 @@ export const updateShare = async (req: Request, res: Response, next: NextFunctio
         for (let i = batch; i < end; i++) {
           docs.push({
             shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
-            shareId: old._id,
+            projectId: old._id,
             status: "available",
             userId: null,
             purchaseId: null,
@@ -142,7 +142,7 @@ export const updateShare = async (req: Request, res: Response, next: NextFunctio
       }
     } else if (diff < 0) {
       // Remove the last |diff| available slots only
-      const toRemove = await ShareSlot.find({ shareId: old._id, status: "available" })
+      const toRemove = await ShareSlot.find({ projectId: old._id, status: "available" })
         .sort({ shareNumber: -1 })
         .limit(Math.abs(diff))
         .select("_id")
@@ -159,7 +159,7 @@ export const deleteShare = async (req: Request, res: Response, next: NextFunctio
   try {
     const pkg = await Project.findByIdAndDelete(req.params.id);
     if (!pkg) return res.status(404).json({ message: "Share not found" });
-    await ShareSlot.deleteMany({ shareId: req.params.id });
+    await ShareSlot.deleteMany({ projectId: req.params.id });
     res.json({ message: "Share deleted" });
   } catch (err) { next(err); }
 };
@@ -190,7 +190,7 @@ export const setCoverSlider = async (req: Request, res: Response, next: NextFunc
     share.isCoverSlider = true;
     await share.save();
 
-    res.json({ message: "Cover slider updated", shareId: share._id });
+    res.json({ message: "Cover slider updated", projectId: share._id });
   } catch (err) { next(err); }
 };
 
@@ -217,7 +217,7 @@ export const backfillSlots = async (req: Request, res: Response, next: NextFunct
     const desired = share.totalShares ?? 0;
     if (desired === 0) return res.json({ message: "Share has 0 totalShares — nothing to backfill", created: 0 });
 
-    const existing = await ShareSlot.countDocuments({ shareId: share._id });
+    const existing = await ShareSlot.countDocuments({ projectId: share._id });
     const diff = desired - existing;
 
     if (diff <= 0) {
@@ -238,7 +238,7 @@ export const backfillSlots = async (req: Request, res: Response, next: NextFunct
       for (let i = batch; i < end; i++) {
         docs.push({
           shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
-          shareId: share._id,
+          projectId: share._id,
           status: "available",
           userId: null,
           purchaseId: null,
@@ -267,14 +267,14 @@ export const getShareStats = async (req: Request, res: Response, next: NextFunct
     const [shares, counts] = await Promise.all([
       Project.find().lean(),
       ShareSlot.aggregate([
-        { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
+        { $group: { _id: { projectId: "$projectId", status: "$status" }, count: { $sum: 1 } } },
       ]),
     ]);
 
-    // Build a map: shareId -> { available, sold, reclaimed }
+    // Build a map: projectId -> { available, sold, reclaimed }
     const map: Record<string, { available: number; sold: number; reclaimed: number }> = {};
     for (const { _id, count } of counts) {
-      const key = _id.shareId.toString();
+      const key = _id.projectId.toString();
       if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0 };
       map[key][_id.status as "available" | "sold" | "reclaimed"] = count;
     }
@@ -303,13 +303,13 @@ export const getSharesWithStats = async (req: Request, res: Response, next: Next
       // Admin panel sees ALL shares (including inactive)
       Project.find().lean(),
       ShareSlot.aggregate([
-        { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
+        { $group: { _id: { projectId: "$projectId", status: "$status" }, count: { $sum: 1 } } },
       ]),
     ]);
 
     const map: Record<string, { available: number; sold: number; reclaimed: number }> = {};
     for (const { _id, count } of counts) {
-      const key = _id.shareId.toString();
+      const key = _id.projectId.toString();
       if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0 };
       map[key][_id.status as "available" | "sold" | "reclaimed"] = count;
     }
