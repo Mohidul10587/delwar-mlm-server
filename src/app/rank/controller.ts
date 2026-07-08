@@ -81,7 +81,10 @@ export const updateRank = async (
       (r) => r._id.toString() === req.params.id
     );
     if (idx === -1) return res.status(404).json({ message: "Rank not found" });
-    
+
+    // First 2 ranks are locked and cannot be updated
+    if (idx < 2) return res.status(403).json({ message: "This rank is locked and cannot be edited" });
+
     const {
       name,
       minNetworkSalesAmount,
@@ -112,10 +115,14 @@ export const replaceAllRanks = async (
   try {
     const s = await Settings.findOne();
     if (!s) return res.status(404).json({ message: "Settings not found" });
-    
-    s.ranks = req.body.ranks;
+
+    // First 2 ranks are locked — always preserved from DB, never replaced by payload
+    const lockedRanks = (s.ranks as any[]).slice(0, 2);
+    const editableRanks = (req.body.ranks ?? []).slice(2);
+
+    s.ranks = [...lockedRanks, ...editableRanks];
     await s.save();
-    
+
     res.json({ message: "Ranks replaced successfully", ranks: s.ranks });
   } catch (err) {
     next(err);
@@ -130,16 +137,18 @@ export const deleteRank = async (
   try {
     const s = await Settings.findOne();
     if (!s) return res.status(404).json({ message: "Settings not found" });
-    
-    const originalLength = s.ranks.length;
+
+    // First 2 ranks are locked and cannot be deleted
+    const rankIdx = (s.ranks as any[]).findIndex(
+      (r) => r._id.toString() === req.params.id
+    );
+    if (rankIdx === -1) return res.status(404).json({ message: "Rank not found" });
+    if (rankIdx < 2) return res.status(403).json({ message: "This rank is locked and cannot be deleted" });
+
     s.ranks = (s.ranks as any[]).filter(
       (r) => r._id.toString() !== req.params.id
     );
-    
-    if (s.ranks.length === originalLength) {
-      return res.status(404).json({ message: "Rank not found" });
-    }
-    
+
     await s.save();
     res.json({ message: "Rank deleted" });
   } catch (err) {
