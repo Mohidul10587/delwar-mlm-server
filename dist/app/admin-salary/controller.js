@@ -89,7 +89,7 @@ const releaseSalary = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         // Update wallet using $inc to avoid race conditions
         yield model_2.Wallet.findOneAndUpdate({ userId: adminId }, {
             $inc: {
-                adminMonthlySalaryBalance: amount,
+                fixedMonthlySalaryForAdminOnly: amount,
                 totalBalance: amount,
             },
         }, { upsert: true });
@@ -207,7 +207,7 @@ const autoReleaseMonthlySalaries = () => __awaiter(void 0, void 0, void 0, funct
             // 1. Credit wallet
             yield model_2.Wallet.findOneAndUpdate({ userId: adminId }, {
                 $inc: {
-                    adminMonthlySalaryBalance: amount,
+                    fixedMonthlySalaryForAdminOnly: amount,
                     totalBalance: amount,
                 },
             }, { upsert: true });

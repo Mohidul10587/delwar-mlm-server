@@ -20,7 +20,7 @@ jest.mock("../wallet/model");
 jest.mock("../user/model");
 jest.mock("../settings/model");
 jest.mock("../rank/controller");
-const mockPurchase = (overrides = {}) => (Object.assign({ _id: "purchase1", userId: "buyer1", paymentType: "cash", quantity: 1, commissionProcessed: false, shareId: {
+const mockPurchase = (overrides = {}) => (Object.assign({ _id: "purchase1", userId: "buyer1", paymentType: "cash", quantity: 1, commissionProcessed: false, projectId: {
         cashPrice: 100000,
         directSalesCommissionForCashSell: 10,
         directSalesCommissionForInstallmentSell: 5,

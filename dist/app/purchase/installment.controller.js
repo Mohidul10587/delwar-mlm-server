@@ -25,8 +25,8 @@ const getWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
 });
 const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { installmentNo, amount, senderAccount, transactionId, paymentMethod, receiptImage } = req.body;
-        const purchase = yield model_1.Purchase.findById(req.params.purchaseId).populate("shareId", "installment");
+        const { installmentNo, amount, senderAccount, transactionId, paymentMethod, receiptImage, } = req.body;
+        const purchase = yield model_1.Purchase.findById(req.params.purchaseId).populate("projectId", "installment");
         if (!purchase) {
             return res.status(404).json({ message: "Purchase not found" });
         }
@@ -54,16 +54,27 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
         }
         const duplicate = yield (0, isTransactionIdUsed_1.isTransactionIdUsed)(String(transactionId).trim());
         if (duplicate) {
-            return res.status(400).json({ message: "This transaction ID has already been used" });
+            return res
+                .status(400)
+                .json({ message: "This transaction ID has already been used" });
         }
         // Validate payment method
         const resolvedPaymentMethod = paymentMethod !== null && paymentMethod !== void 0 ? paymentMethod : "cash";
         if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
-            return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+            return res
+                .status(400)
+                .json({
+                message: "Invalid payment method. Must be cash, bank, or mobile_banking",
+            });
         }
         // Receipt image is required for bank and mobile_banking payments
-        if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
-            return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+        if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) &&
+            !receiptImage) {
+            return res
+                .status(400)
+                .json({
+                message: "Receipt image is required for bank or mobile banking payments",
+            });
         }
         // Validate amount
         const parsedAmount = Number(amount);
@@ -188,11 +199,11 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
         yield payment.save();
         if (status === "approved") {
             // Fix F-04: use atomic $inc to avoid race condition on amountPaid
-            const purchase = yield model_1.Purchase.findByIdAndUpdate(payment.purchaseId, { $inc: { amountPaid: payment.amount } }, { new: true }).populate("shareId", "cashPrice installment commissions");
+            const purchase = yield model_1.Purchase.findByIdAndUpdate(payment.purchaseId, { $inc: { amountPaid: payment.amount } }, { new: true }).populate("projectId", "cashPrice installment commissions");
             if (purchase) {
-                const share = purchase.shareId;
-                const sharePrice = Number((_a = share === null || share === void 0 ? void 0 : share.cashPrice) !== null && _a !== void 0 ? _a : 0);
-                const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchase.quantity);
+                const share = purchase.projectId;
+                const projectPrice = Number((_a = share === null || share === void 0 ? void 0 : share.cashPrice) !== null && _a !== void 0 ? _a : 0);
+                const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchase.quantity);
                 const certificateStatus = (0, service_1.calculateCertificateStatus)({
                     status: purchase.status,
                     paymentType: purchase.paymentType,

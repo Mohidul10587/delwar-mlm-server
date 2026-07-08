@@ -19,7 +19,7 @@ const getMyCertificates = (req, res, next) => __awaiter(void 0, void 0, void 0, 
     var _a;
     try {
         const certificates = yield model_1.Certificate.find({ userId: req.user._id })
-            .populate("shareId", "title image cashPrice")
+            .populate("projectId", "title image cashPrice")
             .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
             .populate("userId", "name phone nominee dateOfBirth district upazila")
             .sort({ createdAt: -1 })
@@ -39,7 +39,7 @@ const getMyCertificates = (req, res, next) => __awaiter(void 0, void 0, void 0, 
         }
         const enriched = certificates.map((c) => {
             var _a, _b, _c, _d;
-            const share = c.shareId;
+            const share = c.projectId;
             const purchase = c.purchaseId;
             const totalPayable = (share === null || share === void 0 ? void 0 : share.cashPrice)
                 ? (0, service_1.calculateTotalPayable)(Number(share.cashPrice), (_a = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _a !== void 0 ? _a : 1)
@@ -59,7 +59,7 @@ const downloadCertificate = (req, res, next) => __awaiter(void 0, void 0, void 0
     var _a, _b;
     try {
         const cert = yield model_1.Certificate.findOne({ _id: req.params.id, userId: req.user._id })
-            .populate("shareId", "title image cashPrice")
+            .populate("projectId", "title image cashPrice")
             .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
             .populate("userId", "name phone nominee dateOfBirth district upazila")
             .lean();
@@ -67,7 +67,7 @@ const downloadCertificate = (req, res, next) => __awaiter(void 0, void 0, void 0
             return res.status(404).json({ message: "Certificate not found" });
         if (cert.status !== "issued")
             return res.status(403).json({ message: "Certificate not yet issued" });
-        const share = cert.shareId;
+        const share = cert.projectId;
         const purchase = cert.purchaseId;
         const totalPayable = (share === null || share === void 0 ? void 0 : share.cashPrice)
             ? (0, service_1.calculateTotalPayable)(Number(share.cashPrice), (_a = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _a !== void 0 ? _a : 1)

@@ -30,7 +30,7 @@ function buildHtml(c) {
     const tuneUrl = toDataUrl("tune.png");
     const signUrl = toDataUrl("Sign (1).png");
     const buyer = (_b = (_a = c.purchaseId) === null || _a === void 0 ? void 0 : _a.buyerInfo) !== null && _b !== void 0 ? _b : c.userId;
-    const share = c.shareId;
+    const share = c.projectId;
     const purchase = c.purchaseId;
     const isIssued = c.status === "issued";
     const fmt = (n) => Number(n).toLocaleString("en-BD");

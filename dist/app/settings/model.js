@@ -47,16 +47,19 @@ const SettingsSchema = new mongoose_1.Schema({
     managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
     ranks: [{
             name: { type: String },
-            requiredApprovedSales: { type: Number, default: 0 },
-            reward: {
-                name: { type: String, default: "" },
-                description: { type: String, default: "" },
-            },
+            // Renamed from: requiredApprovedSales
+            minNetworkSalesAmount: { type: Number, default: 0 },
+            // Minimum personal (own) approved purchases to achieve this rank (one-time check)
+            minPersonalPurchaseQtyToAchieve: { type: Number, default: 0 },
+            reward: { type: String, default: "" },
             salary: {
                 amount: { type: Number, default: 0 },
-                durationMonths: { type: Number, default: 0 },
-                minMonthlySales: { type: Number, default: 0 },
-                requiredPersonalShares: { type: Number, default: 0 },
+                // Renamed from: durationMonths
+                salaryDurationMonths: { type: Number, default: 0 },
+                // Renamed from: minMonthlySales
+                minMonthlySalesQty: { type: Number, default: 0 },
+                // Renamed from: requiredPersonalShares → minPersonalPurchaseQty → minMonthlyPersonalPurchaseQtyForSalary → minTotalPersonalPurchaseQtyForSalary
+                minTotalPersonalPurchaseQtyForSalary: { type: Number, default: 0 },
             },
         }],
     branches: [{ type: String }],

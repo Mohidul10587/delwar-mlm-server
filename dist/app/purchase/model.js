@@ -39,7 +39,8 @@ const SnapshotSchema = new mongoose_1.Schema({
         {
             rankName: { type: String },
             order: { type: Number },
-            requiredApprovedSales: { type: Number },
+            // Renamed from: requiredApprovedSales
+            minNetworkSalesAmount: { type: Number },
             _id: false,
         },
     ],
@@ -47,16 +48,19 @@ const SnapshotSchema = new mongoose_1.Schema({
         {
             rankName: { type: String },
             amount: { type: Number },
-            durationMonths: { type: Number },
-            minMonthlySales: { type: Number },
-            requiredPersonalShares: { type: Number },
+            // Renamed from: durationMonths
+            salaryDurationMonths: { type: Number },
+            // Renamed from: minMonthlySales
+            minMonthlySalesQty: { type: Number },
+            // Renamed from: requiredPersonalShares → minPersonalPurchaseQty → minMonthlyPersonalPurchaseQtyForSalary → minTotalPersonalPurchaseQtyForSalary
+            minTotalPersonalPurchaseQtyForSalary: { type: Number },
             _id: false,
         },
     ],
 }, { _id: false });
 const PurchaseSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
-    shareId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Project", required: true },
+    projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Project", required: true },
     quantity: { type: Number, required: true, min: 1 },
     paymentType: {
         type: String,
@@ -73,8 +77,8 @@ const PurchaseSchema = new mongoose_1.Schema({
     installmentCount: { type: Number, required: true },
     installmentAmount: { type: Number, required: true },
     amountPaid: { type: Number, required: true },
-    senderAccount: { type: String, required: true },
-    transactionId: { type: String, required: true },
+    senderAccount: { type: String, default: "" },
+    transactionId: { type: String, default: "" },
     status: {
         type: String,
         enum: ["pending", "approved", "rejected"],

@@ -14,7 +14,7 @@ const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../ledger/model");
 const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f;
     try {
         const { amount, method, accountDetails, branch } = req.body;
         const amt = Number(amount);
@@ -37,9 +37,8 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const withdrawableBalance = ((_a = wallet.directCommissionBalance) !== null && _a !== void 0 ? _a : 0) +
             ((_b = wallet.manCommFromDownPayment) !== null && _b !== void 0 ? _b : 0) +
             ((_c = wallet.manCommFromInstallment) !== null && _c !== void 0 ? _c : 0) +
-            ((_d = wallet.salaryBalance) !== null && _d !== void 0 ? _d : 0) +
-            ((_e = wallet.rewardBalance) !== null && _e !== void 0 ? _e : 0) +
-            ((_f = wallet.transferBalance) !== null && _f !== void 0 ? _f : 0);
+            ((_d = wallet.salaryBalanceFromRanks) !== null && _d !== void 0 ? _d : 0) +
+            ((_e = wallet.transferBalance) !== null && _e !== void 0 ? _e : 0);
         if (withdrawableBalance < amt)
             return res.status(400).json({ message: "Insufficient balance" });
         // Compute per-field deductions (same sequential logic as before)
@@ -49,14 +48,13 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             "directCommissionBalance",
             "manCommFromDownPayment",
             "manCommFromInstallment",
-            "salaryBalance",
-            "rewardBalance",
+            "salaryBalanceFromRanks",
             "transferBalance",
         ];
         for (const field of fields) {
             if (remaining <= 0)
                 break;
-            const available = (_g = wallet[field]) !== null && _g !== void 0 ? _g : 0;
+            const available = (_f = wallet[field]) !== null && _f !== void 0 ? _f : 0;
             const deduct = Math.min(available, remaining);
             if (deduct > 0) {
                 deductions[field] = deduct;

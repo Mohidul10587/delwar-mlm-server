@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updatePermissions = exports.changeUserRole = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.updateCoverImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = exports.ALL_PERMISSIONS = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
+const model_3 = require("../settings/model");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const validation_1 = require("./validation");
@@ -48,6 +49,18 @@ function buildGenerationAncestors(referrerId) {
             userId: a.userId,
         }));
         return [{ level: 1, userId: referrerId }, ...parentAncestors];
+    });
+}
+/**
+ * Returns the name of the first rank in Settings.ranks[], or null if no ranks configured.
+ * Used to auto-assign Rank 1 at registration.
+ */
+function getFirstRankName() {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const s = yield model_3.Settings.findOne().select("ranks").lean();
+        const ranks = (_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : [];
+        return ranks.length > 0 ? ranks[0].name : null;
     });
 }
 /**
@@ -92,14 +105,14 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
         }
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const generationAncestors = yield buildGenerationAncestors(referrerId);
-        const user = yield model_1.User.create({
-            name,
+        const firstRankName = yield getFirstRankName();
+        const user = yield model_1.User.create(Object.assign({ name,
             username,
-            phone,
-            password: hashedPassword,
-            generationAncestors,
-            currentRank: "Brand Ambassador",
-        });
+            phone, password: hashedPassword, generationAncestors }, (firstRankName && {
+            currentRank: firstRankName,
+            currentRankAchievedAt: new Date(),
+            earnedRanks: [firstRankName],
+        })));
         yield model_2.Wallet.create({ userId: user._id });
         const siblings = yield model_1.User.find({ phone, _id: { $ne: user._id } }).select("_id");
         if (siblings.length > 0) {
@@ -141,16 +154,14 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
             return;
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const generationAncestors = yield buildGenerationAncestors(referrerId);
-        const user = yield model_1.User.create({
-            name,
+        const firstRankName = yield getFirstRankName();
+        const user = yield model_1.User.create(Object.assign({ name,
             username,
-            phone,
-            password: hashedPassword,
-            role,
-            permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [],
-            generationAncestors,
-            currentRank: "Brand Ambassador",
-        });
+            phone, password: hashedPassword, role, permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [], generationAncestors }, (firstRankName && {
+            currentRank: firstRankName,
+            currentRankAchievedAt: new Date(),
+            earnedRanks: [firstRankName],
+        })));
         yield model_2.Wallet.create({ userId: user._id });
         const siblings = yield model_1.User.find({ phone, _id: { $ne: user._id } }).select("_id");
         if (siblings.length > 0) {

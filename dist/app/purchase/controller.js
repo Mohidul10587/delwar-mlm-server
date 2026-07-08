@@ -76,38 +76,57 @@ function fetchSlotsByPurchase(purchaseIds) {
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
     try {
-        const { shareId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage } = req.body;
+        const { projectId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage, } = req.body;
         // Fix V-01: validate quantity
         const qty = parseInt(String(quantity), 10);
         if (!Number.isInteger(qty) || qty < 1) {
-            return res.status(400).json({ message: "Quantity must be a positive integer" });
+            return res
+                .status(400)
+                .json({ message: "Quantity must be a positive integer" });
         }
         // Fix F-10: check transactionId uniqueness before creating purchase
-        if (!transactionId || !String(transactionId).trim()) {
-            return res.status(400).json({ message: "Transaction ID is required" });
-        }
-        const { isTransactionIdUsed } = yield Promise.resolve().then(() => __importStar(require("../../utils/isTransactionIdUsed")));
-        const duplicate = yield isTransactionIdUsed(String(transactionId).trim());
-        if (duplicate) {
-            return res.status(400).json({ message: "This transaction ID has already been used" });
+        // Cash payments don't require a transaction ID
+        const resolvedPaymentMethod = paymentMethod !== null && paymentMethod !== void 0 ? paymentMethod : "cash";
+        const isCashPayment = resolvedPaymentMethod === "cash";
+        if (!isCashPayment) {
+            if (!transactionId || !String(transactionId).trim()) {
+                return res.status(400).json({ message: "Transaction ID is required" });
+            }
+            const { isTransactionIdUsed } = yield Promise.resolve().then(() => __importStar(require("../../utils/isTransactionIdUsed")));
+            const duplicate = yield isTransactionIdUsed(String(transactionId).trim());
+            if (duplicate) {
+                return res
+                    .status(400)
+                    .json({ message: "This transaction ID has already been used" });
+            }
         }
         // Validate payment method
-        const resolvedPaymentMethod = paymentMethod !== null && paymentMethod !== void 0 ? paymentMethod : "cash";
         if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
-            return res.status(400).json({ message: "Invalid payment method. Must be cash, bank, or mobile_banking" });
+            return res
+                .status(400)
+                .json({
+                message: "Invalid payment method. Must be cash, bank, or mobile_banking",
+            });
         }
         // Receipt image is required for bank and mobile_banking payments
-        if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) && !receiptImage) {
-            return res.status(400).json({ message: "Receipt image is required for bank or mobile banking payments" });
+        if (["bank", "mobile_banking"].includes(resolvedPaymentMethod) &&
+            !receiptImage) {
+            return res
+                .status(400)
+                .json({
+                message: "Receipt image is required for bank or mobile banking payments",
+            });
         }
         if (!["cash", "installment"].includes(paymentType)) {
             return res.status(400).json({ message: "Invalid payment type" });
         }
-        const share = yield model_2.Project.findById(shareId);
+        const share = yield model_2.Project.findById(projectId);
         if (!share)
             return res.status(404).json({ message: "Share not found" });
         if (!share.isActive)
-            return res.status(400).json({ message: "This share is not available for purchase" });
+            return res
+                .status(400)
+                .json({ message: "This share is not available for purchase" });
         // Fix F-11: validate down payment range for installment
         if (paymentType === "installment") {
             const dp = Number(downPayment);
@@ -118,7 +137,9 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             }
             // Fix F-14: validate installment count range
             const ic = parseInt(String(installmentCount), 10);
-            if (!Number.isInteger(ic) || ic < share.minInstallments || ic > share.maxInstallments) {
+            if (!Number.isInteger(ic) ||
+                ic < share.minInstallments ||
+                ic > share.maxInstallments) {
                 return res.status(400).json({
                     message: `Installment count must be between ${share.minInstallments} and ${share.maxInstallments}`,
                 });
@@ -178,7 +199,9 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             };
         }
         const totalPayable = share.cashPrice * qty;
-        const resolvedDP = paymentType === "cash" ? share.maxDownPayment * qty : Number(downPayment) * qty;
+        const resolvedDP = paymentType === "cash"
+            ? share.maxDownPayment * qty
+            : Number(downPayment) * qty;
         const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
         const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
         const amountPaid = resolvedDP;
@@ -199,7 +222,7 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
                 return ({
                     rankName: r.name,
                     order: r.order,
-                    requiredApprovedSales: (_a = r.requiredApprovedSales) !== null && _a !== void 0 ? _a : 0,
+                    minNetworkSalesAmount: (_a = r.minNetworkSalesAmount) !== null && _a !== void 0 ? _a : 0,
                 });
             }),
             salaryRules: ranks
@@ -207,14 +230,14 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
                 .map((r) => ({
                 rankName: r.name,
                 amount: r.salary.amount,
-                durationMonths: r.salary.durationMonths,
-                minMonthlySales: r.salary.minMonthlySales,
-                requiredPersonalShares: r.salary.requiredPersonalShares,
+                salaryDurationMonths: r.salary.salaryDurationMonths,
+                minMonthlySalesQty: r.salary.minMonthlySalesQty,
+                minTotalPersonalPurchaseQtyForSalary: r.salary.minTotalPersonalPurchaseQtyForSalary,
             })),
         };
         const purchase = yield model_1.Purchase.create({
             userId: req.user._id,
-            shareId,
+            projectId,
             quantity: qty,
             paymentType,
             paymentMethod: resolvedPaymentMethod,
@@ -223,15 +246,19 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             installmentCount: resolvedCount,
             installmentAmount: resolvedInstallmentAmount,
             amountPaid,
-            senderAccount,
-            transactionId: String(transactionId).trim(),
+            senderAccount: isCashPayment ? "" : senderAccount !== null && senderAccount !== void 0 ? senderAccount : "",
+            // Cash payments have no transaction ID — generate a unique placeholder so
+            // the sparse unique index does not reject multiple cash purchases.
+            transactionId: isCashPayment
+                ? `CASH-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+                : String(transactionId).trim(),
             buyerInfo: resolvedBuyerInfo,
             snapshot,
         });
         yield model_5.Certificate.create({
             userId: req.user._id,
             purchaseId: purchase._id,
-            shareId,
+            projectId,
             status: "pending",
         });
         res.status(201).json({
@@ -258,7 +285,7 @@ const getPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         const [purchases, total] = yield Promise.all([
             model_1.Purchase.find(filter)
                 .populate("userId", "name username phone")
-                .populate("shareId", "title cashPrice installment")
+                .populate("projectId", "title cashPrice installment")
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
@@ -269,7 +296,9 @@ const getPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
             .filter((p) => p.paymentType === "installment" && p.status !== "pending")
             .map((p) => p._id);
         const allPayments = installmentPurchaseIds.length
-            ? yield installment_model_1.InstallmentPayment.find({ purchaseId: { $in: installmentPurchaseIds } }).lean()
+            ? yield installment_model_1.InstallmentPayment.find({
+                purchaseId: { $in: installmentPurchaseIds },
+            }).lean()
             : [];
         const paymentsByPurchase = {};
         for (const pay of allPayments) {
@@ -283,15 +312,16 @@ const getPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         const slotsByPurchase = yield fetchSlotsByPurchase(approvedIds);
         const enriched = purchases.map((purchase) => {
             var _a, _b, _c, _d, _e, _f;
-            const sharePrice = Number((_b = (_a = purchase === null || purchase === void 0 ? void 0 : purchase.shareId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
-            const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchase.quantity);
+            const projectPrice = Number((_b = (_a = purchase === null || purchase === void 0 ? void 0 : purchase.projectId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
+            const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchase.quantity);
             const base = Object.assign(Object.assign({}, purchase), { totalPayable, shareNumbers: (_c = slotsByPurchase[purchase._id.toString()]) !== null && _c !== void 0 ? _c : [], certificateStatus: (0, service_1.calculateCertificateStatus)({
                     status: purchase.status,
                     paymentType: purchase.paymentType,
                     amountPaid: purchase.amountPaid,
                     totalPayable,
                 }) });
-            if (purchase.paymentType !== "installment" || purchase.status === "pending")
+            if (purchase.paymentType !== "installment" ||
+                purchase.status === "pending")
                 return base;
             const payments = (_d = paymentsByPurchase[purchase._id.toString()]) !== null && _d !== void 0 ? _d : [];
             const perInstallment = (_e = purchase.installmentAmount) !== null && _e !== void 0 ? _e : 0;
@@ -308,7 +338,12 @@ const getPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
                     payments,
                 } });
         });
-        res.json({ purchases: enriched, total, page, pages: Math.ceil(total / limit) });
+        res.json({
+            purchases: enriched,
+            total,
+            page,
+            pages: Math.ceil(total / limit),
+        });
     }
     catch (err) {
         next(err);
@@ -321,13 +356,16 @@ const getPurchaseById = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
     try {
         const purchase = yield model_1.Purchase.findById(req.params.id)
             .populate("userId", "name username phone")
-            .populate("shareId", "title cashPrice installment")
+            .populate("projectId", "title cashPrice installment")
             .lean();
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
-        const sharePrice = Number((_b = (_a = purchase === null || purchase === void 0 ? void 0 : purchase.shareId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
-        const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchase.quantity);
-        const slots = yield shareSlot_model_1.ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+        const projectPrice = Number((_b = (_a = purchase === null || purchase === void 0 ? void 0 : purchase.projectId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
+        const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchase.quantity);
+        const slots = yield shareSlot_model_1.ShareSlot.find({
+            purchaseId: purchase._id,
+            status: "sold",
+        })
             .select("shareNumber")
             .sort({ shareNumber: 1 })
             .lean();
@@ -351,20 +389,26 @@ const getPurchaseReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0,
     try {
         const purchase = yield model_1.Purchase.findById(req.params.id)
             .populate("userId", "name username phone")
-            .populate("shareId", "title cashPrice image")
+            .populate("projectId", "title cashPrice image")
             .populate("reviewedBy", "name username") // cashier / receiver
             .lean();
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
         // Only the owner or staff can access
-        const isOwner = purchase.userId && ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
+        const isOwner = purchase.userId &&
+            ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
         const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
         if (!isOwner && !isStaff)
             return res.status(403).json({ message: "Forbidden" });
         if (purchase.status !== "approved")
-            return res.status(400).json({ message: "Receipt only available for approved purchases" });
+            return res
+                .status(400)
+                .json({ message: "Receipt only available for approved purchases" });
         // Fetch share slot numbers
-        const slots = yield shareSlot_model_1.ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+        const slots = yield shareSlot_model_1.ShareSlot.find({
+            purchaseId: purchase._id,
+            status: "sold",
+        })
             .select("shareNumber")
             .sort({ shareNumber: 1 })
             .lean();
@@ -396,11 +440,12 @@ const getInstallmentReceipt = (req, res, next) => __awaiter(void 0, void 0, void
         const { purchaseId, installmentId } = req.params;
         const purchase = yield model_1.Purchase.findById(purchaseId)
             .populate("userId", "name username phone")
-            .populate("shareId", "title cashPrice image")
+            .populate("projectId", "title cashPrice image")
             .lean();
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
-        const isOwner = purchase.userId && ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
+        const isOwner = purchase.userId &&
+            ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
         const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
         if (!isOwner && !isStaff)
             return res.status(403).json({ message: "Forbidden" });
@@ -410,7 +455,9 @@ const getInstallmentReceipt = (req, res, next) => __awaiter(void 0, void 0, void
         if (!installment)
             return res.status(404).json({ message: "Installment not found" });
         if (installment.status !== "approved")
-            return res.status(400).json({ message: "Receipt only available for approved installments" });
+            return res
+                .status(400)
+                .json({ message: "Receipt only available for approved installments" });
         const settings = yield model_4.Settings.findOne()
             .select("siteTitle logo contactPhone contactEmail contactAddress")
             .lean();
@@ -434,7 +481,7 @@ exports.getInstallmentReceipt = getInstallmentReceipt;
 const getMyPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const purchases = yield model_1.Purchase.find({ userId: req.user._id })
-            .populate("shareId", "title cashPrice installment image")
+            .populate("projectId", "title cashPrice installment image")
             .sort({ createdAt: -1 })
             .lean();
         const approvedIds = purchases
@@ -443,8 +490,8 @@ const getMyPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         const slotsByPurchase = yield fetchSlotsByPurchase(approvedIds);
         const enriched = purchases.map((purchase) => {
             var _a, _b, _c;
-            const sharePrice = Number((_b = (_a = purchase === null || purchase === void 0 ? void 0 : purchase.shareId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
-            const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchase.quantity);
+            const projectPrice = Number((_b = (_a = purchase === null || purchase === void 0 ? void 0 : purchase.projectId) === null || _a === void 0 ? void 0 : _a.cashPrice) !== null && _b !== void 0 ? _b : 0);
+            const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchase.quantity);
             return Object.assign(Object.assign({}, purchase), { totalPayable, shareNumbers: (_c = slotsByPurchase[purchase._id.toString()]) !== null && _c !== void 0 ? _c : [], certificateStatus: (0, service_1.calculateCertificateStatus)({
                     status: purchase.status,
                     paymentType: purchase.paymentType,

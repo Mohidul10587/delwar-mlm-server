@@ -59,8 +59,7 @@ const atomicCreditWallet = (userId, field, amount) => __awaiter(void 0, void 0, 
             directCommissionBalance: 0,
             manCommFromDownPayment: 0,
             manCommFromInstallment: 0,
-            salaryBalance: 0,
-            rewardBalance: 0,
+            salaryBalanceFromRanks: 0,
             incentiveBonus: 0,
             transferBalance: 0,
         },
@@ -91,7 +90,7 @@ const ledgerCommission = (txId, userId, amount, note) => __awaiter(void 0, void 
 const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f;
     try {
-        const purchase = yield model_1.Purchase.findOneAndUpdate({ _id: purchaseId, commissionProcessed: false }, { $set: { commissionProcessed: true } }, { new: true }).populate("shareId");
+        const purchase = yield model_1.Purchase.findOneAndUpdate({ _id: purchaseId, commissionProcessed: false }, { $set: { commissionProcessed: true } }, { new: true }).populate("projectId");
         if (!purchase)
             return;
         const snap = purchase.snapshot;

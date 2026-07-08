@@ -92,7 +92,7 @@ const getGenerations = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
     try {
         const userId = req.user._id.toString();
         const all = yield model_1.User.find({ "generationAncestors.userId": req.user._id })
-            .select("_id username name phone createdAt generationAncestors directSalesCount personalSharesCount currentRank")
+            .select("_id username name phone createdAt generationAncestors directSalesCount personalPurchaseCount currentRank")
             .lean();
         // Group each user by the level they appear at under our user
         const genMap = {};
@@ -110,7 +110,7 @@ const getGenerations = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
                 phone: u.phone,
                 createdAt: u.createdAt,
                 directSalesCount: (_b = u.directSalesCount) !== null && _b !== void 0 ? _b : 0,
-                personalSharesCount: (_c = u.personalSharesCount) !== null && _c !== void 0 ? _c : 0,
+                personalPurchaseCount: (_c = u.personalPurchaseCount) !== null && _c !== void 0 ? _c : 0,
                 currentRank: (_d = u.currentRank) !== null && _d !== void 0 ? _d : null,
             });
         }

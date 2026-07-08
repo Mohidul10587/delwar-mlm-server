@@ -25,9 +25,8 @@ const TRANSFERABLE_FIELDS = [
     "directCommissionBalance",
     "manCommFromDownPayment",
     "manCommFromInstallment",
-    "salaryBalance",
-    "rewardBalance",
-    "adminMonthlySalaryBalance",
+    "salaryBalanceFromRanks",
+    "fixedMonthlySalaryForAdminOnly",
     "expenseReimbursementBalance",
     "transferBalance",
 ];
@@ -127,8 +126,7 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
                 directCommissionBalance: 0,
                 manCommFromDownPayment: 0,
                 manCommFromInstallment: 0,
-                salaryBalance: 0,
-                rewardBalance: 0,
+                salaryBalanceFromRanks: 0,
                 incentiveBonus: 0,
             },
         }, { upsert: true, new: true, session });

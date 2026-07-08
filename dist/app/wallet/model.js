@@ -8,28 +8,26 @@ const WalletSchema = new mongoose_1.Schema({
     directCommissionBalance: { type: Number, default: 0 },
     manCommFromDownPayment: { type: Number, default: 0 },
     manCommFromInstallment: { type: Number, default: 0 },
-    salaryBalance: { type: Number, default: 0 },
-    rewardBalance: { type: Number, default: 0 },
+    salaryBalanceFromRanks: { type: Number, default: 0 },
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
     loanBalance: { type: Number, default: 0 },
-    adminMonthlySalaryBalance: { type: Number, default: 0 },
+    fixedMonthlySalaryForAdminOnly: { type: Number, default: 0 },
     expenseReimbursementBalance: { type: Number, default: 0 },
 }, { timestamps: true });
 // Fix F-12: totalBalance is recomputed on every save (for .save() calls)
 // For $inc operations callers MUST also $inc totalBalance by the same amount.
 WalletSchema.pre("save", function () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     this.totalBalance =
         ((_a = this.directCommissionBalance) !== null && _a !== void 0 ? _a : 0) +
             ((_b = this.manCommFromDownPayment) !== null && _b !== void 0 ? _b : 0) +
             ((_c = this.manCommFromInstallment) !== null && _c !== void 0 ? _c : 0) +
-            ((_d = this.salaryBalance) !== null && _d !== void 0 ? _d : 0) +
-            ((_e = this.rewardBalance) !== null && _e !== void 0 ? _e : 0) +
-            ((_f = this.incentiveBonus) !== null && _f !== void 0 ? _f : 0) +
-            ((_g = this.transferBalance) !== null && _g !== void 0 ? _g : 0) +
-            ((_h = this.adminMonthlySalaryBalance) !== null && _h !== void 0 ? _h : 0) +
-            ((_j = this.expenseReimbursementBalance) !== null && _j !== void 0 ? _j : 0);
+            ((_d = this.salaryBalanceFromRanks) !== null && _d !== void 0 ? _d : 0) +
+            ((_e = this.incentiveBonus) !== null && _e !== void 0 ? _e : 0) +
+            ((_f = this.transferBalance) !== null && _f !== void 0 ? _f : 0) +
+            ((_g = this.fixedMonthlySalaryForAdminOnly) !== null && _g !== void 0 ? _g : 0) +
+            ((_h = this.expenseReimbursementBalance) !== null && _h !== void 0 ? _h : 0);
     // Note: loanBalance is NOT included in totalBalance (tracked separately)
 });
 // Index for fast userId lookups

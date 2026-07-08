@@ -29,7 +29,7 @@ function allocateShares(purchase) {
     return __awaiter(this, void 0, void 0, function* () {
         // Find available slot IDs first
         const available = yield shareSlot_model_1.ShareSlot.find({
-            shareId: purchase.shareId,
+            projectId: purchase.projectId,
             status: "available",
         })
             .sort({ shareNumber: 1 })
@@ -46,7 +46,13 @@ function allocateShares(purchase) {
         const claimedIds = [];
         for (const slot of available) {
             const updated = yield shareSlot_model_1.ShareSlot.findOneAndUpdate({ _id: slot._id, status: "available" }, // atomic guard
-            { $set: { status: "sold", userId: purchase.userId, purchaseId: purchase._id } }, { new: true });
+            {
+                $set: {
+                    status: "sold",
+                    userId: purchase.userId,
+                    purchaseId: purchase._id,
+                },
+            }, { new: true });
             if (updated) {
                 claimed++;
                 claimedIds.push(slot._id);
@@ -69,7 +75,14 @@ function allocateShares(purchase) {
  */
 function reclaimPurchaseShares(purchaseId) {
     return __awaiter(this, void 0, void 0, function* () {
-        const result = yield shareSlot_model_1.ShareSlot.updateMany({ purchaseId, status: "sold" }, { $set: { status: "reclaimed", reclaimedAt: new Date(), userId: null, purchaseId: null } });
+        const result = yield shareSlot_model_1.ShareSlot.updateMany({ purchaseId, status: "sold" }, {
+            $set: {
+                status: "reclaimed",
+                reclaimedAt: new Date(),
+                userId: null,
+                purchaseId: null,
+            },
+        });
         return result.modifiedCount;
     });
 }
@@ -82,22 +95,29 @@ function reclaimPurchaseShares(purchaseId) {
  * - Installment purchase: down payment approval = purchase approval → same path.
  * - Only "sold" slots count; "available" and "reclaimed" do not.
  */
-function checkAndCompleteShare(shareId) {
+function checkAndCompleteShare(projectId) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const share = yield model_5.Project.findById(shareId).select("totalShares projectStatus").lean();
+            const share = yield model_5.Project.findById(projectId)
+                .select("totalShares projectStatus")
+                .lean();
             if (!share || share.projectStatus === "complete")
                 return;
             if (!share.totalShares || share.totalShares <= 0)
                 return;
-            const soldCount = yield shareSlot_model_1.ShareSlot.countDocuments({ shareId, status: "sold" });
+            const soldCount = yield shareSlot_model_1.ShareSlot.countDocuments({
+                projectId,
+                status: "sold",
+            });
             if (soldCount >= share.totalShares) {
-                yield model_5.Project.findByIdAndUpdate(shareId, { $set: { projectStatus: "complete" } });
+                yield model_5.Project.findByIdAndUpdate(projectId, {
+                    $set: { projectStatus: "complete" },
+                });
             }
         }
         catch (err) {
             // Non-critical — log and continue; do not block the approval response
-            console.error(`[SHARE COMPLETE] checkAndCompleteShare failed for shareId=${shareId}:`, err);
+            console.error(`[SHARE COMPLETE] checkAndCompleteShare failed for projectId=${projectId}:`, err);
         }
     });
 }
@@ -122,7 +142,9 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             }
         }
         // Step 2 — For cash: mark full amount as paid
-        if (status === "approved" && !wasAlreadyApproved && purchase.paymentType === "cash") {
+        if (status === "approved" &&
+            !wasAlreadyApproved &&
+            purchase.paymentType === "cash") {
             const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
             if (fullAmount > purchase.amountPaid) {
                 purchase.amountPaid = fullAmount;
@@ -139,16 +161,18 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
         if (status === "approved" && !wasAlreadyApproved) {
             // Step 4 — User personal shares count
             yield model_3.User.findByIdAndUpdate(purchase.userId, {
-                $inc: { personalSharesCount: purchase.quantity },
+                $inc: { personalPurchaseCount: purchase.quantity },
             });
-            // Step 4b — Apply purchase-based rank (Entrepreneur) if no sales rank yet
-            yield (0, controller_1.applyPurchaseBasedRank)(purchase.userId.toString());
+            // Step 4b — Recalc buyer's own rank (Rank 2 depends on personal purchase count)
+            yield (0, controller_1.recalcUserRank)(purchase.userId.toString());
             // Step 5 — Fix P-02: await commission distribution so errors are caught
             if (!purchase.commissionProcessed) {
                 yield (0, commissions_1.distributeCommissions)(purchase._id.toString());
             }
             // Step 6 — Ledger entry
-            const buyer = yield model_3.User.findById(purchase.userId).select("name username").lean();
+            const buyer = yield model_3.User.findById(purchase.userId)
+                .select("name username")
+                .lean();
             const buyerName = (_a = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _a !== void 0 ? _a : "";
             const buyerUsername = (_b = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _b !== void 0 ? _b : "";
             try {
@@ -167,15 +191,15 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
                 console.error(`[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`, ledgerErr);
             }
             // Step 7 — Auto-complete share if all slots are now sold
-            yield checkAndCompleteShare(purchase.shareId);
+            yield checkAndCompleteShare(purchase.projectId);
         }
         // Step 8 — Update certificate status
         const purchaseWithShare = yield model_1.Purchase.findById(purchase._id)
-            .populate("shareId", "cashPrice")
+            .populate("projectId", "cashPrice")
             .lean();
         if (purchaseWithShare) {
-            const sharePrice = Number((_f = (_e = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.shareId) === null || _e === void 0 ? void 0 : _e.cashPrice) !== null && _f !== void 0 ? _f : 0);
-            const totalPayable = (0, service_1.calculateTotalPayable)(sharePrice, purchaseWithShare.quantity);
+            const projectPrice = Number((_f = (_e = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.projectId) === null || _e === void 0 ? void 0 : _e.cashPrice) !== null && _f !== void 0 ? _f : 0);
+            const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchaseWithShare.quantity);
             const certificateStatus = (0, service_1.calculateCertificateStatus)({
                 status: purchaseWithShare.status,
                 paymentType: purchaseWithShare.paymentType,

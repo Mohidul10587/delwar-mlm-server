@@ -439,7 +439,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1–12
 
-  // Month boundaries for current-month purchase checks
+  // Month boundaries for current-month direct-sales check
   const monthStart = new Date(currentYear, currentMonth - 1, 1);
   const monthEnd = new Date(currentYear, currentMonth, 1);
 
@@ -447,7 +447,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
 
   const users = await User.find({
     currentRank: { $in: ranks.map((r: any) => r.name) },
-  }).select("_id currentRank currentRankAchievedAt");
+  }).select("_id currentRank currentRankAchievedAt personalPurchaseCount");
 
   for (const user of users) {
     const rank = ranks.find((r: any) => r.name === (user as any).currentRank);
@@ -481,8 +481,8 @@ export const processMonthlySalaries = async (): Promise<number> => {
     });
     if (alreadyPaid) continue;
 
-    // ── Condition 1: current-month direct sales (approved purchases where seller's
-    //    gen-ancestor[0] is this user, approved this month) ────────────────────
+    // ── Condition 1: current-month direct sales ──────────────────────────────
+    // Count approved purchases this month where the buyer's gen-1 ancestor is this user.
     const monthlySalesResult = await Purchase.aggregate([
       {
         $match: {
@@ -516,6 +516,17 @@ export const processMonthlySalaries = async (): Promise<number> => {
     const monthlySalesCount: number = monthlySalesResult[0]?.count ?? 0;
     if (monthlySalesCount < (sal.minMonthlySalesQty ?? 0)) continue;
 
+    // ── Condition 2: cumulative personal purchase count ──────────────────────
+    // The user must have accumulated at least minTotalPersonalPurchaseQtyForSalary
+    // total (all-time) approved personal purchases to receive salary this month.
+    const minTotalPersonalQty: number =
+      sal.minTotalPersonalPurchaseQtyForSalary ?? 0;
+    if (minTotalPersonalQty > 0) {
+      const userPersonalCount: number =
+        (user as any).personalPurchaseCount ?? 0;
+      if (userPersonalCount < minTotalPersonalQty) continue;
+    }
+
     // Fix F-05: atomic $inc — prevents race condition if cron runs twice concurrently
     const updatedWallet = await Wallet.findOneAndUpdate(
       { userId: user._id },
@@ -528,7 +539,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       type: "salary",
       amount: sal.amount,
       balanceAfter: updatedWallet.salaryBalanceFromRanks,
-      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
+      note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
     });
 
     try {
@@ -537,10 +548,13 @@ export const processMonthlySalaries = async (): Promise<number> => {
         type: "salary_paid",
         amount: sal.amount,
         userId: user._id,
-        note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
+        note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
       });
     } catch (ledgerErr) {
-      console.error(`[LEDGER ERROR] salary_paid for userId=${user._id}:`, ledgerErr);
+      console.error(
+        `[LEDGER ERROR] salary_paid for userId=${user._id}:`,
+        ledgerErr
+      );
     }
 
     await RankSalaryLog.create({

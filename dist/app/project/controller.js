@@ -48,7 +48,7 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
                 for (let i = batch; i < end; i++) {
                     docs.push({
                         shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
-                        shareId: pkg._id,
+                        projectId: pkg._id,
                         status: "available",
                         userId: null,
                         purchaseId: null,
@@ -144,7 +144,7 @@ const updateShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
                 for (let i = batch; i < end; i++) {
                     docs.push({
                         shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
-                        shareId: old._id,
+                        projectId: old._id,
                         status: "available",
                         userId: null,
                         purchaseId: null,
@@ -156,7 +156,7 @@ const updateShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         }
         else if (diff < 0) {
             // Remove the last |diff| available slots only
-            const toRemove = yield shareSlot_model_1.ShareSlot.find({ shareId: old._id, status: "available" })
+            const toRemove = yield shareSlot_model_1.ShareSlot.find({ projectId: old._id, status: "available" })
                 .sort({ shareNumber: -1 })
                 .limit(Math.abs(diff))
                 .select("_id")
@@ -176,7 +176,7 @@ const deleteShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const pkg = yield model_1.Project.findByIdAndDelete(req.params.id);
         if (!pkg)
             return res.status(404).json({ message: "Share not found" });
-        yield shareSlot_model_1.ShareSlot.deleteMany({ shareId: req.params.id });
+        yield shareSlot_model_1.ShareSlot.deleteMany({ projectId: req.params.id });
         res.json({ message: "Share deleted" });
     }
     catch (err) {
@@ -184,21 +184,24 @@ const deleteShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 exports.deleteShare = deleteShare;
-// GET /share/cover-slider — public endpoint, returns images of the active cover slider share
+// GET /share/cover-slider — public endpoint, returns merged images of all active cover slider shares
 const getCoverSlider = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
     try {
-        const share = yield model_1.Project.findOne({ isCoverSlider: true, isActive: true }).lean();
-        if (!share)
-            return res.json({ images: [], shareId: null, title: null });
-        res.json({ images: (_a = share.images) !== null && _a !== void 0 ? _a : [], shareId: share._id, title: share.title });
+        const shares = yield model_1.Project.find({ isCoverSlider: true, isActive: true }).lean();
+        if (!shares.length)
+            return res.json({ images: [], shareIds: [], titles: [] });
+        // Merge all images from all selected cover slider shares
+        const images = shares.flatMap((s) => { var _a; return (_a = s.images) !== null && _a !== void 0 ? _a : []; });
+        const shareIds = shares.map((s) => s._id);
+        const titles = shares.map((s) => s.title);
+        res.json({ images, shareIds, titles });
     }
     catch (err) {
         next(err);
     }
 });
 exports.getCoverSlider = getCoverSlider;
-// PATCH /share/:id/set-cover-slider — admin/super-admin sets which share is the cover slider
+// PATCH /share/:id/set-cover-slider — admin toggles a share in/out of the cover slider
 const setCoverSlider = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const share = yield model_1.Project.findById(req.params.id);
@@ -206,11 +209,10 @@ const setCoverSlider = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             return res.status(404).json({ message: "Share not found" });
         if (!share.isActive)
             return res.status(400).json({ message: "Cannot set an inactive share as cover slider" });
-        // Unset all others first
-        yield model_1.Project.updateMany({ isCoverSlider: true }, { $set: { isCoverSlider: false } });
+        // Toggle: if already set, unset it; otherwise add it to the cover slider
         share.isCoverSlider = true;
         yield share.save();
-        res.json({ message: "Cover slider updated", shareId: share._id });
+        res.json({ message: "Cover slider updated", projectId: share._id });
     }
     catch (err) {
         next(err);
@@ -241,7 +243,7 @@ const backfillSlots = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         const desired = (_a = share.totalShares) !== null && _a !== void 0 ? _a : 0;
         if (desired === 0)
             return res.json({ message: "Share has 0 totalShares — nothing to backfill", created: 0 });
-        const existing = yield shareSlot_model_1.ShareSlot.countDocuments({ shareId: share._id });
+        const existing = yield shareSlot_model_1.ShareSlot.countDocuments({ projectId: share._id });
         const diff = desired - existing;
         if (diff <= 0) {
             return res.json({ message: "Slots already up to date", created: 0, total: existing });
@@ -259,7 +261,7 @@ const backfillSlots = (req, res, next) => __awaiter(void 0, void 0, void 0, func
             for (let i = batch; i < end; i++) {
                 docs.push({
                     shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
-                    shareId: share._id,
+                    projectId: share._id,
                     status: "available",
                     userId: null,
                     purchaseId: null,
@@ -291,13 +293,13 @@ const getShareStats = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         const [shares, counts] = yield Promise.all([
             model_1.Project.find().lean(),
             shareSlot_model_1.ShareSlot.aggregate([
-                { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
+                { $group: { _id: { projectId: "$projectId", status: "$status" }, count: { $sum: 1 } } },
             ]),
         ]);
-        // Build a map: shareId -> { available, sold, reclaimed }
+        // Build a map: projectId -> { available, sold, reclaimed }
         const map = {};
         for (const { _id, count } of counts) {
-            const key = _id.shareId.toString();
+            const key = _id.projectId.toString();
             if (!map[key])
                 map[key] = { available: 0, sold: 0, reclaimed: 0 };
             map[key][_id.status] = count;
@@ -329,12 +331,12 @@ const getSharesWithStats = (req, res, next) => __awaiter(void 0, void 0, void 0,
             // Admin panel sees ALL shares (including inactive)
             model_1.Project.find().lean(),
             shareSlot_model_1.ShareSlot.aggregate([
-                { $group: { _id: { shareId: "$shareId", status: "$status" }, count: { $sum: 1 } } },
+                { $group: { _id: { projectId: "$projectId", status: "$status" }, count: { $sum: 1 } } },
             ]),
         ]);
         const map = {};
         for (const { _id, count } of counts) {
-            const key = _id.shareId.toString();
+            const key = _id.projectId.toString();
             if (!map[key])
                 map[key] = { available: 0, sold: 0, reclaimed: 0 };
             map[key][_id.status] = count;
