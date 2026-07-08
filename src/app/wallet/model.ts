@@ -6,12 +6,11 @@ export interface IWallet extends Document {
   directCommissionBalance: number;
   manCommFromDownPayment: number;
   manCommFromInstallment: number;
-  salaryBalance: number;
-  rewardBalance: number;
+  salaryBalanceFromRanks: number;
   incentiveBonus: number;  // admin-granted, non-withdrawable
   transferBalance: number; // received via balance transfer
   loanBalance: number;     // admin-granted loan, tracked separately
-  adminMonthlySalaryBalance: number; // salary released by super admin
+  fixedMonthlySalaryForAdminOnly: number; // salary released by super admin
   expenseReimbursementBalance: number; // approved expense reimbursements
 }
 
@@ -49,12 +48,11 @@ const WalletSchema = new Schema<IWallet>(
     directCommissionBalance: { type: Number, default: 0 },
     manCommFromDownPayment: { type: Number, default: 0 },
     manCommFromInstallment: { type: Number, default: 0 },
-    salaryBalance: { type: Number, default: 0 },
-    rewardBalance: { type: Number, default: 0 },
+    salaryBalanceFromRanks: { type: Number, default: 0 },
     incentiveBonus: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
     loanBalance: { type: Number, default: 0 },
-    adminMonthlySalaryBalance: { type: Number, default: 0 },
+    fixedMonthlySalaryForAdminOnly: { type: Number, default: 0 },
     expenseReimbursementBalance: { type: Number, default: 0 },
   },
   { timestamps: true }
@@ -67,11 +65,10 @@ WalletSchema.pre("save", function () {
     (this.directCommissionBalance ?? 0) +
     (this.manCommFromDownPayment ?? 0) +
     (this.manCommFromInstallment ?? 0) +
-    (this.salaryBalance ?? 0) +
-    (this.rewardBalance ?? 0) +
+    (this.salaryBalanceFromRanks ?? 0) +
     (this.incentiveBonus ?? 0) +
     (this.transferBalance ?? 0) +
-    (this.adminMonthlySalaryBalance ?? 0) +
+    (this.fixedMonthlySalaryForAdminOnly ?? 0) +
     (this.expenseReimbursementBalance ?? 0);
     // Note: loanBalance is NOT included in totalBalance (tracked separately)
 });

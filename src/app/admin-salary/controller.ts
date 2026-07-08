@@ -86,7 +86,7 @@ export const releaseSalary = async (req: Request, res: Response, next: NextFunct
       { userId: adminId },
       {
         $inc: {
-          adminMonthlySalaryBalance: amount,
+          fixedMonthlySalaryForAdminOnly: amount,
           totalBalance: amount,
         },
       },
@@ -217,7 +217,7 @@ export const autoReleaseMonthlySalaries = async (): Promise<void> => {
         { userId: adminId },
         {
           $inc: {
-            adminMonthlySalaryBalance: amount,
+            fixedMonthlySalaryForAdminOnly: amount,
             totalBalance: amount,
           },
         },

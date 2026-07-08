@@ -29,8 +29,7 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
       (wallet.directCommissionBalance ?? 0) +
       (wallet.manCommFromDownPayment ?? 0) +
       (wallet.manCommFromInstallment ?? 0) +
-      (wallet.salaryBalance ?? 0) +
-      (wallet.rewardBalance ?? 0) +
+      (wallet.salaryBalanceFromRanks ?? 0) +
       (wallet.transferBalance ?? 0);
 
     if (withdrawableBalance < amt)
@@ -43,8 +42,7 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
       "directCommissionBalance",
       "manCommFromDownPayment",
       "manCommFromInstallment",
-      "salaryBalance",
-      "rewardBalance",
+      "salaryBalanceFromRanks",
       "transferBalance",
     ];
     for (const field of fields) {

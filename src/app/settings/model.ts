@@ -47,11 +47,7 @@ export interface ISettings extends Document {
      * One-time requirement checked at the time of rank calculation.
      */
     minPersonalPurchaseQtyToAchieve: number;
-    reward?: {
-      /** Display name of the reward (e.g. "Gold Watch") */
-      name: string;
-      description: string;
-    };
+    reward?: string;
     salary?: {
       /** Monthly salary amount in ৳ */
       amount: number;
@@ -133,10 +129,7 @@ const SettingsSchema = new Schema<ISettings>({
     minNetworkSalesAmount: { type: Number, default: 0 },
     // Minimum personal (own) approved purchases to achieve this rank (one-time check)
     minPersonalPurchaseQtyToAchieve: { type: Number, default: 0 },
-    reward: {
-      name: { type: String, default: "" },
-      description: { type: String, default: "" },
-    },
+    reward: { type: String, default: "" },
     salary: {
       amount: { type: Number, default: 0 },
       // Renamed from: durationMonths

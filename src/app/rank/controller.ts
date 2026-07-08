@@ -370,7 +370,7 @@ export const recalcUserRank = async (userId: string, preloadedRanks?: any[]) => 
 };
 
 async function issueRankReward(userId: string, rank: any) {
-  if (!rank?.reward?.value) return;
+  if (!rank?.reward) return;
 
   // Fix F-08: Atomic check — only issue reward if not already issued for this rank
   // Uses TransactionLog as the source of truth to prevent double-issuance
@@ -381,19 +381,13 @@ async function issueRankReward(userId: string, rank: any) {
   }).lean();
   if (alreadyIssued) return;
 
-  // Fix F-05: atomic $inc to prevent race condition
-  const wallet = await Wallet.findOneAndUpdate(
-    { userId },
-    { $inc: { rewardBalance: rank.reward.value, totalBalance: rank.reward.value } },
-    { new: true, upsert: true }
-  );
-
-  const note = `Rank reward — "${rank.name}" achieved: ${rank.reward.name} worth ৳${rank.reward.value.toLocaleString()} (${rank.reward.type})`;
+  // reward is a physical/named item — no monetary value, so wallet is not touched
+  const note = `Rank reward — "${rank.name}" achieved: ${rank.reward}`;
   await TransactionLog.create({
     userId,
     type: "reward",
-    amount: rank.reward.value,
-    balanceAfter: wallet.rewardBalance,
+    amount: 0,
+    balanceAfter: 0,
     note,
   });
 
@@ -401,7 +395,7 @@ async function issueRankReward(userId: string, rank: any) {
     await CompanyLedger.create({
       date: new Date(),
       type: "reward_paid",
-      amount: rank.reward.value,
+      amount: 0,
       userId,
       note,
     });
@@ -516,7 +510,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
     // Fix F-05: atomic $inc — prevents race condition if cron runs twice concurrently
     const updatedWallet = await Wallet.findOneAndUpdate(
       { userId: user._id },
-      { $inc: { salaryBalance: sal.amount, totalBalance: sal.amount } },
+      { $inc: { salaryBalanceFromRanks: sal.amount, totalBalance: sal.amount } },
       { new: true, upsert: true }
     );
 
@@ -524,7 +518,7 @@ export const processMonthlySalaries = async (): Promise<number> => {
       userId: user._id,
       type: "salary",
       amount: sal.amount,
-      balanceAfter: updatedWallet.salaryBalance,
+      balanceAfter: updatedWallet.salaryBalanceFromRanks,
       note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2,"0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${sal.salaryDurationMonths ?? 3})`,
     });
 
