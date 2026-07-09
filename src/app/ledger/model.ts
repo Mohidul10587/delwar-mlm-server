@@ -12,7 +12,6 @@ import { Schema, model, Document, Types } from "mongoose";
  * OUTFLOW (company pays out):
  *   commission_paid          — direct or managerial commission to a user's wallet
  *   salary_paid              — monthly rank salary credited to a user's wallet
- *   reward_paid              — rank achievement reward credited to a user's wallet
  *   investment_profit_paid   — monthly / partial / maturity profit distributed
  *   withdrawal_paid          — withdrawal request approved (money leaves company)
  *   incentive_bonus_paid     — incentive bonus granted by admin
@@ -27,7 +26,6 @@ export type LedgerType =
   | "transfer_fee_received"
   | "commission_paid"
   | "salary_paid"
-  | "reward_paid"
   | "investment_profit_paid"
   | "withdrawal_paid"
   | "incentive_bonus_paid"
@@ -45,7 +43,6 @@ export const INFLOW_TYPES: LedgerType[] = [
 export const OUTFLOW_TYPES: LedgerType[] = [
   "commission_paid",
   "salary_paid",
-  "reward_paid",
   "investment_profit_paid",
   "withdrawal_paid",
   "incentive_bonus_paid",

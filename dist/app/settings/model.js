@@ -29,9 +29,13 @@ const SettingsSchema = new mongoose_1.Schema({
             minInstallments: { type: Number, default: 5 },
             maxInstallments: { type: Number, default: 60 },
             directSaleCommissionValue: { type: Number, default: 0 },
-            downPaymentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
+            downPaymentGenerationRates: [
+                { generation: { type: Number }, rate: { type: Number }, _id: false },
+            ],
             installmentCommissionRate: { type: Number, default: 0 },
-            installmentGenerationRates: [{ generation: { type: Number }, rate: { type: Number }, _id: false }],
+            installmentGenerationRates: [
+                { generation: { type: Number }, rate: { type: Number }, _id: false },
+            ],
         },
         default: () => ({
             minDownPayment: 15000,
@@ -45,29 +49,38 @@ const SettingsSchema = new mongoose_1.Schema({
         }),
     },
     managerialCommissionWeeklyProcessDay: { type: Number, default: 0 },
-    ranks: [{
+    ranks: [
+        {
             name: { type: String },
-            // Renamed from: requiredApprovedSales
             minNetworkSalesAmount: { type: Number, default: 0 },
-            // Minimum personal (own) approved purchases to achieve this rank (one-time check)
             minPersonalPurchaseQtyToAchieve: { type: Number, default: 0 },
             reward: { type: String, default: "" },
             salary: {
                 amount: { type: Number, default: 0 },
-                // Renamed from: durationMonths
                 salaryDurationMonths: { type: Number, default: 0 },
-                // Renamed from: minMonthlySales
                 minMonthlySalesQty: { type: Number, default: 0 },
-                // Renamed from: requiredPersonalShares → minPersonalPurchaseQty → minMonthlyPersonalPurchaseQtyForSalary → minTotalPersonalPurchaseQtyForSalary
                 minTotalPersonalPurchaseQtyForSalary: { type: Number, default: 0 },
             },
-        }],
+        },
+    ],
     branches: [{ type: String }],
     investmentConfig: {
         type: {
-            monthly: { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },
-            partial: { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },
-            maturity: { profitPercentage: { type: Number, default: 0 }, minAmount: { type: Number, default: 0 }, bulletPoints: [{ en: String, bn: String }] },
+            monthly: {
+                profitPercentage: { type: Number, default: 0 },
+                minAmount: { type: Number, default: 0 },
+                bulletPoints: [{ en: String, bn: String }],
+            },
+            partial: {
+                profitPercentage: { type: Number, default: 0 },
+                minAmount: { type: Number, default: 0 },
+                bulletPoints: [{ en: String, bn: String }],
+            },
+            maturity: {
+                profitPercentage: { type: Number, default: 0 },
+                minAmount: { type: Number, default: 0 },
+                bulletPoints: [{ en: String, bn: String }],
+            },
         },
         default: () => ({
             monthly: { profitPercentage: 0, minAmount: 0, bulletPoints: [] },

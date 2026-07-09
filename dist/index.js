@@ -47,7 +47,8 @@ const routes_19 = __importDefault(require("./app/expense/routes"));
 const routes_20 = __importDefault(require("./app/achievers/routes"));
 const routes_21 = __importDefault(require("./app/admin-salary/routes"));
 const controller_1 = require("./app/admin-salary/controller");
-const controller_2 = require("./app/notice/controller");
+const controller_2 = require("./app/rank/controller");
+const controller_3 = require("./app/notice/controller");
 const node_cron_1 = __importDefault(require("node-cron"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -58,13 +59,13 @@ const io = new socket_io_1.Server(httpServer, {
         credentials: true,
     },
 });
-(0, controller_2.setSocketIO)(io);
+(0, controller_3.setSocketIO)(io);
 const port = process.env.PORT || 5000;
 mongoose_1.default.connect(process.env.MONGODB_URI);
 mongoose_1.default.connection.once("open", () => __awaiter(void 0, void 0, void 0, function* () {
     console.log("Connected to MongoDB");
     yield (0, seedAdmin_1.seedAdmin)();
-    // ── Monthly salary auto-release cron ──────────────────────────────────────
+    // ── Admin monthly salary auto-release cron ────────────────────────────────
     // Runs at 23:59 on the last day of every month.
     // "59 23 28-31 * *" + day-of-month check ensures last day only.
     node_cron_1.default.schedule("59 23 28-31 * *", () => __awaiter(void 0, void 0, void 0, function* () {
@@ -77,6 +78,20 @@ mongoose_1.default.connection.once("open", () => __awaiter(void 0, void 0, void 
         }
     }));
     console.log("[CRON] Monthly salary scheduler registered");
+    // ── Rank salary auto-release cron ─────────────────────────────────────────
+    // Runs at 23:59 on the last day of every month (same schedule).
+    // Only fires for users who haven't already been paid manually by admin.
+    node_cron_1.default.schedule("59 23 28-31 * *", () => __awaiter(void 0, void 0, void 0, function* () {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        if (tomorrow.getDate() === 1) {
+            console.log("[CRON] Running rank salary auto-release...");
+            const released = yield (0, controller_2.processMonthlySalaries)();
+            console.log(`[CRON] Rank salary auto-release done: ${released} users paid`);
+        }
+    }));
+    console.log("[CRON] Rank salary scheduler registered");
 }));
 // Fix S-11: Security headers
 app.use((0, helmet_1.default)({

@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processMonthlySalaries = exports.releaseMonthlySalaries = exports.recalcUserRank = exports.getMyRank = exports.deleteRank = exports.replaceAllRanks = exports.updateRank = exports.createRank = exports.getRanks = void 0;
+exports.releaseRankSalaryForUser = exports.getSalaryEligibleUsers = exports.processMonthlySalaries = exports.releaseMonthlySalaries = exports.recalcUserRank = exports.getMyRank = exports.deleteRank = exports.replaceAllRanks = exports.updateRank = exports.createRank = exports.getRanks = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const model_1 = require("../settings/model");
 const model_2 = require("../user/model");
@@ -324,38 +324,16 @@ const recalcUserRank = (userId, preloadedRanks) => __awaiter(void 0, void 0, voi
 exports.recalcUserRank = recalcUserRank;
 function issueRankReward(userId, rank) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a;
         if (!(rank === null || rank === void 0 ? void 0 : rank.reward))
             return;
-        // Fix F-08: Atomic check — only issue reward if not already issued for this rank
-        // Uses TransactionLog as the source of truth to prevent double-issuance
-        const alreadyIssued = yield model_4.TransactionLog.findOne({
-            userId,
-            type: "reward",
-            note: { $regex: `"${rank.name}"` },
-        }).lean();
-        if (alreadyIssued)
+        // Check if user has already earned this rank (duplicate prevention)
+        const user = yield model_2.User.findById(userId).select("earnedRanks").lean();
+        if (!user || ((_a = user.earnedRanks) === null || _a === void 0 ? void 0 : _a.includes(rank.name)))
             return;
-        // reward is a physical/named item — no monetary value, so wallet is not touched
-        const note = `Rank reward — "${rank.name}" achieved: ${rank.reward}`;
-        yield model_4.TransactionLog.create({
-            userId,
-            type: "reward",
-            amount: 0,
-            balanceAfter: 0,
-            note,
-        });
-        try {
-            yield model_5.CompanyLedger.create({
-                date: new Date(),
-                type: "reward_paid",
-                amount: 0,
-                userId,
-                note,
-            });
-        }
-        catch (ledgerErr) {
-            console.error(`[LEDGER ERROR] reward_paid for userId=${userId}:`, ledgerErr);
-        }
+        // reward is a physical/named item — no monetary value
+        // no transaction log or company ledger entry needed since no money changes hands
+        // physical rewards should be tracked in a separate inventory/operations system
     });
 }
 // ── Monthly salary release ────────────────────────────────────────────────────
@@ -491,3 +469,281 @@ const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function*
     return count;
 });
 exports.processMonthlySalaries = processMonthlySalaries;
+// ── GET /rank/salary-eligible ─────────────────────────────────────────────────
+// Returns all users whose currentRank has salary.amount > 0, with per-user
+// breakdown: rank info, this month's sales count, how many more needed,
+// cumulative personal purchase count, and whether they qualify this month.
+const getSalaryEligibleUsers = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const s = yield model_1.Settings.findOne();
+        const salaryRanks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []).filter((r) => { var _a; return ((_a = r.salary) === null || _a === void 0 ? void 0 : _a.amount) > 0; });
+        if (!salaryRanks.length) {
+            return res.json({ users: [] });
+        }
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1–12
+        const monthStart = new Date(currentYear, currentMonth - 1, 1);
+        const monthEnd = new Date(currentYear, currentMonth, 1);
+        // Fetch all users currently holding a salary-eligible rank
+        const users = yield model_2.User.find({
+            currentRank: { $in: salaryRanks.map((r) => r.name) },
+        })
+            .select("_id name username phone currentRank currentRankAchievedAt personalPurchaseCount")
+            .lean();
+        // For each user, count this month's direct sales and check all conditions
+        const rows = yield Promise.all(users.map((user) => __awaiter(void 0, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e, _f, _g;
+            const rank = salaryRanks.find((r) => r.name === user.currentRank);
+            if (!rank)
+                return null;
+            const sal = rank.salary;
+            const achievedAt = (_a = user.currentRankAchievedAt) !== null && _a !== void 0 ? _a : new Date(0);
+            // Salary start month = month after rank achievement
+            const salaryStartMonth = new Date(achievedAt);
+            salaryStartMonth.setMonth(salaryStartMonth.getMonth() + 1);
+            salaryStartMonth.setDate(1);
+            salaryStartMonth.setHours(0, 0, 0, 0);
+            const salaryStarted = now >= salaryStartMonth;
+            // How many salary months have been paid
+            const paidCount = yield salary_log_model_1.RankSalaryLog.countDocuments({
+                userId: user._id,
+                rankName: rank.name,
+            });
+            const maxDuration = (_b = sal.salaryDurationMonths) !== null && _b !== void 0 ? _b : 3;
+            const durationExceeded = paidCount >= maxDuration;
+            // Already paid this month?
+            const alreadyPaidThisMonth = !!(yield salary_log_model_1.RankSalaryLog.findOne({
+                userId: user._id,
+                rankName: rank.name,
+                year: currentYear,
+                month: currentMonth,
+            }).lean());
+            // This month's direct sales
+            const salesAgg = yield model_3.Purchase.aggregate([
+                {
+                    $match: {
+                        status: "approved",
+                        reviewedAt: { $gte: monthStart, $lt: monthEnd },
+                    },
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "userId",
+                        foreignField: "_id",
+                        as: "buyer",
+                    },
+                },
+                { $unwind: "$buyer" },
+                {
+                    $match: {
+                        "buyer.generationAncestors": {
+                            $elemMatch: { level: 1, userId: user._id },
+                        },
+                    },
+                },
+                { $group: { _id: null, count: { $sum: "$quantity" } } },
+            ]);
+            const monthlySalesCount = (_d = (_c = salesAgg[0]) === null || _c === void 0 ? void 0 : _c.count) !== null && _d !== void 0 ? _d : 0;
+            const minMonthlySalesQty = (_e = sal.minMonthlySalesQty) !== null && _e !== void 0 ? _e : 0;
+            const salesNeeded = Math.max(0, minMonthlySalesQty - monthlySalesCount);
+            // salesConditionMet is only meaningful if salary has already started
+            const salesConditionMet = salaryStarted &&
+                (minMonthlySalesQty === 0 || monthlySalesCount >= minMonthlySalesQty);
+            // Cumulative personal purchase condition
+            const minTotalPersonalQty = (_f = sal.minTotalPersonalPurchaseQtyForSalary) !== null && _f !== void 0 ? _f : 0;
+            const personalPurchaseCount = (_g = user.personalPurchaseCount) !== null && _g !== void 0 ? _g : 0;
+            const personalPurchaseNeeded = Math.max(0, minTotalPersonalQty - personalPurchaseCount);
+            const personalConditionMet = minTotalPersonalQty === 0 ||
+                personalPurchaseCount >= minTotalPersonalQty;
+            // Overall eligibility for this month
+            const eligibleThisMonth = salaryStarted &&
+                !durationExceeded &&
+                !alreadyPaidThisMonth &&
+                salesConditionMet &&
+                personalConditionMet;
+            return {
+                userId: user._id,
+                name: user.name,
+                username: user.username,
+                phone: user.phone,
+                currentRank: user.currentRank,
+                rankAchievedAt: user.currentRankAchievedAt,
+                // Salary config
+                salaryAmount: sal.amount,
+                salaryDurationMonths: maxDuration,
+                paidCount,
+                remainingPayments: Math.max(0, maxDuration - paidCount),
+                // Monthly sales
+                minMonthlySalesQty,
+                monthlySalesCount,
+                salesNeeded,
+                salesConditionMet,
+                // Personal purchase (cumulative)
+                minTotalPersonalPurchaseQty: minTotalPersonalQty,
+                personalPurchaseCount,
+                personalPurchaseNeeded,
+                personalConditionMet,
+                // Status flags
+                salaryStarted,
+                durationExceeded,
+                alreadyPaidThisMonth,
+                eligibleThisMonth,
+            };
+        })));
+        const result = rows.filter(Boolean);
+        res.json({
+            year: currentYear,
+            month: currentMonth,
+            users: result,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.getSalaryEligibleUsers = getSalaryEligibleUsers;
+// ── POST /rank/release-salary/:userId ─────────────────────────────────────────
+// Super-admin manually releases this month's rank salary for one specific user.
+// Runs the same eligibility checks as the cron — no double-payment possible.
+const releaseRankSalaryForUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    try {
+        const { userId } = req.params;
+        if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ message: "Invalid userId" });
+        }
+        const s = yield model_1.Settings.findOne();
+        const ranks = ((_a = s === null || s === void 0 ? void 0 : s.ranks) !== null && _a !== void 0 ? _a : []).filter((r) => { var _a; return ((_a = r.salary) === null || _a === void 0 ? void 0 : _a.amount) > 0; });
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const monthStart = new Date(currentYear, currentMonth - 1, 1);
+        const monthEnd = new Date(currentYear, currentMonth, 1);
+        const user = yield model_2.User.findById(userId).select("_id currentRank currentRankAchievedAt personalPurchaseCount");
+        if (!user)
+            return res.status(404).json({ message: "User not found" });
+        const rank = ranks.find((r) => r.name === user.currentRank);
+        if (!rank) {
+            return res
+                .status(400)
+                .json({ message: "User's current rank has no salary configured" });
+        }
+        const sal = rank.salary;
+        const achievedAt = (_b = user.currentRankAchievedAt) !== null && _b !== void 0 ? _b : new Date(0);
+        // Must be in a month after rank achievement
+        const salaryStartMonth = new Date(achievedAt);
+        salaryStartMonth.setMonth(salaryStartMonth.getMonth() + 1);
+        salaryStartMonth.setDate(1);
+        salaryStartMonth.setHours(0, 0, 0, 0);
+        if (now < salaryStartMonth) {
+            return res.status(400).json({
+                message: "Salary only starts from the month after rank achievement",
+            });
+        }
+        // Duration check
+        const paidCount = yield salary_log_model_1.RankSalaryLog.countDocuments({
+            userId: user._id,
+            rankName: rank.name,
+        });
+        const maxDuration = (_c = sal.salaryDurationMonths) !== null && _c !== void 0 ? _c : 3;
+        if (paidCount >= maxDuration) {
+            return res
+                .status(400)
+                .json({ message: "Salary duration already completed" });
+        }
+        // Dedup: already paid this month?
+        const alreadyPaid = yield salary_log_model_1.RankSalaryLog.findOne({
+            userId: user._id,
+            rankName: rank.name,
+            year: currentYear,
+            month: currentMonth,
+        });
+        if (alreadyPaid) {
+            return res
+                .status(400)
+                .json({ message: "Salary already released for this month" });
+        }
+        // Monthly sales condition
+        const salesAgg = yield model_3.Purchase.aggregate([
+            {
+                $match: {
+                    status: "approved",
+                    reviewedAt: { $gte: monthStart, $lt: monthEnd },
+                },
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "buyer",
+                },
+            },
+            { $unwind: "$buyer" },
+            {
+                $match: {
+                    "buyer.generationAncestors": {
+                        $elemMatch: { level: 1, userId: user._id },
+                    },
+                },
+            },
+            { $group: { _id: null, count: { $sum: "$quantity" } } },
+        ]);
+        const monthlySalesCount = (_e = (_d = salesAgg[0]) === null || _d === void 0 ? void 0 : _d.count) !== null && _e !== void 0 ? _e : 0;
+        const minMonthlySalesQty = (_f = sal.minMonthlySalesQty) !== null && _f !== void 0 ? _f : 0;
+        if (monthlySalesCount < minMonthlySalesQty) {
+            return res.status(400).json({
+                message: `Monthly sales condition not met (${monthlySalesCount}/${minMonthlySalesQty})`,
+            });
+        }
+        // Personal purchase condition
+        const minTotalPersonalQty = (_g = sal.minTotalPersonalPurchaseQtyForSalary) !== null && _g !== void 0 ? _g : 0;
+        if (minTotalPersonalQty > 0) {
+            const personalCount = (_h = user.personalPurchaseCount) !== null && _h !== void 0 ? _h : 0;
+            if (personalCount < minTotalPersonalQty) {
+                return res.status(400).json({
+                    message: `Personal purchase condition not met (${personalCount}/${minTotalPersonalQty})`,
+                });
+            }
+        }
+        // All conditions met — release salary
+        const updatedWallet = yield model_4.Wallet.findOneAndUpdate({ userId: user._id }, { $inc: { salaryBalanceFromRanks: sal.amount, totalBalance: sal.amount } }, { new: true, upsert: true });
+        yield model_4.TransactionLog.create({
+            userId: user._id,
+            type: "salary",
+            amount: sal.amount,
+            balanceAfter: updatedWallet.salaryBalanceFromRanks,
+            note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${maxDuration}) [manual]`,
+        });
+        try {
+            yield model_5.CompanyLedger.create({
+                date: new Date(),
+                type: "salary_paid",
+                amount: sal.amount,
+                userId: user._id,
+                note: `Monthly salary — Rank: ${rank.name}, Month: ${currentYear}-${String(currentMonth).padStart(2, "0")}, ৳${sal.amount.toLocaleString()} (payment ${paidCount + 1}/${maxDuration}) [manual]`,
+            });
+        }
+        catch (ledgerErr) {
+            console.error(`[LEDGER ERROR] rank salary_paid for userId=${user._id}:`, ledgerErr);
+        }
+        yield salary_log_model_1.RankSalaryLog.create({
+            userId: user._id,
+            rankName: rank.name,
+            year: currentYear,
+            month: currentMonth,
+        });
+        res.json({
+            message: `Salary of ৳${sal.amount.toLocaleString()} released for ${rank.name}`,
+            amount: sal.amount,
+            month: `${currentYear}-${String(currentMonth).padStart(2, "0")}`,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.releaseRankSalaryForUser = releaseRankSalaryForUser;

@@ -381,36 +381,13 @@ export const recalcUserRank = async (userId: string, preloadedRanks?: any[]) => 
 async function issueRankReward(userId: string, rank: any) {
   if (!rank?.reward) return;
 
-  // Fix F-08: Atomic check — only issue reward if not already issued for this rank
-  // Uses TransactionLog as the source of truth to prevent double-issuance
-  const alreadyIssued = await TransactionLog.findOne({
-    userId,
-    type: "reward",
-    note: { $regex: `"${rank.name}"` },
-  }).lean();
-  if (alreadyIssued) return;
+  // Check if user has already earned this rank (duplicate prevention)
+  const user = await User.findById(userId).select("earnedRanks").lean();
+  if (!user || user.earnedRanks?.includes(rank.name)) return;
 
-  // reward is a physical/named item — no monetary value, so wallet is not touched
-  const note = `Rank reward — "${rank.name}" achieved: ${rank.reward}`;
-  await TransactionLog.create({
-    userId,
-    type: "reward",
-    amount: 0,
-    balanceAfter: 0,
-    note,
-  });
-
-  try {
-    await CompanyLedger.create({
-      date: new Date(),
-      type: "reward_paid",
-      amount: 0,
-      userId,
-      note,
-    });
-  } catch (ledgerErr) {
-    console.error(`[LEDGER ERROR] reward_paid for userId=${userId}:`, ledgerErr);
-  }
+  // reward is a physical/named item — no monetary value
+  // no transaction log or company ledger entry needed since no money changes hands
+  // physical rewards should be tracked in a separate inventory/operations system
 }
 
 // ── Monthly salary release ────────────────────────────────────────────────────

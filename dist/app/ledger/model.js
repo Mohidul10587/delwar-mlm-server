@@ -11,7 +11,6 @@ exports.INFLOW_TYPES = [
 exports.OUTFLOW_TYPES = [
     "commission_paid",
     "salary_paid",
-    "reward_paid",
     "investment_profit_paid",
     "withdrawal_paid",
     "incentive_bonus_paid",
