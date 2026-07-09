@@ -8,6 +8,7 @@ import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Project } from "../project/model";
 import { recalcUserRank } from "../rank/controller";
+import { checkAndGrantOneTimeReward } from "../../utils/rewardUtils";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
 
@@ -187,6 +188,15 @@ export const updatePurchaseStatus = async (
       // Step 5 — Fix P-02: await commission distribution so errors are caught
       if (!purchase.commissionProcessed) {
         await distributeCommissions((purchase._id as any).toString());
+      }
+
+      // Step 5b — One-time reward for cash purchases (full payment at once)
+      if (purchase.paymentType === "cash") {
+        await checkAndGrantOneTimeReward(
+          (purchase._id as any).toString(),
+          purchase.userId.toString(),
+          purchase.amountPaid
+        );
       }
 
       // Step 6 — Ledger entry

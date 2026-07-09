@@ -12,6 +12,7 @@ export interface IWallet extends Document {
   loanBalance: number;     // admin-granted loan, tracked separately
   fixedMonthlySalaryForAdminOnly: number; // salary released by super admin
   expenseReimbursementBalance: number; // approved expense reimbursements
+  rewardBalance: number;               // earned from installment reward system
 }
 
 export interface ITransactionLog extends Document {
@@ -34,7 +35,9 @@ export interface ITransactionLog extends Document {
     | "loan_given"
     | "loan_adjusted"
     | "admin_monthly_salary"
-    | "expense_reimbursement";
+    | "expense_reimbursement"
+    | "installment_reward_one_time"     // one-time payment reward
+    | "installment_reward_completion";  // installment completion reward
   amount: number;
   balanceAfter: number;
   note: string;
@@ -54,6 +57,7 @@ const WalletSchema = new Schema<IWallet>(
     loanBalance: { type: Number, default: 0 },
     fixedMonthlySalaryForAdminOnly: { type: Number, default: 0 },
     expenseReimbursementBalance: { type: Number, default: 0 },
+    rewardBalance: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -69,7 +73,8 @@ WalletSchema.pre("save", function () {
     (this.incentiveBonus ?? 0) +
     (this.transferBalance ?? 0) +
     (this.fixedMonthlySalaryForAdminOnly ?? 0) +
-    (this.expenseReimbursementBalance ?? 0);
+    (this.expenseReimbursementBalance ?? 0) +
+    (this.rewardBalance ?? 0);
     // Note: loanBalance is NOT included in totalBalance (tracked separately)
 });
 
@@ -100,6 +105,8 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
         "loan_adjusted",
         "admin_monthly_salary",
         "expense_reimbursement",
+        "installment_reward_one_time",
+        "installment_reward_completion",
       ],
       required: true,
     },
