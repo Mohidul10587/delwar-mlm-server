@@ -71,8 +71,6 @@ export interface ISettings extends Document {
     targetAmount: number;
     oneTimeReward: number;
     installmentCompletionReward: number;
-    isActive: boolean;
-    sortOrder: number;
   }[];
 }
 
@@ -169,8 +167,6 @@ const SettingsSchema = new Schema<ISettings>(
         targetAmount: { type: Number, required: true },
         oneTimeReward: { type: Number, required: true },
         installmentCompletionReward: { type: Number, required: true },
-        isActive: { type: Boolean, default: true },
-        sortOrder: { type: Number, default: 0 },
         _id: false,
       },
     ],

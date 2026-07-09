@@ -4,15 +4,15 @@ import { Purchase } from "../app/purchase/model";
 import { InstallmentPayment } from "../app/purchase/installment.model";
 
 /**
- * Loads active reward rules from Settings, sorted by targetAmount ascending.
+ * Loads reward rules from Settings, sorted by targetAmount ascending.
  * Returns empty array if no rules configured.
  */
 const getActiveRewardRules = async () => {
   const settings = await Settings.findOne({}).lean();
   if (!settings?.installmentRewardRules?.length) return [];
-  return settings.installmentRewardRules
-    .filter((r) => r.isActive)
-    .sort((a, b) => a.targetAmount - b.targetAmount);
+  return [...settings.installmentRewardRules].sort(
+    (a, b) => a.targetAmount - b.targetAmount
+  );
 };
 
 /**

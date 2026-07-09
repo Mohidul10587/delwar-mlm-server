@@ -14,7 +14,7 @@ const getOrCreateSettings = async () => {
 
 /**
  * GET /reward-rules
- * Returns all reward rules (admin: all, public: active only).
+ * Returns all reward rules.
  */
 export const getRewardRules = async (
   req: Request,
@@ -32,7 +32,7 @@ export const getRewardRules = async (
 
 /**
  * GET /reward-rules/public
- * Returns only active rules — safe for frontend display (no auth required).
+ * Returns all rules sorted by targetAmount — safe for frontend display (no auth required).
  */
 export const getPublicRewardRules = async (
   _req: Request,
@@ -41,9 +41,9 @@ export const getPublicRewardRules = async (
 ) => {
   try {
     const settings = await getOrCreateSettings();
-    const rules = (settings.installmentRewardRules ?? [])
-      .filter((r) => r.isActive)
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.targetAmount - b.targetAmount);
+    const rules = [...(settings.installmentRewardRules ?? [])].sort(
+      (a, b) => a.targetAmount - b.targetAmount
+    );
     res.json({ rules });
   } catch (err) {
     next(err);
@@ -53,7 +53,7 @@ export const getPublicRewardRules = async (
 /**
  * POST /reward-rules
  * Add a new reward rule.
- * Body: { targetAmount, oneTimeReward, installmentCompletionReward, isActive?, sortOrder? }
+ * Body: { targetAmount, oneTimeReward, installmentCompletionReward }
  */
 export const addRewardRule = async (
   req: Request,
@@ -61,8 +61,7 @@ export const addRewardRule = async (
   next: NextFunction
 ) => {
   try {
-    const { targetAmount, oneTimeReward, installmentCompletionReward, isActive, sortOrder } =
-      req.body;
+    const { targetAmount, oneTimeReward, installmentCompletionReward } = req.body;
 
     if (
       typeof targetAmount !== "number" || targetAmount <= 0 ||
@@ -89,13 +88,7 @@ export const addRewardRule = async (
 
     settings.installmentRewardRules = [
       ...(settings.installmentRewardRules ?? []),
-      {
-        targetAmount,
-        oneTimeReward,
-        installmentCompletionReward,
-        isActive: isActive !== false, // default true
-        sortOrder: typeof sortOrder === "number" ? sortOrder : 0,
-      },
+      { targetAmount, oneTimeReward, installmentCompletionReward },
     ];
 
     await settings.save();
@@ -108,7 +101,7 @@ export const addRewardRule = async (
 /**
  * PUT /reward-rules/:targetAmount
  * Update an existing reward rule identified by its targetAmount.
- * Body: { oneTimeReward?, installmentCompletionReward?, isActive?, sortOrder?, newTargetAmount? }
+ * Body: { oneTimeReward?, installmentCompletionReward?, newTargetAmount? }
  */
 export const updateRewardRule = async (
   req: Request,
@@ -131,13 +124,7 @@ export const updateRewardRule = async (
       });
     }
 
-    const {
-      oneTimeReward,
-      installmentCompletionReward,
-      isActive,
-      sortOrder,
-      newTargetAmount,
-    } = req.body;
+    const { oneTimeReward, installmentCompletionReward, newTargetAmount } = req.body;
 
     // If newTargetAmount is provided, check it doesn't conflict
     if (typeof newTargetAmount === "number" && newTargetAmount !== targetAmount) {
@@ -155,8 +142,6 @@ export const updateRewardRule = async (
     if (typeof oneTimeReward === "number" && oneTimeReward >= 0) rule.oneTimeReward = oneTimeReward;
     if (typeof installmentCompletionReward === "number" && installmentCompletionReward >= 0)
       rule.installmentCompletionReward = installmentCompletionReward;
-    if (typeof isActive === "boolean") rule.isActive = isActive;
-    if (typeof sortOrder === "number") rule.sortOrder = sortOrder;
 
     settings.installmentRewardRules = rules;
     settings.markModified("installmentRewardRules");
