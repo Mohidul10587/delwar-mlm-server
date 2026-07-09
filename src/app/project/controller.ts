@@ -9,12 +9,17 @@ const BATCH_SIZE = 1000;
 function isOfferActive(share: any): boolean {
   if (!share.isOffer) return false;
   const now = new Date();
-  if (share.offerStartDate && new Date(share.offerStartDate) > now) return false;
+  if (share.offerStartDate && new Date(share.offerStartDate) > now)
+    return false;
   if (share.offerEndDate && new Date(share.offerEndDate) < now) return false;
   return true;
 }
 
-export const createShare = async (req: Request, res: Response, next: NextFunction) => {
+export const createShare = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const settings = await Settings.findOne();
     const defaults = settings?.defaultShareConfig ?? {};
@@ -31,7 +36,9 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
         .sort({ shareNumber: -1 })
         .select("shareNumber")
         .lean();
-      const lastSeq = last ? parseInt(last.shareNumber.replace("THL-", ""), 10) : 0;
+      const lastSeq = last
+        ? parseInt(last.shareNumber.replace("THL-", ""), 10)
+        : 0;
 
       for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
         const docs = [];
@@ -53,7 +60,8 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
           // Duplicate key on shareNumber — retry with a fresh sequence base
           if (insertErr?.code === 11000) {
             return res.status(409).json({
-              message: "Share number conflict due to concurrent creation. Please retry.",
+              message:
+                "Share number conflict due to concurrent creation. Please retry.",
             });
           }
           throw insertErr;
@@ -62,10 +70,16 @@ export const createShare = async (req: Request, res: Response, next: NextFunctio
     }
 
     res.status(201).json({ message: "Share created", pkg });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const getShares = async (req: Request, res: Response, next: NextFunction) => {
+export const getShares = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { projectStatus, isOffer } = req.query;
     // Public endpoint: only show active shares to users
@@ -75,39 +89,66 @@ export const getShares = async (req: Request, res: Response, next: NextFunction)
     const shares = await Project.find(filter).lean();
 
     // Apply offer-active filter in memory (needs date comparison)
-    const result = isOffer === "true"
-      ? shares.filter(isOfferActive).sort((a, b) => (b.offerPriority ?? 0) - (a.offerPriority ?? 0))
-      : shares;
+    const result =
+      isOffer === "true"
+        ? shares
+            .filter(isOfferActive)
+            .sort((a, b) => (b.offerPriority ?? 0) - (a.offerPriority ?? 0))
+        : shares;
 
     // Attach computed isActiveOffer flag to every share
-    const enriched = result.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) }));
+    const enriched = result.map((s) => ({
+      ...s,
+      isActiveOffer: isOfferActive(s),
+    }));
 
     res.json({ shares: enriched });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // GET /share/admin — returns ALL shares (including inactive) for admin panel
-export const getSharesAdmin = async (req: Request, res: Response, next: NextFunction) => {
+export const getSharesAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { projectStatus } = req.query;
     const filter: any = {};
     if (projectStatus) filter.projectStatus = projectStatus;
 
     const shares = await Project.find(filter).lean();
-    const enriched = shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) }));
+    const enriched = shares.map((s) => ({
+      ...s,
+      isActiveOffer: isOfferActive(s),
+    }));
     res.json({ shares: enriched });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const getShareById = async (req: Request, res: Response, next: NextFunction) => {
+export const getShareById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const pkg = await Project.findById(req.params.id).lean();
     if (!pkg) return res.status(404).json({ message: "Share not found" });
     res.json({ pkg: { ...pkg, isActiveOffer: isOfferActive(pkg) } });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const updateShare = async (req: Request, res: Response, next: NextFunction) => {
+export const updateShare = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const old = await Project.findById(req.params.id);
     if (!old) return res.status(404).json({ message: "Share not found" });
@@ -118,13 +159,21 @@ export const updateShare = async (req: Request, res: Response, next: NextFunctio
       { new: true, runValidators: true }
     );
 
-    const newTotal: number = req.body.totalShares !== undefined ? Number(req.body.totalShares) : old.totalShares;
+    const newTotal: number =
+      req.body.totalShares !== undefined
+        ? Number(req.body.totalShares)
+        : old.totalShares;
     const diff = newTotal - old.totalShares;
 
     if (diff > 0) {
       // Add slots at the end
-      const last = await ShareSlot.findOne().sort({ shareNumber: -1 }).select("shareNumber").lean();
-      const lastSeq = last ? parseInt(last.shareNumber.replace("THL-", ""), 10) : 0;
+      const last = await ShareSlot.findOne()
+        .sort({ shareNumber: -1 })
+        .select("shareNumber")
+        .lean();
+      const lastSeq = last
+        ? parseInt(last.shareNumber.replace("THL-", ""), 10)
+        : 0;
       for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
         const docs = [];
         const end = Math.min(batch + BATCH_SIZE, diff);
@@ -142,33 +191,54 @@ export const updateShare = async (req: Request, res: Response, next: NextFunctio
       }
     } else if (diff < 0) {
       // Remove the last |diff| available slots only
-      const toRemove = await ShareSlot.find({ projectId: old._id, status: "available" })
+      const toRemove = await ShareSlot.find({
+        projectId: old._id,
+        status: "available",
+      })
         .sort({ shareNumber: -1 })
         .limit(Math.abs(diff))
         .select("_id")
         .lean();
       if (toRemove.length > 0)
-        await ShareSlot.deleteMany({ _id: { $in: toRemove.map((s) => s._id) } });
+        await ShareSlot.deleteMany({
+          _id: { $in: toRemove.map((s) => s._id) },
+        });
     }
 
     res.json({ message: "Share updated", pkg });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const deleteShare = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteShare = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const pkg = await Project.findByIdAndDelete(req.params.id);
     if (!pkg) return res.status(404).json({ message: "Share not found" });
     await ShareSlot.deleteMany({ projectId: req.params.id });
     res.json({ message: "Share deleted" });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // GET /share/cover-slider — public endpoint, returns merged images of all active cover slider shares
-export const getCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
+export const getCoverSlider = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const shares = await Project.find({ isCoverSlider: true, isActive: true }).lean();
-    if (!shares.length) return res.json({ images: [], shareIds: [], titles: [] });
+    const shares = await Project.find({
+      isCoverSlider: true,
+      isActive: true,
+    }).lean();
+    if (!shares.length)
+      return res.json({ images: [], shareIds: [], titles: [] });
 
     // Merge all images from all selected cover slider shares
     const images = shares.flatMap((s) => s.images ?? []);
@@ -176,26 +246,41 @@ export const getCoverSlider = async (req: Request, res: Response, next: NextFunc
     const titles = shares.map((s) => s.title);
 
     res.json({ images, shareIds, titles });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // PATCH /share/:id/set-cover-slider — admin toggles a share in/out of the cover slider
-export const setCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
+export const setCoverSlider = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const share = await Project.findById(req.params.id);
     if (!share) return res.status(404).json({ message: "Share not found" });
-    if (!share.isActive) return res.status(400).json({ message: "Cannot set an inactive share as cover slider" });
+    if (!share.isActive)
+      return res
+        .status(400)
+        .json({ message: "Cannot set an inactive share as cover slider" });
 
     // Toggle: if already set, unset it; otherwise add it to the cover slider
     share.isCoverSlider = true;
     await share.save();
 
     res.json({ message: "Cover slider updated", projectId: share._id });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // PATCH /share/:id/unset-cover-slider — remove cover slider designation
-export const unsetCoverSlider = async (req: Request, res: Response, next: NextFunction) => {
+export const unsetCoverSlider = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const share = await Project.findByIdAndUpdate(
       req.params.id,
@@ -204,24 +289,38 @@ export const unsetCoverSlider = async (req: Request, res: Response, next: NextFu
     );
     if (!share) return res.status(404).json({ message: "Share not found" });
     res.json({ message: "Cover slider removed" });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // POST /share/:id/backfill-slots — creates missing available slots so that
 // the total slot count matches share.totalShares. Safe to call multiple times.
-export const backfillSlots = async (req: Request, res: Response, next: NextFunction) => {
+export const backfillSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const share = await Project.findById(req.params.id);
     if (!share) return res.status(404).json({ message: "Share not found" });
 
     const desired = share.totalShares ?? 0;
-    if (desired === 0) return res.json({ message: "Share has 0 totalShares — nothing to backfill", created: 0 });
+    if (desired === 0)
+      return res.json({
+        message: "Share has 0 totalShares — nothing to backfill",
+        created: 0,
+      });
 
     const existing = await ShareSlot.countDocuments({ projectId: share._id });
     const diff = desired - existing;
 
     if (diff <= 0) {
-      return res.json({ message: "Slots already up to date", created: 0, total: existing });
+      return res.json({
+        message: "Slots already up to date",
+        created: 0,
+        total: existing,
+      });
     }
 
     // Find the global max sequence to avoid collisions
@@ -229,7 +328,9 @@ export const backfillSlots = async (req: Request, res: Response, next: NextFunct
       .sort({ shareNumber: -1 })
       .select("shareNumber")
       .lean();
-    const lastSeq = last ? parseInt(last.shareNumber.replace("THL-", ""), 10) : 0;
+    const lastSeq = last
+      ? parseInt(last.shareNumber.replace("THL-", ""), 10)
+      : 0;
 
     let created = 0;
     for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
@@ -258,21 +359,39 @@ export const backfillSlots = async (req: Request, res: Response, next: NextFunct
       }
     }
 
-    res.json({ message: `Backfilled ${created} slots`, created, total: existing + created });
-  } catch (err) { next(err); }
+    res.json({
+      message: `Backfilled ${created} slots`,
+      created,
+      total: existing + created,
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const getShareStats = async (req: Request, res: Response, next: NextFunction) => {
+export const getShareStats = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const [shares, counts] = await Promise.all([
       Project.find().lean(),
       ShareSlot.aggregate([
-        { $group: { _id: { projectId: "$projectId", status: "$status" }, count: { $sum: 1 } } },
+        {
+          $group: {
+            _id: { projectId: "$projectId", status: "$status" },
+            count: { $sum: 1 },
+          },
+        },
       ]),
     ]);
 
     // Build a map: projectId -> { available, sold, reclaimed }
-    const map: Record<string, { available: number; sold: number; reclaimed: number }> = {};
+    const map: Record<
+      string,
+      { available: number; sold: number; reclaimed: number }
+    > = {};
     for (const { _id, count } of counts) {
       const key = _id.projectId.toString();
       if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0 };
@@ -293,21 +412,35 @@ export const getShareStats = async (req: Request, res: Response, next: NextFunct
     });
 
     res.json({ stats });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // GET /share/with-stats — returns active shares + slot stats for all shares (admin panel)
-export const getSharesWithStats = async (req: Request, res: Response, next: NextFunction) => {
+export const getSharesWithStats = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const [shares, counts] = await Promise.all([
       // Admin panel sees ALL shares (including inactive)
       Project.find().lean(),
       ShareSlot.aggregate([
-        { $group: { _id: { projectId: "$projectId", status: "$status" }, count: { $sum: 1 } } },
+        {
+          $group: {
+            _id: { projectId: "$projectId", status: "$status" },
+            count: { $sum: 1 },
+          },
+        },
       ]),
     ]);
 
-    const map: Record<string, { available: number; sold: number; reclaimed: number }> = {};
+    const map: Record<
+      string,
+      { available: number; sold: number; reclaimed: number }
+    > = {};
     for (const { _id, count } of counts) {
       const key = _id.projectId.toString();
       if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0 };
@@ -317,7 +450,14 @@ export const getSharesWithStats = async (req: Request, res: Response, next: Next
     const stats = shares.map((s) => {
       const key = (s._id as any).toString();
       const { available = 0, sold = 0, reclaimed = 0 } = map[key] ?? {};
-      return { _id: s._id, title: s.title, totalShares: s.totalShares, sold, reclaimed, available };
+      return {
+        _id: s._id,
+        title: s.title,
+        totalShares: s.totalShares,
+        sold,
+        reclaimed,
+        available,
+      };
     });
 
     res.json({
@@ -325,5 +465,7 @@ export const getSharesWithStats = async (req: Request, res: Response, next: Next
       shares: shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
       stats,
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };

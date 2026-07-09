@@ -33,6 +33,7 @@ import expenseRoutes from "./app/expense/routes";
 import achieversRoutes from "./app/achievers/routes";
 import adminSalaryRoutes from "./app/admin-salary/routes";
 import { autoReleaseMonthlySalaries } from "./app/admin-salary/controller";
+import { processMonthlySalaries } from "./app/rank/controller";
 import { setSocketIO } from "./app/notice/controller";
 import cron from "node-cron";
 
@@ -55,7 +56,7 @@ mongoose.connection.once("open", async () => {
   console.log("Connected to MongoDB");
   await seedAdmin();
 
-  // ── Monthly salary auto-release cron ──────────────────────────────────────
+  // ── Admin monthly salary auto-release cron ────────────────────────────────
   // Runs at 23:59 on the last day of every month.
   // "59 23 28-31 * *" + day-of-month check ensures last day only.
   cron.schedule("59 23 28-31 * *", async () => {
@@ -68,6 +69,21 @@ mongoose.connection.once("open", async () => {
     }
   });
   console.log("[CRON] Monthly salary scheduler registered");
+
+  // ── Rank salary auto-release cron ─────────────────────────────────────────
+  // Runs at 23:59 on the last day of every month (same schedule).
+  // Only fires for users who haven't already been paid manually by admin.
+  cron.schedule("59 23 28-31 * *", async () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    if (tomorrow.getDate() === 1) {
+      console.log("[CRON] Running rank salary auto-release...");
+      const released = await processMonthlySalaries();
+      console.log(`[CRON] Rank salary auto-release done: ${released} users paid`);
+    }
+  });
+  console.log("[CRON] Rank salary scheduler registered");
 });
 
 // Fix S-11: Security headers
