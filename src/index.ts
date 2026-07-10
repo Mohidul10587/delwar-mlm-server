@@ -81,7 +81,9 @@ mongoose.connection.once("open", async () => {
     if (tomorrow.getDate() === 1) {
       console.log("[CRON] Running rank salary auto-release...");
       const released = await processMonthlySalaries();
-      console.log(`[CRON] Rank salary auto-release done: ${released} users paid`);
+      console.log(
+        `[CRON] Rank salary auto-release done: ${released} users paid`
+      );
     }
   });
   console.log("[CRON] Rank salary scheduler registered");
