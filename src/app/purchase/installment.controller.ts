@@ -8,7 +8,7 @@ import { User } from "../user/model";
 import { distributeInstallmentPaymentCommission } from "./commissions";
 import { CompanyLedger } from "../ledger/model";
 import { isTransactionIdUsed } from "../../utils/isTransactionIdUsed";
-import { checkAndGrantInstallmentReward } from "../../utils/rewardUtils";
+// [DISABLED] import { checkAndGrantInstallmentReward } from "../../utils/rewardUtils";
 
 // Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
 const getWallet = async (userId: string) => {
@@ -328,17 +328,18 @@ export const updateInstallmentStatus = async (
         });
 
         // Check and grant installment completion reward (non-critical)
-        try {
-          await checkAndGrantInstallmentReward(
-            purchase._id.toString(),
-            purchase.userId.toString()
-          );
-        } catch (rewardErr) {
-          console.error(
-            `[REWARD ERROR] installment reward check failed for purchaseId=${purchase._id}:`,
-            rewardErr
-          );
-        }
+        // [DISABLED]
+        // try {
+        //   await checkAndGrantInstallmentReward(
+        //     purchase._id.toString(),
+        //     purchase.userId.toString()
+        //   );
+        // } catch (rewardErr) {
+        //   console.error(
+        //     `[REWARD ERROR] installment reward check failed for purchaseId=${purchase._id}:`,
+        //     rewardErr
+        //   );
+        // }
       }
     }
 
