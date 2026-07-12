@@ -130,9 +130,12 @@ const reviewAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0,
                 balanceAfter: (_b = updatedWallet === null || updatedWallet === void 0 ? void 0 : updatedWallet.totalBalance) !== null && _b !== void 0 ? _b : 0,
                 note: `Expense reimbursement approved: ${expense.description}`,
             });
-            // Mirror to CompanyLedger as outflow (company expense)
+            // Mirror to CompanyLedger as outflow (company expense).
+            // We use `new + save()` instead of `create()` so that the explicit
+            // createdAt/updatedAt values are honoured by Mongoose even when
+            // `timestamps: true` is set on the schema.
             try {
-                yield model_2.CompanyLedger.create({
+                const ledgerDoc = new model_2.CompanyLedger({
                     date: expense.expenseDate,
                     type: "expense_recorded",
                     amount: expense.amount,
@@ -140,7 +143,11 @@ const reviewAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0,
                     relatedModel: "Expense",
                     userId: expense.submittedBy,
                     note: expense.description,
+                    createdAt: expense.expenseDate,
+                    updatedAt: expense.expenseDate,
                 });
+                // Bypass Mongoose auto-timestamp so our explicit dates are preserved
+                yield ledgerDoc.save({ timestamps: false });
             }
             catch (ledgerErr) {
                 console.error(`[LEDGER ERROR] expense_recorded for adminExpenseId=${expense._id}:`, ledgerErr);

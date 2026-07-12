@@ -27,7 +27,8 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Resolve first rank name before resetting users
         const settings = yield model_6.Settings.findOne().select("ranks").lean();
-        const firstRankName = Array.isArray(settings === null || settings === void 0 ? void 0 : settings.ranks) && settings.ranks.length > 0
+        const firstRankName = Array.isArray(settings === null || settings === void 0 ? void 0 : settings.ranks) &&
+            settings.ranks.length > 0
             ? settings.ranks[0].name
             : null;
         const rankResetFields = firstRankName
@@ -54,9 +55,9 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     manCommFromDownPayment: 0,
                     manCommFromInstallment: 0,
                     salaryBalanceFromRanks: 0,
-                    incentiveBonus: 0,
+                    cashbackBalance: 0,
                     transferBalance: 0,
-                    loanBalance: 0,
+                    loanAmount: 0,
                     fixedMonthlySalaryForAdminOnly: 0,
                     expenseReimbursementBalance: 0,
                     totalBalance: 0,

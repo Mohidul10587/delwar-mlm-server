@@ -17,7 +17,9 @@ const getMyWallet = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     try {
         const wallet = yield (0, walletUtils_1.findOrCreateWallet)(req.user._id.toString());
         const transactions = yield model_1.TransactionLog.find({ userId: req.user._id })
-            .sort({ createdAt: -1 }).limit(20).lean();
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean();
         res.json({ wallet, transactions });
     }
     catch (err) {
@@ -28,8 +30,12 @@ exports.getMyWallet = getMyWallet;
 const getWalletByUser = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const wallet = yield (0, walletUtils_1.findOrCreateWallet)(req.params.userId);
-        const transactions = yield model_1.TransactionLog.find({ userId: req.params.userId })
-            .sort({ createdAt: -1 }).limit(50).lean();
+        const transactions = yield model_1.TransactionLog.find({
+            userId: req.params.userId,
+        })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
         res.json({ wallet, transactions });
     }
     catch (err) {
@@ -56,7 +62,11 @@ const getMyTransactions = (req, res, next) => __awaiter(void 0, void 0, void 0, 
             }
         }
         const [transactions, total] = yield Promise.all([
-            model_1.TransactionLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            model_1.TransactionLog.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
             model_1.TransactionLog.countDocuments(filter),
         ]);
         res.json({ transactions, total, page, pages: Math.ceil(total / limit) });
@@ -104,7 +114,12 @@ const adminDebit = (req, res, next) => __awaiter(void 0, void 0, void 0, functio
         // Prevent debit below zero
         const deductable = Math.min(amt, wallet.directCommissionBalance);
         // Fix F-12: atomic $inc
-        const updated = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { directCommissionBalance: -deductable, totalBalance: -deductable } }, { new: true });
+        const updated = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, {
+            $inc: {
+                directCommissionBalance: -deductable,
+                totalBalance: -deductable,
+            },
+        }, { new: true });
         yield model_1.TransactionLog.create({
             userId: req.params.userId,
             type: "admin_debit",
@@ -128,7 +143,7 @@ const adminGiveIncentiveBonus = (req, res, next) => __awaiter(void 0, void 0, vo
             return res.status(400).json({ message: "Amount must be greater than 0" });
         }
         // Fix F-12: atomic $inc keeps totalBalance consistent
-        const wallet = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { incentiveBonus: amt, totalBalance: amt } }, { new: true, upsert: true });
+        const wallet = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { cashbackBalance: amt, totalBalance: amt } }, { new: true, upsert: true });
         yield model_1.TransactionLog.create({
             userId: req.params.userId,
             type: "incentive_bonus",
@@ -162,27 +177,30 @@ const adminAdjustLoanBalance = (req, res, next) => __awaiter(void 0, void 0, voi
         const { amount, note } = req.body;
         const amt = Number(amount);
         if (isNaN(amt) || amt === 0) {
-            return res.status(400).json({ message: "Amount must be a non-zero number" });
+            return res
+                .status(400)
+                .json({ message: "Amount must be a non-zero number" });
         }
         const wallet = yield model_1.Wallet.findOne({ userId: req.params.userId });
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
         // Prevent loan balance from going below zero
-        const currentLoan = (_a = wallet.loanBalance) !== null && _a !== void 0 ? _a : 0;
+        const currentLoan = (_a = wallet.loanAmount) !== null && _a !== void 0 ? _a : 0;
         if (amt < 0 && Math.abs(amt) > currentLoan) {
             return res.status(400).json({
                 message: `Cannot deduct ৳${Math.abs(amt)} — current loan balance is only ৳${currentLoan}`,
             });
         }
         const transactionType = amt > 0 ? "loan_given" : "loan_adjusted";
-        // loanBalance is tracked separately, not added to totalBalance
-        const updated = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { loanBalance: amt } }, { new: true, upsert: true });
+        // loanAmount is tracked separately, not added to totalBalance
+        const updated = yield model_1.Wallet.findOneAndUpdate({ userId: req.params.userId }, { $inc: { loanAmount: amt } }, { new: true, upsert: true });
         yield model_1.TransactionLog.create({
             userId: req.params.userId,
             type: transactionType,
             amount: Math.abs(amt),
-            balanceAfter: updated.loanBalance,
-            note: note || (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
+            balanceAfter: updated.loanAmount,
+            note: note ||
+                (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
         });
         try {
             yield model_2.CompanyLedger.create({
@@ -190,13 +208,17 @@ const adminAdjustLoanBalance = (req, res, next) => __awaiter(void 0, void 0, voi
                 type: transactionType,
                 amount: Math.abs(amt),
                 userId: req.params.userId,
-                note: note || (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
+                note: note ||
+                    (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
             });
         }
         catch (ledgerErr) {
             console.error(`[LEDGER ERROR] ${transactionType} for userId=${req.params.userId}:`, ledgerErr);
         }
-        res.json({ message: amt > 0 ? "Loan granted successfully" : "Loan balance adjusted", wallet: updated });
+        res.json({
+            message: amt > 0 ? "Loan granted successfully" : "Loan balance adjusted",
+            wallet: updated,
+        });
     }
     catch (err) {
         next(err);

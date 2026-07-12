@@ -25,7 +25,7 @@ const findOrCreateWallet = (userId) => __awaiter(void 0, void 0, void 0, functio
             manCommFromDownPayment: 0,
             manCommFromInstallment: 0,
             salaryBalanceFromRanks: 0,
-            incentiveBonus: 0,
+            cashbackBalance: 0,
             transferBalance: 0,
         },
     }, { upsert: true, new: true });

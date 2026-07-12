@@ -20,7 +20,7 @@ const model_2 = require("../ledger/model");
 const model_3 = require("../settings/model");
 const model_4 = require("../user/model");
 // Fields that can be drawn from during a transfer, in deduction priority order.
-// incentiveBonus and loanBalance are intentionally excluded.
+// cashbackBalance and loanAmount are intentionally excluded.
 const TRANSFERABLE_FIELDS = [
     "directCommissionBalance",
     "manCommFromDownPayment",
@@ -51,7 +51,7 @@ function buildDeductionInc(wallet, needed) {
     return inc;
 }
 const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c;
     const session = yield mongoose_1.default.startSession();
     session.startTransaction();
     try {
@@ -59,11 +59,15 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         const { receiverUsername, amount, password } = req.body;
         if (!receiverUsername || !amount) {
             yield session.abortTransaction();
-            return res.status(400).json({ message: "receiverUsername and amount are required" });
+            return res
+                .status(400)
+                .json({ message: "receiverUsername and amount are required" });
         }
         if (!password) {
             yield session.abortTransaction();
-            return res.status(400).json({ message: "Password is required to confirm transfer" });
+            return res
+                .status(400)
+                .json({ message: "Password is required to confirm transfer" });
         }
         // Verify password
         const senderUser = yield model_4.User.findById(senderId).select("password").lean();
@@ -74,7 +78,9 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         const isPasswordValid = yield bcryptjs_1.default.compare(String(password), senderUser.password);
         if (!isPasswordValid) {
             yield session.abortTransaction();
-            return res.status(401).json({ message: "Incorrect password. Transfer cancelled." });
+            return res
+                .status(401)
+                .json({ message: "Incorrect password. Transfer cancelled." });
         }
         const transferAmount = Number(amount);
         if (isNaN(transferAmount) || transferAmount <= 0) {
@@ -89,7 +95,9 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
         }
         if (receiver._id.toString() === senderId) {
             yield session.abortTransaction();
-            return res.status(400).json({ message: "You cannot transfer to yourself" });
+            return res
+                .status(400)
+                .json({ message: "You cannot transfer to yourself" });
         }
         // Calculate fee
         const settings = yield model_3.Settings.findOne().lean();
@@ -103,16 +111,18 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
             return res.status(400).json({ message: "Insufficient balance" });
         }
         const incUpdate = buildDeductionInc(senderWalletDoc, totalDeduction);
-        if (!incUpdate) {
+        const loanAmount = (_b = senderWalletDoc.loanAmount) !== null && _b !== void 0 ? _b : 0;
+        const effectiveBalance = ((_c = senderWalletDoc.totalBalance) !== null && _c !== void 0 ? _c : 0) - loanAmount;
+        if (!incUpdate || effectiveBalance < totalDeduction) {
             yield session.abortTransaction();
             return res.status(400).json({
-                message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} but only have ৳${((_b = senderWalletDoc.totalBalance) !== null && _b !== void 0 ? _b : 0).toLocaleString()}.`,
+                message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} but only have ৳${effectiveBalance.toLocaleString()}.`,
             });
         }
-        // Apply deduction atomically — also guard totalBalance to prevent race condition
+        // Apply deduction atomically — also guard totalBalance (+ loanAmount) to prevent race condition
         const updatedSenderWallet = yield model_1.Wallet.findOneAndUpdate({
             userId: senderId,
-            totalBalance: { $gte: totalDeduction },
+            totalBalance: { $gte: totalDeduction + loanAmount },
         }, { $inc: incUpdate }, { new: true, session });
         if (!updatedSenderWallet) {
             yield session.abortTransaction();
@@ -127,34 +137,40 @@ const sendTransfer = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
                 manCommFromDownPayment: 0,
                 manCommFromInstallment: 0,
                 salaryBalanceFromRanks: 0,
-                incentiveBonus: 0,
+                cashbackBalance: 0,
             },
         }, { upsert: true, new: true, session });
         const now = new Date();
-        yield model_1.TransactionLog.create([{
+        yield model_1.TransactionLog.create([
+            {
                 userId: senderId,
                 type: "transfer_sent",
                 amount: totalDeduction,
                 balanceAfter: updatedSenderWallet.totalBalance,
                 note: `Transferred ৳${transferAmount} to @${receiver.username}${feeAmount > 0 ? ` (fee: ৳${feeAmount}, rate: ${feePercent}%)` : ""}`,
                 createdAt: now,
-            }], { session });
-        yield model_1.TransactionLog.create([{
+            },
+        ], { session });
+        yield model_1.TransactionLog.create([
+            {
                 userId: receiver._id.toString(),
                 type: "transfer_received",
                 amount: transferAmount,
                 balanceAfter: receiverWallet.totalBalance,
                 note: `Received ৳${transferAmount} from @${req.user.username}`,
                 createdAt: now,
-            }], { session });
+            },
+        ], { session });
         if (feeAmount > 0) {
-            yield model_2.CompanyLedger.create([{
+            yield model_2.CompanyLedger.create([
+                {
                     date: now,
                     type: "transfer_fee_received",
                     amount: feeAmount,
                     userId: senderId,
                     note: `Transfer fee from @${req.user.username} → @${receiver.username} (${feePercent}% of ৳${transferAmount})`,
-                }], { session });
+                },
+            ], { session });
         }
         yield session.commitTransaction();
         res.json({

@@ -14,7 +14,7 @@ const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../ledger/model");
 const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
         const { amount, method, accountDetails, branch } = req.body;
         const amt = Number(amount);
@@ -33,12 +33,15 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const wallet = yield model_2.Wallet.findOne({ userId: req.user._id });
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
-        // incentiveBonus is excluded from withdrawal
-        const withdrawableBalance = ((_a = wallet.directCommissionBalance) !== null && _a !== void 0 ? _a : 0) +
-            ((_b = wallet.manCommFromDownPayment) !== null && _b !== void 0 ? _b : 0) +
-            ((_c = wallet.manCommFromInstallment) !== null && _c !== void 0 ? _c : 0) +
-            ((_d = wallet.salaryBalanceFromRanks) !== null && _d !== void 0 ? _d : 0) +
-            ((_e = wallet.transferBalance) !== null && _e !== void 0 ? _e : 0);
+        // cashbackBalance is excluded from withdrawal
+        // loanAmount reduces the effective withdrawable balance
+        const loanAmount = (_a = wallet.loanAmount) !== null && _a !== void 0 ? _a : 0;
+        const withdrawableBalance = ((_b = wallet.directCommissionBalance) !== null && _b !== void 0 ? _b : 0) +
+            ((_c = wallet.manCommFromDownPayment) !== null && _c !== void 0 ? _c : 0) +
+            ((_d = wallet.manCommFromInstallment) !== null && _d !== void 0 ? _d : 0) +
+            ((_e = wallet.salaryBalanceFromRanks) !== null && _e !== void 0 ? _e : 0) +
+            ((_f = wallet.transferBalance) !== null && _f !== void 0 ? _f : 0) -
+            loanAmount;
         if (withdrawableBalance < amt)
             return res.status(400).json({ message: "Insufficient balance" });
         // Compute per-field deductions (same sequential logic as before)
@@ -54,7 +57,7 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         for (const field of fields) {
             if (remaining <= 0)
                 break;
-            const available = (_f = wallet[field]) !== null && _f !== void 0 ? _f : 0;
+            const available = (_g = wallet[field]) !== null && _g !== void 0 ? _g : 0;
             const deduct = Math.min(available, remaining);
             if (deduct > 0) {
                 deductions[field] = deduct;
@@ -68,7 +71,8 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         }
         // H-03 fix: Atomic balance check inside findOneAndUpdate — prevents race condition
         // where two concurrent requests both pass the balance check before either deducts.
-        const updated = yield model_2.Wallet.findOneAndUpdate({ _id: wallet._id, totalBalance: { $gte: amt } }, // atomic guard
+        // totalBalance must be >= amt + loanAmount to ensure effective balance covers withdrawal.
+        const updated = yield model_2.Wallet.findOneAndUpdate({ _id: wallet._id, totalBalance: { $gte: amt + loanAmount } }, // atomic guard (accounts for loan)
         { $inc: incPayload }, { new: true });
         if (!updated) {
             return res.status(400).json({ message: "Insufficient balance" });
@@ -92,7 +96,9 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             branch: method === "branch" ? branch : undefined,
             deductionBreakdown: deductions, // stored for correct refund on rejection
         });
-        res.status(201).json({ message: "Withdrawal request submitted", withdrawal });
+        res
+            .status(201)
+            .json({ message: "Withdrawal request submitted", withdrawal });
     }
     catch (err) {
         next(err);
@@ -153,7 +159,9 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
                 const breakdown = (_a = withdrawal.deductionBreakdown) !== null && _a !== void 0 ? _a : {};
                 if (Object.keys(breakdown).length > 0) {
                     // Restore using the stored breakdown
-                    const incPayload = { totalBalance: withdrawal.amount };
+                    const incPayload = {
+                        totalBalance: withdrawal.amount,
+                    };
                     for (const [field, amount] of Object.entries(breakdown)) {
                         incPayload[field] = amount;
                     }
@@ -187,9 +195,9 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
         yield withdrawal.save();
         // Ledger: approved withdrawal = outflow
         if (status === "approved") {
-            const wUser = yield model_1.Withdrawal.findById(withdrawal._id)
+            const wUser = (yield model_1.Withdrawal.findById(withdrawal._id)
                 .populate("userId", "name username")
-                .lean();
+                .lean());
             const uName = (_d = (_c = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _c === void 0 ? void 0 : _c.name) !== null && _d !== void 0 ? _d : "";
             const uUsername = (_f = (_e = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _e === void 0 ? void 0 : _e.username) !== null && _f !== void 0 ? _f : "";
             const dest = withdrawal.method === "branch"

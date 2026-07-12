@@ -89,5 +89,13 @@ const SettingsSchema = new mongoose_1.Schema({
         }),
     },
     balanceTransferFeePercent: { type: Number, default: 0 },
+    installmentRewardRules: [
+        {
+            targetAmount: { type: Number, required: true },
+            oneTimeReward: { type: Number, required: true },
+            installmentCompletionReward: { type: Number, required: true },
+            _id: false,
+        },
+    ],
 }, { timestamps: true });
 exports.Settings = (0, mongoose_1.model)("Settings", SettingsSchema);

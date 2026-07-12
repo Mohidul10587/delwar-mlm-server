@@ -66,12 +66,12 @@ export interface ISettings extends Document {
   };
   // Balance transfer fee
   balanceTransferFeePercent: number;
-  // [DISABLED] Installment reward rules — admin configurable, no hardcoded values
-  // installmentRewardRules: {
-  //   targetAmount: number;
-  //   oneTimeReward: number;
-  //   installmentCompletionReward: number;
-  // }[];
+
+  installmentRewardRules: {
+    targetAmount: number;
+    oneTimeReward: number;
+    installmentCompletionReward: number;
+  }[];
 }
 
 const SettingsSchema = new Schema<ISettings>(
@@ -162,14 +162,14 @@ const SettingsSchema = new Schema<ISettings>(
       }),
     },
     balanceTransferFeePercent: { type: Number, default: 0 },
-    // [DISABLED] installmentRewardRules: [
-    //   {
-    //     targetAmount: { type: Number, required: true },
-    //     oneTimeReward: { type: Number, required: true },
-    //     installmentCompletionReward: { type: Number, required: true },
-    //     _id: false,
-    //   },
-    // ],
+    installmentRewardRules: [
+      {
+        targetAmount: { type: Number, required: true },
+        oneTimeReward: { type: Number, required: true },
+        installmentCompletionReward: { type: Number, required: true },
+        _id: false,
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -19,11 +19,11 @@ const seedAdmin = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const adminExists = yield model_1.User.findOne({ role: "superadmin" });
         if (!adminExists) {
-            const hashedPassword = yield bcryptjs_1.default.hash("01700000000", 10);
+            const hashedPassword = yield bcryptjs_1.default.hash("super-admin", 10);
             const admin = yield model_1.User.create({
                 name: "Super Admin",
                 phone: "01700000000",
-                username: "01700000000",
+                username: "super-admin",
                 password: hashedPassword,
                 role: "superadmin",
                 isActive: true,

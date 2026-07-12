@@ -46,6 +46,7 @@ const routes_18 = __importDefault(require("./app/transfer/routes"));
 const routes_19 = __importDefault(require("./app/expense/routes"));
 const routes_20 = __importDefault(require("./app/achievers/routes"));
 const routes_21 = __importDefault(require("./app/admin-salary/routes"));
+// [DISABLED] import rewardRulesRoutes from "./app/reward-rules/routes";
 const controller_1 = require("./app/admin-salary/controller");
 const controller_2 = require("./app/rank/controller");
 const controller_3 = require("./app/notice/controller");
@@ -163,6 +164,7 @@ app.use("/transfer", routes_18.default);
 app.use("/expense", routes_19.default);
 app.use("/achievers", routes_20.default);
 app.use("/admin-salary", routes_21.default);
+// [DISABLED] app.use("/reward-rules", rewardRulesRoutes);
 app.use(errorHandler_1.errorHandler);
 if (process.env.VERCEL !== "1") {
     httpServer.listen(port, () => console.log(`Server running on port ${port}`));

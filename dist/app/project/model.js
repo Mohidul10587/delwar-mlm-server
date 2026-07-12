@@ -48,5 +48,7 @@ const ProjectSchema = new mongoose_1.Schema({
     offerPriority: { type: Number, default: 0 },
     // Cover slider — admin selects which share's images appear as cover
     isCoverSlider: { type: Boolean, default: false },
+    // Cashback % for cash purchases — auto-credited on approval (non-withdrawable, non-transferable)
+    cashbackPercent: { type: Number, default: 0 },
 }, { timestamps: true });
 exports.Project = (0, mongoose_1.model)("Project", ProjectSchema);

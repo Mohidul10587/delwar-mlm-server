@@ -74,7 +74,7 @@ function fetchSlotsByPurchase(purchaseIds) {
 }
 // POST /purchase  — logged-in user submits a purchase request
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
     try {
         const { projectId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage, } = req.body;
         // Fix V-01: validate quantity
@@ -217,6 +217,7 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             downPaymentGenerationRates: share.downPaymentGenerationRates,
             installmentCommissionRate: share.installmentCommissionRate,
             installmentGenerationRates: (_s = share.installmentGenerationRates) !== null && _s !== void 0 ? _s : [],
+            cashbackPercent: (_t = share.cashbackPercent) !== null && _t !== void 0 ? _t : 0,
             rankQualification: ranks.map((r) => {
                 var _a;
                 return ({

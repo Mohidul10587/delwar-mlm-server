@@ -19,6 +19,7 @@ const model_4 = require("../user/model");
 const commissions_1 = require("./commissions");
 const model_5 = require("../ledger/model");
 const isTransactionIdUsed_1 = require("../../utils/isTransactionIdUsed");
+// [DISABLED] import { checkAndGrantInstallmentReward } from "../../utils/rewardUtils";
 // Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
 const getWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     return yield model_3.Wallet.findOne({ userId });
@@ -251,6 +252,19 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                 }).catch((err) => {
                     console.error(`[TXLOG ERROR] installment_received log failed for paymentId=${payment._id}:`, err);
                 });
+                // Check and grant installment completion reward (non-critical)
+                // [DISABLED]
+                // try {
+                //   await checkAndGrantInstallmentReward(
+                //     purchase._id.toString(),
+                //     purchase.userId.toString()
+                //   );
+                // } catch (rewardErr) {
+                //   console.error(
+                //     `[REWARD ERROR] installment reward check failed for purchaseId=${purchase._id}:`,
+                //     rewardErr
+                //   );
+                // }
             }
         }
         res.json({

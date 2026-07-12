@@ -35,6 +35,8 @@ const SnapshotSchema = new mongoose_1.Schema({
     installmentGenerationRates: [
         { generation: { type: Number }, rate: { type: Number }, _id: false },
     ],
+    // Cashback % for cash purchases (captured at purchase time)
+    cashbackPercent: { type: Number, default: 0 },
     rankQualification: [
         {
             rankName: { type: String },

@@ -28,8 +28,9 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
             model_3.Purchase.countDocuments({ status: "approved" }),
             model_4.Withdrawal.countDocuments({ status: "pending" }),
             model_4.Withdrawal.countDocuments({ status: "approved" }),
-            // L-05 fix: include incentiveBonus and transferBalance in aggregate
-            model_5.Wallet.aggregate([{
+            // L-05 fix: include cashbackBalance and transferBalance in aggregate
+            model_5.Wallet.aggregate([
+                {
                     $group: {
                         _id: null,
                         totalBalance: {
@@ -39,7 +40,7 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
                                     "$manCommFromDownPayment",
                                     "$manCommFromInstallment",
                                     "$salaryBalanceFromRanks",
-                                    "$incentiveBonus",
+                                    "$cashbackBalance",
                                     "$transferBalance",
                                 ],
                             },
@@ -47,7 +48,8 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
                         totalDPCommission: { $sum: "$manCommFromDownPayment" },
                         totalInstallmentCommission: { $sum: "$manCommFromInstallment" },
                     },
-                }]),
+                },
+            ]),
         ]);
         res.json({
             totalUsers,

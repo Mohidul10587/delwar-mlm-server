@@ -60,7 +60,7 @@ const atomicCreditWallet = (userId, field, amount) => __awaiter(void 0, void 0, 
             manCommFromDownPayment: 0,
             manCommFromInstallment: 0,
             salaryBalanceFromRanks: 0,
-            incentiveBonus: 0,
+            cashbackBalance: 0,
             transferBalance: 0,
         },
     }, { upsert: true });
@@ -113,7 +113,8 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         let installmentPortion;
         if (purchase.paymentType === "cash") {
             downPaymentPortion = Math.min(snap.maxDownPayment, snap.cashPrice) * qty;
-            installmentPortion = Math.max(0, snap.cashPrice - snap.maxDownPayment) * qty;
+            installmentPortion =
+                Math.max(0, snap.cashPrice - snap.maxDownPayment) * qty;
         }
         else {
             downPaymentPortion = purchase.amountPaid;
@@ -135,7 +136,9 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                 });
                 yield ledgerCommission(tx._id, referrerId.toString(), commission, note);
             }
-            yield model_3.User.findByIdAndUpdate(referrerId, { $inc: { directSalesCount: qty } });
+            yield model_3.User.findByIdAndUpdate(referrerId, {
+                $inc: { directSalesCount: qty },
+            });
             yield (0, controller_1.recalcUserRank)(referrerId.toString(), preloadedRanks); // C-04 fix
         }
         // ── 2. Down Payment Managerial Commission ─────────────────────────────────
@@ -161,7 +164,9 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
                     });
                     yield ledgerCommission(tx._id, currentId, commission, note);
                 }
-                yield model_3.User.findByIdAndUpdate(currentId, { $inc: { teamSalesCount: qty } });
+                yield model_3.User.findByIdAndUpdate(currentId, {
+                    $inc: { teamSalesCount: qty },
+                });
                 yield (0, controller_1.recalcUserRank)(currentId, preloadedRanks); // C-04 fix
             }
         }
@@ -170,7 +175,8 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
         // Falls back to the legacy flat snap.installmentCommissionRate for old records
         // that were created before the per-gen array was introduced.
         if (installmentPortion > 0) {
-            const instGenRates = snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0
+            const instGenRates = snap.installmentGenerationRates &&
+                snap.installmentGenerationRates.length > 0
                 ? snap.installmentGenerationRates
                 : [];
             // Legacy flat-rate fallback: build a synthetic per-gen array where every gen
@@ -214,7 +220,9 @@ const distributeCommissions = (purchaseId) => __awaiter(void 0, void 0, void 0, 
     catch (err) {
         console.error(`[COMMISSION ERROR] distributeCommissions failed for purchaseId=${purchaseId}:`, err);
         try {
-            yield model_1.Purchase.findByIdAndUpdate(purchaseId, { $set: { commissionProcessed: false } });
+            yield model_1.Purchase.findByIdAndUpdate(purchaseId, {
+                $set: { commissionProcessed: false },
+            });
         }
         catch (rollbackErr) {
             console.error(`[COMMISSION ERROR] Failed to roll back commissionProcessed for purchaseId=${purchaseId}:`, rollbackErr);
@@ -237,12 +245,15 @@ const distributeInstallmentPaymentCommission = (purchaseId, installmentAmount, i
         const buyerName = (_a = buyer.name) !== null && _a !== void 0 ? _a : "";
         const buyerUsername = (_b = buyer.username) !== null && _b !== void 0 ? _b : "";
         const shareTitle = (_c = snap.shareTitle) !== null && _c !== void 0 ? _c : "";
-        const instLabel = installmentNo ? `Installment #${installmentNo}` : "Installment payment";
+        const instLabel = installmentNo
+            ? `Installment #${installmentNo}`
+            : "Installment payment";
         // Resolve effective per-generation rates.
         // New records: use snap.installmentGenerationRates.
         // Old records (created before this feature): fall back to the legacy flat rate
         // applied uniformly across all generations that have a DP rate configured.
-        const instGenRates = snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0
+        const instGenRates = snap.installmentGenerationRates &&
+            snap.installmentGenerationRates.length > 0
             ? snap.installmentGenerationRates
             : [];
         const effectiveRates = instGenRates.length > 0
