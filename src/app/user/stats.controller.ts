@@ -6,7 +6,11 @@ import { Withdrawal } from "../withdrawal/model";
 import { Wallet } from "../wallet/model";
 
 // H-07 fix: added try/catch and next(err)
-export const getSuperAdminStats = async (_req: Request, res: Response, next: NextFunction) => {
+export const getSuperAdminStats = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const [
       totalUsers,
@@ -27,26 +31,28 @@ export const getSuperAdminStats = async (_req: Request, res: Response, next: Nex
       Purchase.countDocuments({ status: "approved" }),
       Withdrawal.countDocuments({ status: "pending" }),
       Withdrawal.countDocuments({ status: "approved" }),
-      // L-05 fix: include incentiveBonus and transferBalance in aggregate
-      Wallet.aggregate([{
-        $group: {
-          _id: null,
-          totalBalance: {
-            $sum: {
-              $add: [
-                "$directCommissionBalance",
-                "$manCommFromDownPayment",
-                "$manCommFromInstallment",
-                "$salaryBalanceFromRanks",
-                "$incentiveBonus",
-                "$transferBalance",
-              ],
+      // L-05 fix: include cashbackBalance and transferBalance in aggregate
+      Wallet.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalBalance: {
+              $sum: {
+                $add: [
+                  "$directCommissionBalance",
+                  "$manCommFromDownPayment",
+                  "$manCommFromInstallment",
+                  "$salaryBalanceFromRanks",
+                  "$cashbackBalance",
+                  "$transferBalance",
+                ],
+              },
             },
+            totalDPCommission: { $sum: "$manCommFromDownPayment" },
+            totalInstallmentCommission: { $sum: "$manCommFromInstallment" },
           },
-          totalDPCommission: { $sum: "$manCommFromDownPayment" },
-          totalInstallmentCommission: { $sum: "$manCommFromInstallment" },
         },
-      }]),
+      ]),
     ]);
 
     res.json({
@@ -60,7 +66,8 @@ export const getSuperAdminStats = async (_req: Request, res: Response, next: Nex
       approvedWithdrawals,
       totalWalletBalance: walletAgg[0]?.totalBalance ?? 0,
       totalManCommFromDownPayment: walletAgg[0]?.totalDPCommission ?? 0,
-      totalManCommFromInstallment: walletAgg[0]?.totalInstallmentCommission ?? 0,
+      totalManCommFromInstallment:
+        walletAgg[0]?.totalInstallmentCommission ?? 0,
     });
   } catch (err) {
     next(err);

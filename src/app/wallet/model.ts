@@ -7,12 +7,12 @@ export interface IWallet extends Document {
   manCommFromDownPayment: number;
   manCommFromInstallment: number;
   salaryBalanceFromRanks: number;
-  incentiveBonus: number;  // admin-granted, non-withdrawable
+  cashbackBalance: number; // admin-granted, non-withdrawable
   transferBalance: number; // received via balance transfer
-  loanBalance: number;     // admin-granted loan, tracked separately
+  loanBalance: number; // admin-granted loan, tracked separately
   fixedMonthlySalaryForAdminOnly: number; // salary released by super admin
   expenseReimbursementBalance: number; // approved expense reimbursements
-  rewardBalance: number;               // earned from installment reward system
+  rewardBalance: number; // earned from installment reward system
 }
 
 export interface ITransactionLog extends Document {
@@ -30,14 +30,15 @@ export interface ITransactionLog extends Document {
     | "admin_debit"
     | "installment_received"
     | "incentive_bonus"
+    | "cashback"
     | "transfer_sent"
     | "transfer_received"
     | "loan_given"
     | "loan_adjusted"
     | "admin_monthly_salary"
     | "expense_reimbursement"
-    | "installment_reward_one_time"     // one-time payment reward
-    | "installment_reward_completion";  // installment completion reward
+    | "installment_reward_one_time" // one-time payment reward
+    | "installment_reward_completion"; // installment completion reward
   amount: number;
   balanceAfter: number;
   note: string;
@@ -46,13 +47,18 @@ export interface ITransactionLog extends Document {
 
 const WalletSchema = new Schema<IWallet>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true,
+    },
     totalBalance: { type: Number, default: 0 },
     directCommissionBalance: { type: Number, default: 0 },
     manCommFromDownPayment: { type: Number, default: 0 },
     manCommFromInstallment: { type: Number, default: 0 },
     salaryBalanceFromRanks: { type: Number, default: 0 },
-    incentiveBonus: { type: Number, default: 0 },
+    cashbackBalance: { type: Number, default: 0 },
     transferBalance: { type: Number, default: 0 },
     loanBalance: { type: Number, default: 0 },
     fixedMonthlySalaryForAdminOnly: { type: Number, default: 0 },
@@ -70,12 +76,12 @@ WalletSchema.pre("save", function () {
     (this.manCommFromDownPayment ?? 0) +
     (this.manCommFromInstallment ?? 0) +
     (this.salaryBalanceFromRanks ?? 0) +
-    (this.incentiveBonus ?? 0) +
+    (this.cashbackBalance ?? 0) +
     (this.transferBalance ?? 0) +
     (this.fixedMonthlySalaryForAdminOnly ?? 0) +
     (this.expenseReimbursementBalance ?? 0) +
     (this.rewardBalance ?? 0);
-    // Note: loanBalance is NOT included in totalBalance (tracked separately)
+  // Note: loanBalance is NOT included in totalBalance (tracked separately)
 });
 
 // Index for fast userId lookups
@@ -99,6 +105,7 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
         "admin_debit",
         "installment_received",
         "incentive_bonus",
+        "cashback",
         "transfer_sent",
         "transfer_received",
         "loan_given",
@@ -122,4 +129,7 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
 TransactionLogSchema.index({ userId: 1, createdAt: -1 });
 
 export const Wallet = model<IWallet>("Wallet", WalletSchema);
-export const TransactionLog = model<ITransactionLog>("TransactionLog", TransactionLogSchema);
+export const TransactionLog = model<ITransactionLog>(
+  "TransactionLog",
+  TransactionLogSchema
+);

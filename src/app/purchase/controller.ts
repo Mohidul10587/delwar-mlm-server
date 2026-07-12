@@ -209,6 +209,7 @@ export const createPurchase = async (
       downPaymentGenerationRates: share.downPaymentGenerationRates,
       installmentCommissionRate: share.installmentCommissionRate,
       installmentGenerationRates: share.installmentGenerationRates ?? [],
+      cashbackPercent: share.cashbackPercent ?? 0,
       rankQualification: ranks.map((r: any) => ({
         rankName: r.name,
         order: r.order,

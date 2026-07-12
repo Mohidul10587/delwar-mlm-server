@@ -20,7 +20,8 @@ router.get("/", async (_req: Request, res: Response) => {
     // Resolve first rank name before resetting users
     const settings = await Settings.findOne().select("ranks").lean();
     const firstRankName: string | null =
-      Array.isArray((settings as any)?.ranks) && (settings as any).ranks.length > 0
+      Array.isArray((settings as any)?.ranks) &&
+      (settings as any).ranks.length > 0
         ? (settings as any).ranks[0].name
         : null;
 
@@ -43,36 +44,45 @@ router.get("/", async (_req: Request, res: Response) => {
       TransactionLog.deleteMany({}),
       RankSalaryLog.deleteMany({}),
       CompanyLedger.deleteMany({}),
-      Wallet.updateMany({}, {
-        $set: {
-          directCommissionBalance: 0,
-          manCommFromDownPayment: 0,
-          manCommFromInstallment: 0,
-          salaryBalanceFromRanks: 0,
-          incentiveBonus: 0,
-          transferBalance: 0,
-          loanBalance: 0,
-          fixedMonthlySalaryForAdminOnly: 0,
-          expenseReimbursementBalance: 0,
-          totalBalance: 0,
-        },
-      }),
-      User.updateMany({}, {
-        $set: {
-          ...rankResetFields,
-          directSalesCount: 0,
-          teamSalesCount: 0,
-          personalPurchaseCount: 0,
-        },
-      }),
-      ShareSlot.updateMany({}, {
-        $set: {
-          status: "available",
-          userId: null,
-          purchaseId: null,
-          reclaimedAt: null,
-        },
-      }),
+      Wallet.updateMany(
+        {},
+        {
+          $set: {
+            directCommissionBalance: 0,
+            manCommFromDownPayment: 0,
+            manCommFromInstallment: 0,
+            salaryBalanceFromRanks: 0,
+            cashbackBalance: 0,
+            transferBalance: 0,
+            loanBalance: 0,
+            fixedMonthlySalaryForAdminOnly: 0,
+            expenseReimbursementBalance: 0,
+            totalBalance: 0,
+          },
+        }
+      ),
+      User.updateMany(
+        {},
+        {
+          $set: {
+            ...rankResetFields,
+            directSalesCount: 0,
+            teamSalesCount: 0,
+            personalPurchaseCount: 0,
+          },
+        }
+      ),
+      ShareSlot.updateMany(
+        {},
+        {
+          $set: {
+            status: "available",
+            userId: null,
+            purchaseId: null,
+            reclaimedAt: null,
+          },
+        }
+      ),
     ]);
 
     return res.json({ message: "Full reset complete" });

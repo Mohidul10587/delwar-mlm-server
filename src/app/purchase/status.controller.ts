@@ -8,6 +8,7 @@ import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Project } from "../project/model";
 import { recalcUserRank } from "../rank/controller";
+import { Wallet, TransactionLog } from "../wallet/model";
 // [DISABLED] import { checkAndGrantOneTimeReward } from "../../utils/rewardUtils";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
@@ -188,6 +189,58 @@ export const updatePurchaseStatus = async (
       // Step 5 — Fix P-02: await commission distribution so errors are caught
       if (!purchase.commissionProcessed) {
         await distributeCommissions((purchase._id as any).toString());
+      }
+
+      // Step 5c — Auto cashback for cash purchases
+      // Only triggers when paymentType === "cash" and cashbackPercent > 0
+      if (
+        purchase.paymentType === "cash" &&
+        (purchase.snapshot?.cashbackPercent ?? 0) > 0
+      ) {
+        try {
+          const cashbackPct = purchase.snapshot.cashbackPercent;
+          const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
+          const cashbackAmt = Math.floor((cashbackPct / 100) * totalPaid);
+
+          if (cashbackAmt > 0) {
+            const updatedWallet = await Wallet.findOneAndUpdate(
+              { userId: purchase.userId },
+              { $inc: { cashbackBalance: cashbackAmt, totalBalance: cashbackAmt } },
+              { new: true, upsert: true }
+            );
+
+            await TransactionLog.create({
+              userId: purchase.userId,
+              type: "cashback",
+              amount: cashbackAmt,
+              balanceAfter: updatedWallet!.totalBalance,
+              relatedPurchaseId: purchase._id,
+              note: `Cashback ${cashbackPct}% — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
+            });
+
+            try {
+              await CompanyLedger.create({
+                date: new Date(),
+                type: "cashback_paid",
+                amount: cashbackAmt,
+                relatedId: purchase._id,
+                relatedModel: "Purchase",
+                userId: purchase.userId,
+                note: `Auto cashback ${cashbackPct}% for purchaseId=${(purchase._id as any).toString()}`,
+              });
+            } catch (ledgerErr) {
+              console.error(
+                `[LEDGER ERROR] cashback_paid for purchaseId=${(purchase._id as any).toString()}:`,
+                ledgerErr
+              );
+            }
+          }
+        } catch (cashbackErr) {
+          console.error(
+            `[CASHBACK ERROR] Auto cashback failed for purchaseId=${(purchase._id as any).toString()}:`,
+            cashbackErr
+          );
+        }
       }
 
       // Step 5b — One-time reward for cash purchases (full payment at once)

@@ -49,6 +49,9 @@ export interface IProject extends Document {
 
   // Cover slider flag — only one share can have this true at a time
   isCoverSlider: boolean;
+
+  // Cashback percentage for cash purchases — credited automatically on approval
+  cashbackPercent: number;
 }
 
 const ProjectSchema = new Schema<IProject>(
@@ -107,6 +110,9 @@ const ProjectSchema = new Schema<IProject>(
 
     // Cover slider — admin selects which share's images appear as cover
     isCoverSlider: { type: Boolean, default: false },
+
+    // Cashback % for cash purchases — auto-credited on approval (non-withdrawable, non-transferable)
+    cashbackPercent: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

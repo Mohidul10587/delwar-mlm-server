@@ -7,7 +7,7 @@ import { Settings } from "../settings/model";
 import { User } from "../user/model";
 
 // Fields that can be drawn from during a transfer, in deduction priority order.
-// incentiveBonus and loanBalance are intentionally excluded.
+// cashbackBalance and loanBalance are intentionally excluded.
 const TRANSFERABLE_FIELDS = [
   "directCommissionBalance",
   "manCommFromDownPayment",
@@ -39,7 +39,11 @@ function buildDeductionInc(wallet: Record<string, number>, needed: number) {
   return inc;
 }
 
-export const sendTransfer = async (req: Request, res: Response, next: NextFunction) => {
+export const sendTransfer = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -48,12 +52,16 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
 
     if (!receiverUsername || !amount) {
       await session.abortTransaction();
-      return res.status(400).json({ message: "receiverUsername and amount are required" });
+      return res
+        .status(400)
+        .json({ message: "receiverUsername and amount are required" });
     }
 
     if (!password) {
       await session.abortTransaction();
-      return res.status(400).json({ message: "Password is required to confirm transfer" });
+      return res
+        .status(400)
+        .json({ message: "Password is required to confirm transfer" });
     }
 
     // Verify password
@@ -62,10 +70,15 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
       await session.abortTransaction();
       return res.status(404).json({ message: "Sender not found" });
     }
-    const isPasswordValid = await bcrypt.compare(String(password), senderUser.password);
+    const isPasswordValid = await bcrypt.compare(
+      String(password),
+      senderUser.password
+    );
     if (!isPasswordValid) {
       await session.abortTransaction();
-      return res.status(401).json({ message: "Incorrect password. Transfer cancelled." });
+      return res
+        .status(401)
+        .json({ message: "Incorrect password. Transfer cancelled." });
     }
 
     const transferAmount = Number(amount);
@@ -82,13 +95,17 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
     }
     if (receiver._id.toString() === senderId) {
       await session.abortTransaction();
-      return res.status(400).json({ message: "You cannot transfer to yourself" });
+      return res
+        .status(400)
+        .json({ message: "You cannot transfer to yourself" });
     }
 
     // Calculate fee
     const settings = await Settings.findOne().lean();
     const feePercent = settings?.balanceTransferFeePercent ?? 0;
-    const feeAmount = parseFloat(((transferAmount * feePercent) / 100).toFixed(2));
+    const feeAmount = parseFloat(
+      ((transferAmount * feePercent) / 100).toFixed(2)
+    );
     const totalDeduction = parseFloat((transferAmount + feeAmount).toFixed(2));
 
     // Read sender wallet to build deduction plan
@@ -98,11 +115,16 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ message: "Insufficient balance" });
     }
 
-    const incUpdate = buildDeductionInc(senderWalletDoc as unknown as Record<string, number>, totalDeduction);
+    const incUpdate = buildDeductionInc(
+      senderWalletDoc as unknown as Record<string, number>,
+      totalDeduction
+    );
     if (!incUpdate) {
       await session.abortTransaction();
       return res.status(400).json({
-        message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} but only have ৳${(senderWalletDoc.totalBalance ?? 0).toLocaleString()}.`,
+        message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} but only have ৳${(
+          senderWalletDoc.totalBalance ?? 0
+        ).toLocaleString()}.`,
       });
     }
 
@@ -132,7 +154,7 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
           manCommFromDownPayment: 0,
           manCommFromInstallment: 0,
           salaryBalanceFromRanks: 0,
-          incentiveBonus: 0,
+          cashbackBalance: 0,
         },
       },
       { upsert: true, new: true, session }
@@ -141,38 +163,48 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
     const now = new Date();
 
     await TransactionLog.create(
-      [{
-        userId: senderId,
-        type: "transfer_sent",
-        amount: totalDeduction,
-        balanceAfter: updatedSenderWallet.totalBalance,
-        note: `Transferred ৳${transferAmount} to @${receiver.username}${feeAmount > 0 ? ` (fee: ৳${feeAmount}, rate: ${feePercent}%)` : ""}`,
-        createdAt: now,
-      }],
+      [
+        {
+          userId: senderId,
+          type: "transfer_sent",
+          amount: totalDeduction,
+          balanceAfter: updatedSenderWallet.totalBalance,
+          note: `Transferred ৳${transferAmount} to @${receiver.username}${
+            feeAmount > 0 ? ` (fee: ৳${feeAmount}, rate: ${feePercent}%)` : ""
+          }`,
+          createdAt: now,
+        },
+      ],
       { session }
     );
 
     await TransactionLog.create(
-      [{
-        userId: receiver._id.toString(),
-        type: "transfer_received",
-        amount: transferAmount,
-        balanceAfter: receiverWallet.totalBalance,
-        note: `Received ৳${transferAmount} from @${req.user!.username}`,
-        createdAt: now,
-      }],
+      [
+        {
+          userId: receiver._id.toString(),
+          type: "transfer_received",
+          amount: transferAmount,
+          balanceAfter: receiverWallet.totalBalance,
+          note: `Received ৳${transferAmount} from @${req.user!.username}`,
+          createdAt: now,
+        },
+      ],
       { session }
     );
 
     if (feeAmount > 0) {
       await CompanyLedger.create(
-        [{
-          date: now,
-          type: "transfer_fee_received",
-          amount: feeAmount,
-          userId: senderId,
-          note: `Transfer fee from @${req.user!.username} → @${receiver.username} (${feePercent}% of ৳${transferAmount})`,
-        }],
+        [
+          {
+            date: now,
+            type: "transfer_fee_received",
+            amount: feeAmount,
+            userId: senderId,
+            note: `Transfer fee from @${req.user!.username} → @${
+              receiver.username
+            } (${feePercent}% of ৳${transferAmount})`,
+          },
+        ],
         { session }
       );
     }
@@ -180,7 +212,9 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
     await session.commitTransaction();
 
     res.json({
-      message: `Successfully transferred ৳${transferAmount} to @${receiver.username}.${feeAmount > 0 ? ` Fee: ৳${feeAmount}.` : ""}`,
+      message: `Successfully transferred ৳${transferAmount} to @${
+        receiver.username
+      }.${feeAmount > 0 ? ` Fee: ৳${feeAmount}.` : ""}`,
       transferred: transferAmount,
       fee: feeAmount,
       totalDeducted: totalDeduction,
@@ -193,9 +227,15 @@ export const sendTransfer = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-export const getTransferFee = async (_req: Request, res: Response, next: NextFunction) => {
+export const getTransferFee = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const settings = await Settings.findOne().lean();
     res.json({ feePercent: settings?.balanceTransferFeePercent ?? 0 });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };

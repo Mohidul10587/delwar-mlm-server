@@ -16,7 +16,7 @@ export const findOrCreateWallet = async (userId: string) => {
         manCommFromDownPayment: 0,
         manCommFromInstallment: 0,
         salaryBalanceFromRanks: 0,
-        incentiveBonus: 0,
+        cashbackBalance: 0,
         transferBalance: 0,
       },
     },

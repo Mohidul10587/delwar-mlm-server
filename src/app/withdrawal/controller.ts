@@ -3,7 +3,11 @@ import { Withdrawal } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { CompanyLedger } from "../ledger/model";
 
-export const createWithdrawal = async (req: Request, res: Response, next: NextFunction) => {
+export const createWithdrawal = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { amount, method, accountDetails, branch } = req.body;
     const amt = Number(amount);
@@ -24,7 +28,7 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
     const wallet = await Wallet.findOne({ userId: req.user!._id });
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
 
-    // incentiveBonus is excluded from withdrawal
+    // cashbackBalance is excluded from withdrawal
     const withdrawableBalance =
       (wallet.directCommissionBalance ?? 0) +
       (wallet.manCommFromDownPayment ?? 0) +
@@ -96,13 +100,19 @@ export const createWithdrawal = async (req: Request, res: Response, next: NextFu
       deductionBreakdown: deductions, // stored for correct refund on rejection
     });
 
-    res.status(201).json({ message: "Withdrawal request submitted", withdrawal });
+    res
+      .status(201)
+      .json({ message: "Withdrawal request submitted", withdrawal });
   } catch (err) {
     next(err);
   }
 };
 
-export const getWithdrawals = async (req: Request, res: Response, next: NextFunction) => {
+export const getWithdrawals = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     // Fix A-03: add pagination
     const page = parseInt(req.query.page as string) || 1;
@@ -120,19 +130,31 @@ export const getWithdrawals = async (req: Request, res: Response, next: NextFunc
     ]);
 
     res.json({ withdrawals, total, page, pages: Math.ceil(total / limit) });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const getMyWithdrawals = async (req: Request, res: Response, next: NextFunction) => {
+export const getMyWithdrawals = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const withdrawals = await Withdrawal.find({ userId: req.user!._id })
       .sort({ createdAt: -1 })
       .lean();
     res.json({ withdrawals });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const updateWithdrawalStatus = async (req: Request, res: Response, next: NextFunction) => {
+export const updateWithdrawalStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { status, reviewNote } = req.body;
     if (!["approved", "rejected"].includes(status))
@@ -155,7 +177,9 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
 
         if (Object.keys(breakdown).length > 0) {
           // Restore using the stored breakdown
-          const incPayload: Record<string, number> = { totalBalance: withdrawal.amount };
+          const incPayload: Record<string, number> = {
+            totalBalance: withdrawal.amount,
+          };
           for (const [field, amount] of Object.entries(breakdown)) {
             incPayload[field] = amount;
           }
@@ -176,7 +200,9 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
           type: "withdrawal_rejected",
           amount: withdrawal.amount,
           balanceAfter: (restoredWallet as any)?.totalBalance ?? 0,
-          note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${withdrawal.method}${
+          note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${
+            withdrawal.method
+          }${
             withdrawal.method === "branch"
               ? ` (${withdrawal.branch})`
               : ` (${withdrawal.accountDetails})`
@@ -193,9 +219,9 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
 
     // Ledger: approved withdrawal = outflow
     if (status === "approved") {
-      const wUser = await Withdrawal.findById(withdrawal._id)
+      const wUser = (await Withdrawal.findById(withdrawal._id)
         .populate("userId", "name username")
-        .lean() as any;
+        .lean()) as any;
       const uName = wUser?.userId?.name ?? "";
       const uUsername = wUser?.userId?.username ?? "";
       const dest =
@@ -214,10 +240,15 @@ export const updateWithdrawalStatus = async (req: Request, res: Response, next: 
           note: `Withdrawal paid — ৳${withdrawal.amount.toLocaleString()} to ${uName} (@${uUsername}) via ${dest}`,
         });
       } catch (ledgerErr) {
-        console.error(`[LEDGER ERROR] withdrawal_paid for withdrawalId=${withdrawal._id}:`, ledgerErr);
+        console.error(
+          `[LEDGER ERROR] withdrawal_paid for withdrawalId=${withdrawal._id}:`,
+          ledgerErr
+        );
       }
     }
 
     res.json({ message: `Withdrawal ${status}`, withdrawal });
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };

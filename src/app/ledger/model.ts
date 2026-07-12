@@ -15,6 +15,7 @@ import { Schema, model, Document, Types } from "mongoose";
  *   investment_profit_paid   — monthly / partial / maturity profit distributed
  *   withdrawal_paid          — withdrawal request approved (money leaves company)
  *   incentive_bonus_paid     — incentive bonus granted by admin
+ *   cashback_paid            — auto cashback credited on cash purchase approval
  *   loan_given               — loan given to a user by admin
  *   loan_adjusted            — loan balance adjusted by admin
  *   expense_recorded         — company operating expense logged by admin
@@ -29,6 +30,7 @@ export type LedgerType =
   | "investment_profit_paid"
   | "withdrawal_paid"
   | "incentive_bonus_paid"
+  | "cashback_paid"
   | "loan_given"
   | "loan_adjusted"
   | "expense_recorded";
@@ -46,6 +48,7 @@ export const OUTFLOW_TYPES: LedgerType[] = [
   "investment_profit_paid",
   "withdrawal_paid",
   "incentive_bonus_paid",
+  "cashback_paid",
   "loan_given",
   "loan_adjusted",
   "expense_recorded",
