@@ -7,7 +7,7 @@ import { Settings } from "../settings/model";
 import { User } from "../user/model";
 
 // Fields that can be drawn from during a transfer, in deduction priority order.
-// cashbackBalance and loanBalance are intentionally excluded.
+// cashbackBalance and loanAmount are intentionally excluded.
 const TRANSFERABLE_FIELDS = [
   "directCommissionBalance",
   "manCommFromDownPayment",
@@ -119,20 +119,20 @@ export const sendTransfer = async (
       senderWalletDoc as unknown as Record<string, number>,
       totalDeduction
     );
-    if (!incUpdate) {
+    const loanAmount = senderWalletDoc.loanAmount ?? 0;
+    const effectiveBalance = (senderWalletDoc.totalBalance ?? 0) - loanAmount;
+    if (!incUpdate || effectiveBalance < totalDeduction) {
       await session.abortTransaction();
       return res.status(400).json({
-        message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} but only have ৳${(
-          senderWalletDoc.totalBalance ?? 0
-        ).toLocaleString()}.`,
+        message: `Insufficient balance. You need ৳${totalDeduction.toLocaleString()} but only have ৳${effectiveBalance.toLocaleString()}.`,
       });
     }
 
-    // Apply deduction atomically — also guard totalBalance to prevent race condition
+    // Apply deduction atomically — also guard totalBalance (+ loanAmount) to prevent race condition
     const updatedSenderWallet = await Wallet.findOneAndUpdate(
       {
         userId: senderId,
-        totalBalance: { $gte: totalDeduction },
+        totalBalance: { $gte: totalDeduction + loanAmount },
       },
       { $inc: incUpdate },
       { new: true, session }

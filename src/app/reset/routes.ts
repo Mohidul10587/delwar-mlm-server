@@ -54,7 +54,7 @@ router.get("/", async (_req: Request, res: Response) => {
             salaryBalanceFromRanks: 0,
             cashbackBalance: 0,
             transferBalance: 0,
-            loanBalance: 0,
+            loanAmount: 0,
             fixedMonthlySalaryForAdminOnly: 0,
             expenseReimbursementBalance: 0,
             totalBalance: 0,

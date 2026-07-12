@@ -29,12 +29,15 @@ export const createWithdrawal = async (
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
 
     // cashbackBalance is excluded from withdrawal
+    // loanAmount reduces the effective withdrawable balance
+    const loanAmount = wallet.loanAmount ?? 0;
     const withdrawableBalance =
       (wallet.directCommissionBalance ?? 0) +
       (wallet.manCommFromDownPayment ?? 0) +
       (wallet.manCommFromInstallment ?? 0) +
       (wallet.salaryBalanceFromRanks ?? 0) +
-      (wallet.transferBalance ?? 0);
+      (wallet.transferBalance ?? 0) -
+      loanAmount;
 
     if (withdrawableBalance < amt)
       return res.status(400).json({ message: "Insufficient balance" });
@@ -67,8 +70,9 @@ export const createWithdrawal = async (
 
     // H-03 fix: Atomic balance check inside findOneAndUpdate — prevents race condition
     // where two concurrent requests both pass the balance check before either deducts.
+    // totalBalance must be >= amt + loanAmount to ensure effective balance covers withdrawal.
     const updated = await Wallet.findOneAndUpdate(
-      { _id: wallet._id, totalBalance: { $gte: amt } }, // atomic guard
+      { _id: wallet._id, totalBalance: { $gte: amt + loanAmount } }, // atomic guard (accounts for loan)
       { $inc: incPayload },
       { new: true }
     );

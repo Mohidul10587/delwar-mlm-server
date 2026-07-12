@@ -229,7 +229,7 @@ export const adminAdjustLoanBalance = async (
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
 
     // Prevent loan balance from going below zero
-    const currentLoan = wallet.loanBalance ?? 0;
+    const currentLoan = wallet.loanAmount ?? 0;
     if (amt < 0 && Math.abs(amt) > currentLoan) {
       return res.status(400).json({
         message: `Cannot deduct ৳${Math.abs(
@@ -240,10 +240,10 @@ export const adminAdjustLoanBalance = async (
 
     const transactionType = amt > 0 ? "loan_given" : "loan_adjusted";
 
-    // loanBalance is tracked separately, not added to totalBalance
+    // loanAmount is tracked separately, not added to totalBalance
     const updated = await Wallet.findOneAndUpdate(
       { userId: req.params.userId },
-      { $inc: { loanBalance: amt } },
+      { $inc: { loanAmount: amt } },
       { new: true, upsert: true }
     );
 
@@ -251,7 +251,7 @@ export const adminAdjustLoanBalance = async (
       userId: req.params.userId,
       type: transactionType,
       amount: Math.abs(amt),
-      balanceAfter: updated!.loanBalance,
+      balanceAfter: updated!.loanAmount,
       note:
         note ||
         (amt > 0 ? "Loan given by admin" : "Loan balance adjusted by admin"),
