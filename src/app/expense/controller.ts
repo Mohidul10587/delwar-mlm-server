@@ -8,7 +8,7 @@ import { Wallet, TransactionLog } from "../wallet/model";
 // POST /expense/admin/submit — admin submits an expense for approval
 export const submitAdminExpense = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { amount, description, expenseDate, receiptImage } = req.body;
+    const { amount, description, paidBy, expenseDate, receiptImage } = req.body;
 
     if (!amount || !description || !expenseDate) {
       return res.status(400).json({ message: "amount, description, and expenseDate are required" });
@@ -22,6 +22,7 @@ export const submitAdminExpense = async (req: Request, res: Response, next: Next
       submittedBy: req.user!._id,
       amount: amt,
       description: description.trim(),
+      paidBy: paidBy?.trim() ?? "",
       expenseDate: new Date(expenseDate),
       receiptImage: receiptImage ?? null,
       status: "pending",
