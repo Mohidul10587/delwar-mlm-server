@@ -15,11 +15,7 @@ export interface ISettings extends Document {
   contactAddress: string;
   socialFacebook: string;
   socialYoutube: string;
-  bkash: string;
-  nagad: string;
-  bankName: string;
-  bankAccount: string;
-  bankBranch: string;
+
   defaultShareConfig: {
     minDownPayment: number;
     maxDownPayment: number;
@@ -72,6 +68,17 @@ export interface ISettings extends Document {
     oneTimeReward: number;
     installmentCompletionReward: number;
   }[];
+
+  // Company Payment Methods — shown to users at checkout
+  companyPaymentMethods: {
+    _id?: any;
+    type: "bank" | "bkash" | "nagad" | "rocket";
+    label: string; // display name, e.g. "Dutch Bangla Bank"
+    accountNumber: string; // account / mobile number
+    accountName?: string; // account holder name (optional)
+    branchName?: string; // for bank accounts
+    isActive: boolean;
+  }[];
 }
 
 const SettingsSchema = new Schema<ISettings>(
@@ -90,11 +97,7 @@ const SettingsSchema = new Schema<ISettings>(
     contactAddress: { type: String, default: "" },
     socialFacebook: { type: String, default: "" },
     socialYoutube: { type: String, default: "" },
-    bkash: { type: String, default: "" },
-    nagad: { type: String, default: "" },
-    bankName: { type: String, default: "" },
-    bankAccount: { type: String, default: "" },
-    bankBranch: { type: String, default: "" },
+
     defaultShareConfig: {
       type: {
         minDownPayment: { type: Number, default: 15000 },
@@ -168,6 +171,20 @@ const SettingsSchema = new Schema<ISettings>(
         oneTimeReward: { type: Number, required: true },
         installmentCompletionReward: { type: Number, required: true },
         _id: false,
+      },
+    ],
+    companyPaymentMethods: [
+      {
+        type: {
+          type: String,
+          enum: ["bank", "bkash", "nagad", "rocket"],
+          required: true,
+        },
+        label: { type: String, required: true },
+        accountNumber: { type: String, required: true },
+        accountName: { type: String, default: "" },
+        branchName: { type: String, default: "" },
+        isActive: { type: Boolean, default: true },
       },
     ],
   },

@@ -30,6 +30,8 @@ export const getPublicSettings = async (_req: Request, res: Response, next: Next
         branches: doc.branches,
         investmentConfig: doc.investmentConfig,
         balanceTransferFeePercent: doc.balanceTransferFeePercent,
+        // Return only active payment methods for checkout display
+        companyPaymentMethods: (doc.companyPaymentMethods ?? []).filter(m => m.isActive),
       },
     });
   } catch (err) { next(err); }
@@ -47,9 +49,110 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
   try {
     const doc = await getOrCreate();
     // Prevent overwriting ranks through this endpoint — use /rank routes instead
-    const { ranks, ...safeBody } = req.body;
+    const { ranks, companyPaymentMethods, ...safeBody } = req.body;
     Object.assign(doc, safeBody);
     await doc.save();
     res.json({ message: "Settings updated", settings: doc });
+  } catch (err) { next(err); }
+};
+
+// ── Company Payment Methods CRUD ──────────────────────────────────────────────
+
+// GET /settings/payment-methods — all payment methods (admin)
+export const getCompanyPaymentMethods = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const doc = await getOrCreate();
+    res.json({ paymentMethods: doc.companyPaymentMethods ?? [] });
+  } catch (err) { next(err); }
+};
+
+// POST /settings/payment-methods — add a new payment method
+export const addCompanyPaymentMethod = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { type, label, accountNumber, accountName, branchName, isActive } = req.body;
+
+    if (!type || !["bank", "bkash", "nagad", "rocket"].includes(type)) {
+      return res.status(400).json({ message: "Invalid type. Must be bank, bkash, nagad, or rocket" });
+    }
+    if (!label || !String(label).trim()) {
+      return res.status(400).json({ message: "Label is required" });
+    }
+    if (!accountNumber || !String(accountNumber).trim()) {
+      return res.status(400).json({ message: "Account number is required" });
+    }
+
+    const doc = await getOrCreate();
+    doc.companyPaymentMethods.push({
+      type,
+      label: String(label).trim(),
+      accountNumber: String(accountNumber).trim(),
+      accountName: accountName ? String(accountName).trim() : "",
+      branchName: branchName ? String(branchName).trim() : "",
+      isActive: isActive !== false,
+    });
+    await doc.save();
+    res.status(201).json({ message: "Payment method added", paymentMethods: doc.companyPaymentMethods });
+  } catch (err) { next(err); }
+};
+
+// PUT /settings/payment-methods/:id — update a payment method
+export const updateCompanyPaymentMethod = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { type, label, accountNumber, accountName, branchName, isActive } = req.body;
+
+    const doc = await getOrCreate();
+    const entry = doc.companyPaymentMethods.find(
+      (m: any) => m._id.toString() === id
+    );
+    if (!entry) return res.status(404).json({ message: "Payment method not found" });
+
+    if (type !== undefined) {
+      if (!["bank", "bkash", "nagad", "rocket"].includes(type)) {
+        return res.status(400).json({ message: "Invalid type" });
+      }
+      entry.type = type;
+    }
+    if (label !== undefined) entry.label = String(label).trim();
+    if (accountNumber !== undefined) entry.accountNumber = String(accountNumber).trim();
+    if (accountName !== undefined) entry.accountName = String(accountName).trim();
+    if (branchName !== undefined) entry.branchName = String(branchName).trim();
+    if (isActive !== undefined) entry.isActive = Boolean(isActive);
+
+    await doc.save();
+    res.json({ message: "Payment method updated", paymentMethods: doc.companyPaymentMethods });
+  } catch (err) { next(err); }
+};
+
+// PATCH /settings/payment-methods/:id/toggle — toggle active status
+export const toggleCompanyPaymentMethod = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const doc = await getOrCreate();
+    const entry = doc.companyPaymentMethods.find(
+      (m: any) => m._id.toString() === id
+    );
+    if (!entry) return res.status(404).json({ message: "Payment method not found" });
+
+    entry.isActive = !entry.isActive;
+    await doc.save();
+    res.json({ message: `Payment method ${entry.isActive ? "activated" : "deactivated"}`, paymentMethods: doc.companyPaymentMethods });
+  } catch (err) { next(err); }
+};
+
+// DELETE /settings/payment-methods/:id — delete a payment method
+export const deleteCompanyPaymentMethod = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const doc = await getOrCreate();
+    const before = doc.companyPaymentMethods.length;
+    doc.companyPaymentMethods = doc.companyPaymentMethods.filter(
+      (m: any) => m._id.toString() !== id
+    ) as typeof doc.companyPaymentMethods;
+    if (doc.companyPaymentMethods.length === before) {
+      return res.status(404).json({ message: "Payment method not found" });
+    }
+    await doc.save();
+    res.json({ message: "Payment method deleted", paymentMethods: doc.companyPaymentMethods });
   } catch (err) { next(err); }
 };
