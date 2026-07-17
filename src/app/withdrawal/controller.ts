@@ -3,6 +3,19 @@ import { Withdrawal } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { Branch } from "../branch/model";
 
+// All wallet balances except cashback are withdrawable. Loan is subtracted
+// from their total before a withdrawal can be approved.
+const WITHDRAWABLE_FIELDS = [
+  "directCommissionBalance",
+  "manCommFromDownPayment",
+  "manCommFromInstallment",
+  "salaryBalanceFromRanks",
+  "transferBalance",
+  "fixedMonthlySalaryForAdminOnly",
+  "expenseReimbursementBalance",
+  "rewardBalance",
+] as const;
+
 export const createWithdrawal = async (
   req: Request,
   res: Response,
@@ -66,12 +79,10 @@ export const createWithdrawal = async (
 
     const loanAmount = wallet.loanAmount ?? 0;
     const withdrawableBalance =
-      (wallet.directCommissionBalance ?? 0) +
-      (wallet.manCommFromDownPayment ?? 0) +
-      (wallet.manCommFromInstallment ?? 0) +
-      (wallet.salaryBalanceFromRanks ?? 0) +
-      (wallet.transferBalance ?? 0) -
-      loanAmount;
+      WITHDRAWABLE_FIELDS.reduce(
+        (total, field) => total + (wallet[field] ?? 0),
+        0
+      ) - loanAmount;
 
     if (withdrawableBalance < amt)
       return res.status(400).json({ message: "Insufficient balance" });
@@ -79,14 +90,7 @@ export const createWithdrawal = async (
     // ── Compute per-field deductions ─────────────────────────────────────
     let remaining = amt;
     const deductions: Record<string, number> = {};
-    const fields: (keyof typeof wallet)[] = [
-      "directCommissionBalance",
-      "manCommFromDownPayment",
-      "manCommFromInstallment",
-      "salaryBalanceFromRanks",
-      "transferBalance",
-    ];
-    for (const field of fields) {
+    for (const field of WITHDRAWABLE_FIELDS) {
       if (remaining <= 0) break;
       const available = (wallet[field] as number) ?? 0;
       const deduct = Math.min(available, remaining);
@@ -102,7 +106,11 @@ export const createWithdrawal = async (
     }
 
     const updated = await Wallet.findOneAndUpdate(
-      { _id: wallet._id, totalBalance: { $gte: amt + loanAmount } },
+      {
+        _id: wallet._id,
+        // totalBalance includes cashback, but cashback cannot be withdrawn.
+        totalBalance: { $gte: amt + loanAmount + (wallet.cashbackBalance ?? 0) },
+      },
       { $inc: incPayload },
       { new: true }
     );
@@ -233,6 +241,17 @@ export const updateWithdrawalStatus = async (
       return res.status(404).json({ message: "Withdrawal not found" });
     if (withdrawal.status !== "pending")
       return res.status(400).json({ message: "Already reviewed" });
+
+    // A branch manager can review only withdrawals routed to their own branch.
+    // Admin and superadmin reviewers retain access to all requests.
+    if (req.user!.role === "branch_manager") {
+      const branch = await Branch.findOne({ managerId: req.user!._id }).select("_id").lean();
+      if (!branch || withdrawal.branchId?.toString() !== branch._id.toString()) {
+        return res.status(403).json({
+          message: "You can only review withdrawal requests for your branch",
+        });
+      }
+    }
 
     if (status === "rejected") {
       const wallet = await Wallet.findOne({ userId: withdrawal.userId });
