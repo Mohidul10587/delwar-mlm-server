@@ -517,9 +517,11 @@ export const getUsers = async (
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = (req.query.search as string) || "";
+    const role = (req.query.role as string) || "";
     const skip = (page - 1) * limit;
 
     const query: any = {};
+    if (role) query.role = role;
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
@@ -673,10 +675,10 @@ export const changeUserRole = async (
   try {
     const { role } = req.body as { role?: string };
 
-    if (!role || !["user", "admin"].includes(role)) {
+    if (!role || !["user", "admin", "staff", "branch_manager"].includes(role)) {
       return res
         .status(400)
-        .json({ message: "role must be either 'user' or 'admin'" });
+        .json({ message: "role must be 'user', 'admin', 'staff', or 'branch_manager'" });
     }
 
     const target = await Model.findById(req.params.id).select("-password");

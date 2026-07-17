@@ -12,12 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requirePermission = exports.verifyStaff = exports.verifyAdmin = exports.verifySuperAdmin = exports.verifyUser = void 0;
+exports.requirePermission = exports.verifyBranchManager = exports.verifyStaff = exports.verifyAdmin = exports.verifySuperAdmin = exports.verifyUser = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const model_1 = require("../app/user/model");
 const authConfig_1 = require("../utils/authConfig");
 // ─── Role helpers ─────────────────────────────────────────────────────────────
-// Centralised so future divergence between superadmin/admin only needs changes here.
 /** Roles that have full super-admin level access. */
 const SUPER_ROLES = ["superadmin"];
 const isSuperRole = (role) => SUPER_ROLES.includes(role);
@@ -105,6 +104,28 @@ const verifyStaff = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 exports.verifyStaff = verifyStaff;
+const verifyBranchManager = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const token = req.cookies.accessToken;
+        if (!token)
+            return res.status(401).json({ message: "Unauthorized" });
+        const decoded = jsonwebtoken_1.default.verify(token, authConfig_1.JWT_SECRET);
+        const user = yield model_1.User.findById(decoded.id).select("-password");
+        if (!user)
+            return res.status(404).json({ message: "User not found" });
+        if (!user.isActive)
+            return res.status(403).json({ message: "Account is disabled" });
+        // superadmin can access branch manager endpoints too
+        if (!["superadmin", "branch_manager"].includes(user.role))
+            return res.status(403).json({ message: "Branch manager access required" });
+        req.user = user;
+        next();
+    }
+    catch (_a) {
+        res.status(401).json({ message: "Invalid token" });
+    }
+});
+exports.verifyBranchManager = verifyBranchManager;
 const requirePermission = (permission) => {
     return (req, res, next) => {
         const user = req.user;

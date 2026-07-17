@@ -32,6 +32,7 @@ import transferRoutes from "./app/transfer/routes";
 import expenseRoutes from "./app/expense/routes";
 import achieversRoutes from "./app/achievers/routes";
 import adminSalaryRoutes from "./app/admin-salary/routes";
+import branchRoutes from "./app/branch/routes";
 // [DISABLED] import rewardRulesRoutes from "./app/reward-rules/routes";
 import { autoReleaseMonthlySalaries } from "./app/admin-salary/controller";
 import { processMonthlySalaries } from "./app/rank/controller";
@@ -171,6 +172,7 @@ app.use("/transfer", transferRoutes);
 app.use("/expense", expenseRoutes);
 app.use("/achievers", achieversRoutes);
 app.use("/admin-salary", adminSalaryRoutes);
+app.use("/branch", branchRoutes);
 // [DISABLED] app.use("/reward-rules", rewardRulesRoutes);
 app.use(errorHandler);
 

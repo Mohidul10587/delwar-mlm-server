@@ -4,7 +4,6 @@ import { User } from "../app/user/model";
 import { JWT_SECRET } from "../utils/authConfig";
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
-// Centralised so future divergence between superadmin/admin only needs changes here.
 
 /** Roles that have full super-admin level access. */
 const SUPER_ROLES = ["superadmin"] as const;
@@ -93,6 +92,29 @@ export const verifyStaff = async (req: Request, res: Response, next: NextFunctio
 
     if (!["superadmin", "admin", "staff"].includes(user.role))
       return res.status(403).json({ message: "Staff access required" });
+
+    req.user = user;
+    next();
+  } catch {
+    res.status(401).json({ message: "Invalid token" });
+  }
+};
+
+export const verifyBranchManager = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.cookies.accessToken;
+    if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user.isActive)
+      return res.status(403).json({ message: "Account is disabled" });
+
+    // superadmin can access branch manager endpoints too
+    if (!["superadmin", "branch_manager"].includes(user.role))
+      return res.status(403).json({ message: "Branch manager access required" });
 
     req.user = user;
     next();

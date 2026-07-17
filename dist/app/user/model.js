@@ -13,7 +13,7 @@ const UserSchema = new mongoose_1.Schema({
     password: { type: String, required: true },
     role: {
         type: String,
-        enum: ["superadmin", "admin", "staff", "user"],
+        enum: ["superadmin", "admin", "staff", "branch_manager", "user"],
         default: "user",
     },
     isActive: { type: Boolean, default: true },
@@ -57,6 +57,28 @@ const UserSchema = new mongoose_1.Schema({
             bkash: { type: String, default: null },
             nagad: { type: String, default: null },
             rocket: { type: String, default: null },
+            bankAccounts: {
+                type: [
+                    {
+                        bankName: { type: String, required: true },
+                        accountName: { type: String, required: true },
+                        accountNumber: { type: String, required: true },
+                        branchName: { type: String, default: "" },
+                        routingNumber: { type: String, default: "" },
+                    },
+                ],
+                default: [],
+            },
+            mobileAccounts: {
+                type: [
+                    {
+                        type: { type: String, enum: ["bkash", "nagad", "rocket"], required: true },
+                        number: { type: String, required: true },
+                        accountName: { type: String, default: "" },
+                    },
+                ],
+                default: [],
+            },
         },
         default: null,
     },

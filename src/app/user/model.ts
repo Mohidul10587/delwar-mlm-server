@@ -13,11 +13,29 @@ export interface INominee {
   image?: string;
 }
 
+export interface IBankAccount {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branchName?: string;
+  routingNumber?: string;
+}
+
+export interface IMobileAccount {
+  type: "bkash" | "nagad" | "rocket";
+  number: string;
+  accountName?: string;
+}
+
 export interface IPaymentMethods {
+  /** Legacy single-string fields */
   bank?: string;
   bkash?: string;
   nagad?: string;
   rocket?: string;
+  /** Structured saved accounts */
+  bankAccounts?: IBankAccount[];
+  mobileAccounts?: IMobileAccount[];
 }
 
 export interface IUser extends Document {
@@ -26,7 +44,7 @@ export interface IUser extends Document {
   name: string;
   phone: string;
   password: string;
-  role: "superadmin" | "admin" | "user";
+  role: "superadmin" | "admin" | "staff" | "branch_manager" | "user";
   isActive: boolean;
   image: string | null;
   coverImage?: string | null;
@@ -63,7 +81,7 @@ const UserSchema = new Schema<IUser>(
     password: { type: String, required: true },
     role: {
       type: String,
-      enum: ["superadmin", "admin", "staff", "user"],
+      enum: ["superadmin", "admin", "staff", "branch_manager", "user"],
       default: "user",
     },
     isActive: { type: Boolean, default: true },
@@ -108,6 +126,28 @@ const UserSchema = new Schema<IUser>(
         bkash: { type: String, default: null },
         nagad: { type: String, default: null },
         rocket: { type: String, default: null },
+        bankAccounts: {
+          type: [
+            {
+              bankName: { type: String, required: true },
+              accountName: { type: String, required: true },
+              accountNumber: { type: String, required: true },
+              branchName: { type: String, default: "" },
+              routingNumber: { type: String, default: "" },
+            },
+          ],
+          default: [],
+        },
+        mobileAccounts: {
+          type: [
+            {
+              type: { type: String, enum: ["bkash", "nagad", "rocket"], required: true },
+              number: { type: String, required: true },
+              accountName: { type: String, default: "" },
+            },
+          ],
+          default: [],
+        },
       },
       default: null,
     },

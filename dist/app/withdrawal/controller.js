@@ -12,29 +12,59 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateWithdrawalStatus = exports.getMyWithdrawals = exports.getWithdrawals = exports.createWithdrawal = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
-const model_3 = require("../ledger/model");
+const model_3 = require("../branch/model");
 const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f, _g;
     try {
-        const { amount, method, accountDetails, branch } = req.body;
+        const { amount, method, 
+        // bank
+        bankAccount, 
+        // mobile
+        mobileType, mobileNumber, mobileAccountName, 
+        // cash / branch
+        branchId, 
+        // legacy
+        accountDetails, } = req.body;
         const amt = Number(amount);
         if (isNaN(amt) || amt <= 0)
             return res.status(400).json({ message: "Amount must be greater than 0" });
-        if (method === "branch" && !branch)
-            return res.status(400).json({ message: "Branch is required" });
-        if (method !== "branch" && !accountDetails)
-            return res.status(400).json({ message: "Account details required" });
-        // Fix F-02: Atomic balance check + deduction using findOneAndUpdate.
-        // We deduct from each balance field sequentially in a single save but
-        // first we use a version-check pattern to prevent concurrent over-withdrawal.
-        //
-        // Strategy: load the wallet, compute deductions, then do an atomic update
-        // only if all sub-balances are still sufficient (optimistic guard).
+        // ── Validate per method ──────────────────────────────────────────────
+        if (method === "bank") {
+            if (!(bankAccount === null || bankAccount === void 0 ? void 0 : bankAccount.bankName) || !(bankAccount === null || bankAccount === void 0 ? void 0 : bankAccount.accountNumber))
+                return res
+                    .status(400)
+                    .json({ message: "Bank account details required" });
+        }
+        else if (method === "mobile") {
+            if (!mobileType || !mobileNumber)
+                return res
+                    .status(400)
+                    .json({ message: "Mobile type and number required" });
+        }
+        else if (method === "cash" || method === "branch") {
+            if (!branchId)
+                return res
+                    .status(400)
+                    .json({ message: "Branch is required for cash withdrawal" });
+        }
+        else {
+            // legacy methods: bkash / nagad / rocket / bank (old)
+            if (!accountDetails)
+                return res.status(400).json({ message: "Account details required" });
+        }
+        // ── Resolve branch name ──────────────────────────────────────────────
+        let branchName;
+        const isCash = method === "cash" || method === "branch";
+        if (isCash && branchId) {
+            const branchDoc = yield model_3.Branch.findById(branchId).lean();
+            if (!branchDoc)
+                return res.status(404).json({ message: "Selected branch not found" });
+            branchName = branchDoc.name;
+        }
+        // ── Balance check ────────────────────────────────────────────────────
         const wallet = yield model_2.Wallet.findOne({ userId: req.user._id });
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
-        // cashbackBalance is excluded from withdrawal
-        // loanAmount reduces the effective withdrawable balance
         const loanAmount = (_a = wallet.loanAmount) !== null && _a !== void 0 ? _a : 0;
         const withdrawableBalance = ((_b = wallet.directCommissionBalance) !== null && _b !== void 0 ? _b : 0) +
             ((_c = wallet.manCommFromDownPayment) !== null && _c !== void 0 ? _c : 0) +
@@ -44,7 +74,7 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             loanAmount;
         if (withdrawableBalance < amt)
             return res.status(400).json({ message: "Insufficient balance" });
-        // Compute per-field deductions (same sequential logic as before)
+        // ── Compute per-field deductions ─────────────────────────────────────
         let remaining = amt;
         const deductions = {};
         const fields = [
@@ -64,22 +94,31 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
                 remaining -= deduct;
             }
         }
-        // Build $inc payload — also update totalBalance atomically
         const incPayload = { totalBalance: -amt };
         for (const [field, deduct] of Object.entries(deductions)) {
             incPayload[field] = -deduct;
         }
-        // H-03 fix: Atomic balance check inside findOneAndUpdate — prevents race condition
-        // where two concurrent requests both pass the balance check before either deducts.
-        // totalBalance must be >= amt + loanAmount to ensure effective balance covers withdrawal.
-        const updated = yield model_2.Wallet.findOneAndUpdate({ _id: wallet._id, totalBalance: { $gte: amt + loanAmount } }, // atomic guard (accounts for loan)
-        { $inc: incPayload }, { new: true });
-        if (!updated) {
+        const updated = yield model_2.Wallet.findOneAndUpdate({ _id: wallet._id, totalBalance: { $gte: amt + loanAmount } }, { $inc: incPayload }, { new: true });
+        if (!updated)
             return res.status(400).json({ message: "Insufficient balance" });
+        // ── Build note & accountDetails string ───────────────────────────────
+        let noteDetail;
+        let legacyAccountDetails = accountDetails !== null && accountDetails !== void 0 ? accountDetails : "";
+        if (method === "bank") {
+            noteDetail = `Bank: ${bankAccount.bankName} — ${bankAccount.accountNumber}`;
+            legacyAccountDetails = `${bankAccount.bankName} — ${bankAccount.accountName} — ${bankAccount.accountNumber}`;
         }
-        const noteDetail = method === "branch"
-            ? `Branch: ${branch}`
-            : `${method.toUpperCase()}: ${accountDetails}`;
+        else if (method === "mobile") {
+            noteDetail = `${mobileType.toUpperCase()}: ${mobileNumber}`;
+            legacyAccountDetails = `${mobileType.toUpperCase()} — ${mobileNumber}`;
+        }
+        else if (isCash) {
+            noteDetail = `Branch: ${branchName}`;
+            legacyAccountDetails = "";
+        }
+        else {
+            noteDetail = `${method.toUpperCase()}: ${accountDetails}`;
+        }
         yield model_2.TransactionLog.create({
             userId: req.user._id,
             type: "withdrawal",
@@ -87,14 +126,23 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
             balanceAfter: updated.totalBalance,
             note: `Withdrawal request — ৳${amt.toLocaleString()} via ${noteDetail}`,
         });
-        // Fix F-07: Store deduction breakdown so we can restore correctly on rejection
+        // ── Create withdrawal document ───────────────────────────────────────
         const withdrawal = yield model_1.Withdrawal.create({
             userId: req.user._id,
             amount: amt,
             method,
-            accountDetails: method === "branch" ? "" : accountDetails,
-            branch: method === "branch" ? branch : undefined,
-            deductionBreakdown: deductions, // stored for correct refund on rejection
+            // bank
+            bankAccount: method === "bank" ? bankAccount : undefined,
+            // mobile
+            mobileType: method === "mobile" ? mobileType : undefined,
+            mobileNumber: method === "mobile" ? mobileNumber : undefined,
+            mobileAccountName: method === "mobile" ? mobileAccountName : undefined,
+            // cash
+            branch: isCash ? branchName : undefined,
+            branchId: isCash ? branchId : undefined,
+            // legacy
+            accountDetails: legacyAccountDetails,
+            deductionBreakdown: deductions,
         });
         res
             .status(201)
@@ -111,14 +159,24 @@ const getWithdrawals = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 30;
         const skip = (page - 1) * limit;
+        // Branch manager sees only withdrawals routed to their branch
+        let filter = {};
+        if (req.user.role === "branch_manager") {
+            const branch = yield model_3.Branch.findOne({ managerId: req.user._id }).lean();
+            if (!branch) {
+                return res.json({ withdrawals: [], total: 0, page, pages: 0 });
+            }
+            filter = { branchId: branch._id };
+        }
         const [withdrawals, total] = yield Promise.all([
-            model_1.Withdrawal.find()
+            model_1.Withdrawal.find(filter)
                 .populate("userId", "name username phone")
+                .populate("branchId", "name address")
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
                 .lean(),
-            model_1.Withdrawal.countDocuments(),
+            model_1.Withdrawal.countDocuments(filter),
         ]);
         res.json({ withdrawals, total, page, pages: Math.ceil(total / limit) });
     }
@@ -140,7 +198,7 @@ const getMyWithdrawals = (req, res, next) => __awaiter(void 0, void 0, void 0, f
 });
 exports.getMyWithdrawals = getMyWithdrawals;
 const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
@@ -176,15 +234,20 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
                         },
                     });
                 }
+                const isCashMethod = withdrawal.method === "cash" || withdrawal.method === "branch";
                 const restoredWallet = yield model_2.Wallet.findById(wallet._id).lean();
                 yield model_2.TransactionLog.create({
                     userId: withdrawal.userId,
                     type: "withdrawal_rejected",
                     amount: withdrawal.amount,
                     balanceAfter: (_b = restoredWallet === null || restoredWallet === void 0 ? void 0 : restoredWallet.totalBalance) !== null && _b !== void 0 ? _b : 0,
-                    note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${withdrawal.method}${withdrawal.method === "branch"
+                    note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${withdrawal.method}${isCashMethod
                         ? ` (${withdrawal.branch})`
-                        : ` (${withdrawal.accountDetails})`}. Reason: ${reviewNote || "No reason given"}`,
+                        : withdrawal.method === "mobile"
+                            ? ` (${(_c = withdrawal.mobileType) === null || _c === void 0 ? void 0 : _c.toUpperCase()}: ${withdrawal.mobileNumber})`
+                            : withdrawal.bankAccount
+                                ? ` (${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber})`
+                                : ` (${withdrawal.accountDetails})`}. Reason: ${reviewNote || "No reason given"}`,
                 });
             }
         }
@@ -198,25 +261,16 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
             const wUser = (yield model_1.Withdrawal.findById(withdrawal._id)
                 .populate("userId", "name username")
                 .lean());
-            const uName = (_d = (_c = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _c === void 0 ? void 0 : _c.name) !== null && _d !== void 0 ? _d : "";
-            const uUsername = (_f = (_e = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _e === void 0 ? void 0 : _e.username) !== null && _f !== void 0 ? _f : "";
-            const dest = withdrawal.method === "branch"
+            const uName = (_e = (_d = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _d === void 0 ? void 0 : _d.name) !== null && _e !== void 0 ? _e : "";
+            const uUsername = (_g = (_f = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _f === void 0 ? void 0 : _f.username) !== null && _g !== void 0 ? _g : "";
+            const isCashMethod = withdrawal.method === "cash" || withdrawal.method === "branch";
+            const dest = isCashMethod
                 ? `Branch: ${withdrawal.branch}`
-                : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
-            try {
-                yield model_3.CompanyLedger.create({
-                    date: new Date(),
-                    type: "withdrawal_paid",
-                    amount: withdrawal.amount,
-                    relatedId: withdrawal._id,
-                    relatedModel: "Withdrawal",
-                    userId: withdrawal.userId,
-                    note: `Withdrawal paid — ৳${withdrawal.amount.toLocaleString()} to ${uName} (@${uUsername}) via ${dest}`,
-                });
-            }
-            catch (ledgerErr) {
-                console.error(`[LEDGER ERROR] withdrawal_paid for withdrawalId=${withdrawal._id}:`, ledgerErr);
-            }
+                : withdrawal.method === "mobile"
+                    ? `${(_h = withdrawal.mobileType) === null || _h === void 0 ? void 0 : _h.toUpperCase()}: ${withdrawal.mobileNumber}`
+                    : withdrawal.bankAccount
+                        ? `Bank: ${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber}`
+                        : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
         }
         res.json({ message: `Withdrawal ${status}`, withdrawal });
     }

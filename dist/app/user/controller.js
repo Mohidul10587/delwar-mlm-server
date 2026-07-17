@@ -406,8 +406,11 @@ const getUsers = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || "";
+        const role = req.query.role || "";
         const skip = (page - 1) * limit;
         const query = {};
+        if (role)
+            query.role = role;
         if (search) {
             query.$or = [
                 { name: { $regex: search, $options: "i" } },
@@ -534,10 +537,10 @@ const changeUserRole = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
     var _a;
     try {
         const { role } = req.body;
-        if (!role || !["user", "admin"].includes(role)) {
+        if (!role || !["user", "admin", "staff", "branch_manager"].includes(role)) {
             return res
                 .status(400)
-                .json({ message: "role must be either 'user' or 'admin'" });
+                .json({ message: "role must be 'user', 'admin', 'staff', or 'branch_manager'" });
         }
         const target = yield model_1.User.findById(req.params.id).select("-password");
         if (!target)

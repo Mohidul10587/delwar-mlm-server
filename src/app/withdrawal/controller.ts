@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Withdrawal } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
-import { CompanyLedger } from "../ledger/model";
+import { Branch } from "../branch/model";
 
 export const createWithdrawal = async (
   req: Request,
@@ -9,27 +9,61 @@ export const createWithdrawal = async (
   next: NextFunction
 ) => {
   try {
-    const { amount, method, accountDetails, branch } = req.body;
-    const amt = Number(amount);
+    const {
+      amount,
+      method,
+      // bank
+      bankAccount,
+      // mobile
+      mobileType,
+      mobileNumber,
+      mobileAccountName,
+      // cash / branch
+      branchId,
+      // legacy
+      accountDetails,
+    } = req.body;
 
+    const amt = Number(amount);
     if (isNaN(amt) || amt <= 0)
       return res.status(400).json({ message: "Amount must be greater than 0" });
-    if (method === "branch" && !branch)
-      return res.status(400).json({ message: "Branch is required" });
-    if (method !== "branch" && !accountDetails)
-      return res.status(400).json({ message: "Account details required" });
 
-    // Fix F-02: Atomic balance check + deduction using findOneAndUpdate.
-    // We deduct from each balance field sequentially in a single save but
-    // first we use a version-check pattern to prevent concurrent over-withdrawal.
-    //
-    // Strategy: load the wallet, compute deductions, then do an atomic update
-    // only if all sub-balances are still sufficient (optimistic guard).
+    // ── Validate per method ──────────────────────────────────────────────
+    if (method === "bank") {
+      if (!bankAccount?.bankName || !bankAccount?.accountNumber)
+        return res
+          .status(400)
+          .json({ message: "Bank account details required" });
+    } else if (method === "mobile") {
+      if (!mobileType || !mobileNumber)
+        return res
+          .status(400)
+          .json({ message: "Mobile type and number required" });
+    } else if (method === "cash" || method === "branch") {
+      if (!branchId)
+        return res
+          .status(400)
+          .json({ message: "Branch is required for cash withdrawal" });
+    } else {
+      // legacy methods: bkash / nagad / rocket / bank (old)
+      if (!accountDetails)
+        return res.status(400).json({ message: "Account details required" });
+    }
+
+    // ── Resolve branch name ──────────────────────────────────────────────
+    let branchName: string | undefined;
+    const isCash = method === "cash" || method === "branch";
+    if (isCash && branchId) {
+      const branchDoc = await Branch.findById(branchId).lean();
+      if (!branchDoc)
+        return res.status(404).json({ message: "Selected branch not found" });
+      branchName = (branchDoc as any).name;
+    }
+
+    // ── Balance check ────────────────────────────────────────────────────
     const wallet = await Wallet.findOne({ userId: req.user!._id });
     if (!wallet) return res.status(404).json({ message: "Wallet not found" });
 
-    // cashbackBalance is excluded from withdrawal
-    // loanAmount reduces the effective withdrawable balance
     const loanAmount = wallet.loanAmount ?? 0;
     const withdrawableBalance =
       (wallet.directCommissionBalance ?? 0) +
@@ -42,7 +76,7 @@ export const createWithdrawal = async (
     if (withdrawableBalance < amt)
       return res.status(400).json({ message: "Insufficient balance" });
 
-    // Compute per-field deductions (same sequential logic as before)
+    // ── Compute per-field deductions ─────────────────────────────────────
     let remaining = amt;
     const deductions: Record<string, number> = {};
     const fields: (keyof typeof wallet)[] = [
@@ -62,29 +96,37 @@ export const createWithdrawal = async (
       }
     }
 
-    // Build $inc payload — also update totalBalance atomically
     const incPayload: Record<string, number> = { totalBalance: -amt };
     for (const [field, deduct] of Object.entries(deductions)) {
       incPayload[field] = -deduct;
     }
 
-    // H-03 fix: Atomic balance check inside findOneAndUpdate — prevents race condition
-    // where two concurrent requests both pass the balance check before either deducts.
-    // totalBalance must be >= amt + loanAmount to ensure effective balance covers withdrawal.
     const updated = await Wallet.findOneAndUpdate(
-      { _id: wallet._id, totalBalance: { $gte: amt + loanAmount } }, // atomic guard (accounts for loan)
+      { _id: wallet._id, totalBalance: { $gte: amt + loanAmount } },
       { $inc: incPayload },
       { new: true }
     );
-
-    if (!updated) {
+    if (!updated)
       return res.status(400).json({ message: "Insufficient balance" });
-    }
 
-    const noteDetail =
-      method === "branch"
-        ? `Branch: ${branch}`
-        : `${method.toUpperCase()}: ${accountDetails}`;
+    // ── Build note & accountDetails string ───────────────────────────────
+    let noteDetail: string;
+    let legacyAccountDetails = accountDetails ?? "";
+
+    if (method === "bank") {
+      noteDetail = `Bank: ${bankAccount.bankName} — ${bankAccount.accountNumber}`;
+      legacyAccountDetails = `${bankAccount.bankName} — ${bankAccount.accountName} — ${bankAccount.accountNumber}`;
+    } else if (method === "mobile") {
+      noteDetail = `${(mobileType as string).toUpperCase()}: ${mobileNumber}`;
+      legacyAccountDetails = `${(
+        mobileType as string
+      ).toUpperCase()} — ${mobileNumber}`;
+    } else if (isCash) {
+      noteDetail = `Branch: ${branchName}`;
+      legacyAccountDetails = "";
+    } else {
+      noteDetail = `${(method as string).toUpperCase()}: ${accountDetails}`;
+    }
 
     await TransactionLog.create({
       userId: req.user!._id,
@@ -94,14 +136,23 @@ export const createWithdrawal = async (
       note: `Withdrawal request — ৳${amt.toLocaleString()} via ${noteDetail}`,
     });
 
-    // Fix F-07: Store deduction breakdown so we can restore correctly on rejection
+    // ── Create withdrawal document ───────────────────────────────────────
     const withdrawal = await Withdrawal.create({
       userId: req.user!._id,
       amount: amt,
       method,
-      accountDetails: method === "branch" ? "" : accountDetails,
-      branch: method === "branch" ? branch : undefined,
-      deductionBreakdown: deductions, // stored for correct refund on rejection
+      // bank
+      bankAccount: method === "bank" ? bankAccount : undefined,
+      // mobile
+      mobileType: method === "mobile" ? mobileType : undefined,
+      mobileNumber: method === "mobile" ? mobileNumber : undefined,
+      mobileAccountName: method === "mobile" ? mobileAccountName : undefined,
+      // cash
+      branch: isCash ? branchName : undefined,
+      branchId: isCash ? branchId : undefined,
+      // legacy
+      accountDetails: legacyAccountDetails,
+      deductionBreakdown: deductions,
     });
 
     res
@@ -123,14 +174,25 @@ export const getWithdrawals = async (
     const limit = parseInt(req.query.limit as string) || 30;
     const skip = (page - 1) * limit;
 
+    // Branch manager sees only withdrawals routed to their branch
+    let filter: Record<string, any> = {};
+    if (req.user!.role === "branch_manager") {
+      const branch = await Branch.findOne({ managerId: req.user!._id }).lean();
+      if (!branch) {
+        return res.json({ withdrawals: [], total: 0, page, pages: 0 });
+      }
+      filter = { branchId: (branch as any)._id };
+    }
+
     const [withdrawals, total] = await Promise.all([
-      Withdrawal.find()
+      Withdrawal.find(filter)
         .populate("userId", "name username phone")
+        .populate("branchId", "name address")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      Withdrawal.countDocuments(),
+      Withdrawal.countDocuments(filter),
     ]);
 
     res.json({ withdrawals, total, page, pages: Math.ceil(total / limit) });
@@ -198,6 +260,8 @@ export const updateWithdrawalStatus = async (
           });
         }
 
+        const isCashMethod =
+          withdrawal.method === "cash" || withdrawal.method === "branch";
         const restoredWallet = await Wallet.findById(wallet._id).lean();
         await TransactionLog.create({
           userId: withdrawal.userId,
@@ -207,8 +271,14 @@ export const updateWithdrawalStatus = async (
           note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${
             withdrawal.method
           }${
-            withdrawal.method === "branch"
+            isCashMethod
               ? ` (${withdrawal.branch})`
+              : withdrawal.method === "mobile"
+              ? ` (${withdrawal.mobileType?.toUpperCase()}: ${
+                  withdrawal.mobileNumber
+                })`
+              : withdrawal.bankAccount
+              ? ` (${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber})`
               : ` (${withdrawal.accountDetails})`
           }. Reason: ${reviewNote || "No reason given"}`,
         });
@@ -228,27 +298,15 @@ export const updateWithdrawalStatus = async (
         .lean()) as any;
       const uName = wUser?.userId?.name ?? "";
       const uUsername = wUser?.userId?.username ?? "";
-      const dest =
-        withdrawal.method === "branch"
-          ? `Branch: ${withdrawal.branch}`
-          : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
-
-      try {
-        await CompanyLedger.create({
-          date: new Date(),
-          type: "withdrawal_paid",
-          amount: withdrawal.amount,
-          relatedId: withdrawal._id,
-          relatedModel: "Withdrawal",
-          userId: withdrawal.userId,
-          note: `Withdrawal paid — ৳${withdrawal.amount.toLocaleString()} to ${uName} (@${uUsername}) via ${dest}`,
-        });
-      } catch (ledgerErr) {
-        console.error(
-          `[LEDGER ERROR] withdrawal_paid for withdrawalId=${withdrawal._id}:`,
-          ledgerErr
-        );
-      }
+      const isCashMethod =
+        withdrawal.method === "cash" || withdrawal.method === "branch";
+      const dest = isCashMethod
+        ? `Branch: ${withdrawal.branch}`
+        : withdrawal.method === "mobile"
+        ? `${withdrawal.mobileType?.toUpperCase()}: ${withdrawal.mobileNumber}`
+        : withdrawal.bankAccount
+        ? `Bank: ${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber}`
+        : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
     }
 
     res.json({ message: `Withdrawal ${status}`, withdrawal });
