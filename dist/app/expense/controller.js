@@ -16,8 +16,9 @@ const model_3 = require("../wallet/model");
 // ─── Admin Expense (approval-based) endpoints ─────────────────────────────────
 // POST /expense/admin/submit — admin submits an expense for approval
 const submitAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
-        const { amount, description, expenseDate, receiptImage } = req.body;
+        const { amount, description, paidBy, expenseDate, receiptImage } = req.body;
         if (!amount || !description || !expenseDate) {
             return res.status(400).json({ message: "amount, description, and expenseDate are required" });
         }
@@ -29,6 +30,7 @@ const submitAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0,
             submittedBy: req.user._id,
             amount: amt,
             description: description.trim(),
+            paidBy: (_a = paidBy === null || paidBy === void 0 ? void 0 : paidBy.trim()) !== null && _a !== void 0 ? _a : "",
             expenseDate: new Date(expenseDate),
             receiptImage: receiptImage !== null && receiptImage !== void 0 ? receiptImage : null,
             status: "pending",

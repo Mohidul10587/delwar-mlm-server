@@ -8,8 +8,14 @@ const AdminExpenseSchema = new mongoose_1.Schema({
     description: { type: String, required: true, trim: true },
     expenseDate: { type: Date, required: true },
     receiptImage: { type: String, default: null },
-    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
+    status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+        index: true,
+    },
     reviewNote: { type: String, default: "" },
+    paidBy: { type: String, default: "" },
     reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
 }, { timestamps: true });

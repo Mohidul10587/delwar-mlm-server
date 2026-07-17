@@ -17,11 +17,6 @@ const SettingsSchema = new mongoose_1.Schema({
     contactAddress: { type: String, default: "" },
     socialFacebook: { type: String, default: "" },
     socialYoutube: { type: String, default: "" },
-    bkash: { type: String, default: "" },
-    nagad: { type: String, default: "" },
-    bankName: { type: String, default: "" },
-    bankAccount: { type: String, default: "" },
-    bankBranch: { type: String, default: "" },
     defaultShareConfig: {
         type: {
             minDownPayment: { type: Number, default: 15000 },
@@ -95,6 +90,20 @@ const SettingsSchema = new mongoose_1.Schema({
             oneTimeReward: { type: Number, required: true },
             installmentCompletionReward: { type: Number, required: true },
             _id: false,
+        },
+    ],
+    companyPaymentMethods: [
+        {
+            type: {
+                type: String,
+                enum: ["bank", "bkash", "nagad", "rocket"],
+                required: true,
+            },
+            label: { type: String, required: true },
+            accountNumber: { type: String, required: true },
+            accountName: { type: String, default: "" },
+            branchName: { type: String, default: "" },
+            isActive: { type: Boolean, default: true },
         },
     ],
 }, { timestamps: true });
