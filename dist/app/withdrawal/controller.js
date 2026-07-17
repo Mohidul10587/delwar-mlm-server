@@ -13,8 +13,20 @@ exports.updateWithdrawalStatus = exports.getMyWithdrawals = exports.getWithdrawa
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../branch/model");
+// All wallet balances except cashback are withdrawable. Loan is subtracted
+// from their total before a withdrawal can be approved.
+const WITHDRAWABLE_FIELDS = [
+    "directCommissionBalance",
+    "manCommFromDownPayment",
+    "manCommFromInstallment",
+    "salaryBalanceFromRanks",
+    "transferBalance",
+    "fixedMonthlySalaryForAdminOnly",
+    "expenseReimbursementBalance",
+    "rewardBalance",
+];
 const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c;
     try {
         const { amount, method, 
         // bank
@@ -66,28 +78,16 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         if (!wallet)
             return res.status(404).json({ message: "Wallet not found" });
         const loanAmount = (_a = wallet.loanAmount) !== null && _a !== void 0 ? _a : 0;
-        const withdrawableBalance = ((_b = wallet.directCommissionBalance) !== null && _b !== void 0 ? _b : 0) +
-            ((_c = wallet.manCommFromDownPayment) !== null && _c !== void 0 ? _c : 0) +
-            ((_d = wallet.manCommFromInstallment) !== null && _d !== void 0 ? _d : 0) +
-            ((_e = wallet.salaryBalanceFromRanks) !== null && _e !== void 0 ? _e : 0) +
-            ((_f = wallet.transferBalance) !== null && _f !== void 0 ? _f : 0) -
-            loanAmount;
+        const withdrawableBalance = WITHDRAWABLE_FIELDS.reduce((total, field) => { var _a; return total + ((_a = wallet[field]) !== null && _a !== void 0 ? _a : 0); }, 0) - loanAmount;
         if (withdrawableBalance < amt)
             return res.status(400).json({ message: "Insufficient balance" });
         // ── Compute per-field deductions ─────────────────────────────────────
         let remaining = amt;
         const deductions = {};
-        const fields = [
-            "directCommissionBalance",
-            "manCommFromDownPayment",
-            "manCommFromInstallment",
-            "salaryBalanceFromRanks",
-            "transferBalance",
-        ];
-        for (const field of fields) {
+        for (const field of WITHDRAWABLE_FIELDS) {
             if (remaining <= 0)
                 break;
-            const available = (_g = wallet[field]) !== null && _g !== void 0 ? _g : 0;
+            const available = (_b = wallet[field]) !== null && _b !== void 0 ? _b : 0;
             const deduct = Math.min(available, remaining);
             if (deduct > 0) {
                 deductions[field] = deduct;
@@ -98,7 +98,11 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         for (const [field, deduct] of Object.entries(deductions)) {
             incPayload[field] = -deduct;
         }
-        const updated = yield model_2.Wallet.findOneAndUpdate({ _id: wallet._id, totalBalance: { $gte: amt + loanAmount } }, { $inc: incPayload }, { new: true });
+        const updated = yield model_2.Wallet.findOneAndUpdate({
+            _id: wallet._id,
+            // totalBalance includes cashback, but cashback cannot be withdrawn.
+            totalBalance: { $gte: amt + loanAmount + ((_c = wallet.cashbackBalance) !== null && _c !== void 0 ? _c : 0) },
+        }, { $inc: incPayload }, { new: true });
         if (!updated)
             return res.status(400).json({ message: "Insufficient balance" });
         // ── Build note & accountDetails string ───────────────────────────────
@@ -198,7 +202,7 @@ const getMyWithdrawals = (req, res, next) => __awaiter(void 0, void 0, void 0, f
 });
 exports.getMyWithdrawals = getMyWithdrawals;
 const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
@@ -210,11 +214,21 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
             return res.status(404).json({ message: "Withdrawal not found" });
         if (withdrawal.status !== "pending")
             return res.status(400).json({ message: "Already reviewed" });
+        // A branch manager can review only withdrawals routed to their own branch.
+        // Admin and superadmin reviewers retain access to all requests.
+        if (req.user.role === "branch_manager") {
+            const branch = yield model_3.Branch.findOne({ managerId: req.user._id }).select("_id").lean();
+            if (!branch || ((_a = withdrawal.branchId) === null || _a === void 0 ? void 0 : _a.toString()) !== branch._id.toString()) {
+                return res.status(403).json({
+                    message: "You can only review withdrawal requests for your branch",
+                });
+            }
+        }
         if (status === "rejected") {
             const wallet = yield model_2.Wallet.findOne({ userId: withdrawal.userId });
             if (wallet) {
                 // Fix F-07: restore each balance field to what was originally deducted
-                const breakdown = (_a = withdrawal.deductionBreakdown) !== null && _a !== void 0 ? _a : {};
+                const breakdown = (_b = withdrawal.deductionBreakdown) !== null && _b !== void 0 ? _b : {};
                 if (Object.keys(breakdown).length > 0) {
                     // Restore using the stored breakdown
                     const incPayload = {
@@ -240,11 +254,11 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
                     userId: withdrawal.userId,
                     type: "withdrawal_rejected",
                     amount: withdrawal.amount,
-                    balanceAfter: (_b = restoredWallet === null || restoredWallet === void 0 ? void 0 : restoredWallet.totalBalance) !== null && _b !== void 0 ? _b : 0,
+                    balanceAfter: (_c = restoredWallet === null || restoredWallet === void 0 ? void 0 : restoredWallet.totalBalance) !== null && _c !== void 0 ? _c : 0,
                     note: `Withdrawal rejected — ৳${withdrawal.amount.toLocaleString()} via ${withdrawal.method}${isCashMethod
                         ? ` (${withdrawal.branch})`
                         : withdrawal.method === "mobile"
-                            ? ` (${(_c = withdrawal.mobileType) === null || _c === void 0 ? void 0 : _c.toUpperCase()}: ${withdrawal.mobileNumber})`
+                            ? ` (${(_d = withdrawal.mobileType) === null || _d === void 0 ? void 0 : _d.toUpperCase()}: ${withdrawal.mobileNumber})`
                             : withdrawal.bankAccount
                                 ? ` (${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber})`
                                 : ` (${withdrawal.accountDetails})`}. Reason: ${reviewNote || "No reason given"}`,
@@ -261,13 +275,13 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
             const wUser = (yield model_1.Withdrawal.findById(withdrawal._id)
                 .populate("userId", "name username")
                 .lean());
-            const uName = (_e = (_d = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _d === void 0 ? void 0 : _d.name) !== null && _e !== void 0 ? _e : "";
-            const uUsername = (_g = (_f = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _f === void 0 ? void 0 : _f.username) !== null && _g !== void 0 ? _g : "";
+            const uName = (_f = (_e = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _e === void 0 ? void 0 : _e.name) !== null && _f !== void 0 ? _f : "";
+            const uUsername = (_h = (_g = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _g === void 0 ? void 0 : _g.username) !== null && _h !== void 0 ? _h : "";
             const isCashMethod = withdrawal.method === "cash" || withdrawal.method === "branch";
             const dest = isCashMethod
                 ? `Branch: ${withdrawal.branch}`
                 : withdrawal.method === "mobile"
-                    ? `${(_h = withdrawal.mobileType) === null || _h === void 0 ? void 0 : _h.toUpperCase()}: ${withdrawal.mobileNumber}`
+                    ? `${(_j = withdrawal.mobileType) === null || _j === void 0 ? void 0 : _j.toUpperCase()}: ${withdrawal.mobileNumber}`
                     : withdrawal.bankAccount
                         ? `Bank: ${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber}`
                         : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;

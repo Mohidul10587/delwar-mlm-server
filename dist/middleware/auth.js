@@ -115,9 +115,10 @@ const verifyBranchManager = (req, res, next) => __awaiter(void 0, void 0, void 0
             return res.status(404).json({ message: "User not found" });
         if (!user.isActive)
             return res.status(403).json({ message: "Account is disabled" });
-        // superadmin can access branch manager endpoints too
-        if (!["superadmin", "branch_manager"].includes(user.role))
-            return res.status(403).json({ message: "Branch manager access required" });
+        // Admin roles can manage all withdrawals; branch managers are restricted
+        // to their assigned branch by the withdrawal controller.
+        if (!["superadmin", "admin", "branch_manager"].includes(user.role))
+            return res.status(403).json({ message: "Withdrawal reviewer access required" });
         req.user = user;
         next();
     }
