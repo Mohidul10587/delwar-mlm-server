@@ -103,23 +103,14 @@ export const register = async (
 
     const existingUsername = await Model.findOne({ username });
     if (existingUsername) {
-      // Username ইতিমধ্যে নিবন্ধিত, কিন্তু phone verify হয়েছে কিনা চেক করব
       if (!existingUsername.isPhoneVerified) {
-        // Phone verify হয়নি → frontend OTP পাঠাবে
         return res.status(409).json({
           code: "UNVERIFIED_PHONE",
-          message: {
-            en: "Username registered but phone not verified. Please verify.",
-            bn: "ইউজারনেম নিবন্ধিত কিন্তু ফোন যাচাই হয়নি। অনুগ্রহ করে যাচাই করুন।",
-          },
+          message: "Username registered but phone not verified. Please verify.",
         });
       }
-      // Phone verified → full conflict
       return res.status(400).json({
-        message: {
-          en: "Username already taken",
-          bn: "এই ইউজারনেম ইতিমধ্যে নিবন্ধিত",
-        },
+        message: "Username already taken",
       });
     }
 
@@ -130,7 +121,7 @@ export const register = async (
       }).select("_id");
       if (!referrer)
         return res.status(400).json({
-          message: { en: "Referrer not found", bn: "রেফারার পাওয়া যায়নি" },
+          message: "Referrer not found",
         });
       referrerId = referrer._id;
     }
@@ -167,12 +158,8 @@ export const register = async (
       await user.save();
     }
 
-    // ⚠️ এখন auto-login করব না। Frontend OTP পাঠাবে, verify হলে login হবে।
     res.status(201).json({
-      message: {
-        en: "Registered. Please verify your phone.",
-        bn: "নিবন্ধিত হয়েছে। ফোন যাচাই করুন।",
-      },
+      message: "Registered. Please verify your phone.",
     });
   } catch (err) {
     next(err);
@@ -264,10 +251,9 @@ export const login = async (
     const user = await Model.findOne({ username });
     if (!user)
       return res.status(404).json({
-        message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
+        message: "User not found",
       });
 
-    // Phone verify হয়েছে কিনা চেক — সব role-এর জন্য প্রযোজ্য
     if (!user.isPhoneVerified) {
       return res.status(403).json({
         code: "UNVERIFIED_PHONE",
@@ -277,13 +263,13 @@ export const login = async (
 
     if (!user.isActive)
       return res.status(403).json({
-        message: { en: "Account is inactive", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" },
+        message: "Account is inactive",
       });
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid)
       return res.status(401).json({
-        message: { en: "Invalid password", bn: "পাসওয়ার্ড ভুল" },
+        message: "Invalid password",
       });
 
     const { accessToken, refreshToken } = generateTokens(user._id.toString());
@@ -291,7 +277,7 @@ export const login = async (
     res.cookie("refreshToken", refreshToken, cookieOpts());
 
     res.json({
-      message: { en: "Login successful", bn: "লগইন সফল" },
+      message: "Login successful",
       user,
     });
   } catch (err) {
@@ -815,17 +801,14 @@ export const forgotPassword = async (
 
     if (!username || !newPassword) {
       return res.status(400).json({
-        message: {
-          en: "Username and new password required",
-          bn: "ইউজারনেম ও নতুন পাসওয়ার্ড প্রয়োজন",
-        },
+        message: "Username and new password required",
       });
     }
 
     const user = await Model.findOne({ username });
     if (!user) {
       return res.status(404).json({
-        message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
+        message: "User not found",
       });
     }
 
@@ -833,10 +816,7 @@ export const forgotPassword = async (
     await user.save();
 
     res.json({
-      message: {
-        en: "Password reset successful",
-        bn: "পাসওয়ার্ড রিসেট সফল হয়েছে",
-      },
+      message: "Password reset successful",
     });
   } catch (err) {
     next(err);
