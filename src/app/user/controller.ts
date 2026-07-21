@@ -267,9 +267,8 @@ export const login = async (
         message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
       });
 
-    // Phone verify হয়েছে কিনা চেক করব (admin ব্যতীত)
-    // Superadmin ও admin-এর isPhoneVerified সবসময় true ধরা হয়
-    if (!user.isPhoneVerified && user.role === "user") {
+    // Phone verify হয়েছে কিনা চেক — সব role-এর জন্য প্রযোজ্য
+    if (!user.isPhoneVerified) {
       return res.status(403).json({
         code: "UNVERIFIED_PHONE",
         message: {

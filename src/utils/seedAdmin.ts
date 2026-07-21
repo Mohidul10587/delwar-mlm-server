@@ -13,6 +13,7 @@ export const seedAdmin = async () => {
         password: hashedPassword,
         role: "superadmin",
         isActive: true,
+        isPhoneVerified: true,
         permissions: [],
       });
       console.log(
