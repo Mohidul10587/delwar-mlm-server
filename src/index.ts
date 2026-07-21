@@ -46,7 +46,12 @@ const app: Express = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
+    origin: [
+      "http://localhost:3000",
+      "https://delwar-mlm-client.vercel.app",
+      "https://alaheebd.com",
+      "https://www.alaheebd.com",
+    ],
     credentials: true,
   },
 });
