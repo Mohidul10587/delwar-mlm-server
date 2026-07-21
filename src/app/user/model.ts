@@ -46,6 +46,8 @@ export interface IUser extends Document {
   password: string;
   role: "superadmin" | "admin" | "staff" | "branch_manager" | "user";
   isActive: boolean;
+  /** ফোন নম্বর OTP দিয়ে যাচাই হয়েছে কিনা */
+  isPhoneVerified: boolean;
   image: string | null;
   coverImage?: string | null;
   linkedPhoneAccounts: mongoose.Types.ObjectId[];
@@ -85,6 +87,7 @@ const UserSchema = new Schema<IUser>(
       default: "user",
     },
     isActive: { type: Boolean, default: true },
+    isPhoneVerified: { type: Boolean, default: false },
     image: { type: String, default: null },
     coverImage: { type: String, default: null },
     linkedPhoneAccounts: [{ type: Schema.Types.ObjectId, ref: "User" }],

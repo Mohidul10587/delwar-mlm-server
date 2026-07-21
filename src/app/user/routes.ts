@@ -22,6 +22,7 @@ import {
   updateInfo,
   getLinkedAccounts,
   changeUserRole,
+  forgotPassword,
 } from "./controller";
 import { getSuperAdminStats } from "./stats.controller";
 import {
@@ -35,6 +36,7 @@ const router = Router();
 router.post("/register", register);
 router.post("/admin/register", verifySuperAdmin, adminRegister);
 router.post("/login", login);
+router.post("/forgot-password", forgotPassword);
 router.get("/verify", verify);
 router.post("/refresh", refresh);
 router.post("/logout", verifyUser, logout);

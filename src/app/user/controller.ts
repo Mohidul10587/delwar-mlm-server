@@ -102,8 +102,26 @@ export const register = async (
       registerSchema.parse(req.body);
 
     const existingUsername = await Model.findOne({ username });
-    if (existingUsername)
-      return res.status(400).json({ message: "Username already taken" });
+    if (existingUsername) {
+      // Username ইতিমধ্যে নিবন্ধিত, কিন্তু phone verify হয়েছে কিনা চেক করব
+      if (!existingUsername.isPhoneVerified) {
+        // Phone verify হয়নি → frontend OTP পাঠাবে
+        return res.status(409).json({
+          code: "UNVERIFIED_PHONE",
+          message: {
+            en: "Username registered but phone not verified. Please verify.",
+            bn: "ইউজারনেম নিবন্ধিত কিন্তু ফোন যাচাই হয়নি। অনুগ্রহ করে যাচাই করুন।",
+          },
+        });
+      }
+      // Phone verified → full conflict
+      return res.status(400).json({
+        message: {
+          en: "Username already taken",
+          bn: "এই ইউজারনেম ইতিমধ্যে নিবন্ধিত",
+        },
+      });
+    }
 
     let referrerId: mongoose.Types.ObjectId | null = null;
     if (referrerUsername) {
@@ -111,7 +129,9 @@ export const register = async (
         username: referrerUsername,
       }).select("_id");
       if (!referrer)
-        return res.status(400).json({ message: "Referrer not found" });
+        return res.status(400).json({
+          message: { en: "Referrer not found", bn: "রেফারার পাওয়া যায়নি" },
+        });
       referrerId = referrer._id;
     }
 
@@ -124,6 +144,7 @@ export const register = async (
       phone,
       password: hashedPassword,
       generationAncestors,
+      isPhoneVerified: false,
       ...(firstRankName && {
         currentRank: firstRankName,
         currentRankAchievedAt: new Date(),
@@ -146,11 +167,13 @@ export const register = async (
       await user.save();
     }
 
-    const { accessToken, refreshToken } = generateTokens(user._id.toString());
-    res.cookie("accessToken", accessToken, cookieOpts());
-    res.cookie("refreshToken", refreshToken, cookieOpts());
-
-    res.status(201).json({ message: "Registered successfully", user });
+    // ⚠️ এখন auto-login করব না। Frontend OTP পাঠাবে, verify হলে login হবে।
+    res.status(201).json({
+      message: {
+        en: "Registered. Please verify your phone.",
+        bn: "নিবন্ধিত হয়েছে। ফোন যাচাই করুন।",
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -239,19 +262,42 @@ export const login = async (
     const { username, password } = loginSchema.parse(req.body);
 
     const user = await Model.findOne({ username });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user)
+      return res.status(404).json({
+        message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
+      });
+
+    // Phone verify হয়েছে কিনা চেক করব (admin ব্যতীত)
+    // Superadmin ও admin-এর isPhoneVerified সবসময় true ধরা হয়
+    if (!user.isPhoneVerified && user.role === "user") {
+      return res.status(403).json({
+        code: "UNVERIFIED_PHONE",
+        message: {
+          en: "Phone not verified. Please verify your phone first.",
+          bn: "ফোন যাচাই হয়নি। অনুগ্রহ করে প্রথমে ফোন যাচাই করুন।",
+        },
+      });
+    }
 
     if (!user.isActive)
-      return res.status(403).json({ message: "Account is inactive" });
+      return res.status(403).json({
+        message: { en: "Account is inactive", bn: "অ্যাকাউন্ট নিষ্ক্রিয়" },
+      });
 
     const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(401).json({ message: "Invalid password" });
+    if (!isValid)
+      return res.status(401).json({
+        message: { en: "Invalid password", bn: "পাসওয়ার্ড ভুল" },
+      });
 
     const { accessToken, refreshToken } = generateTokens(user._id.toString());
     res.cookie("accessToken", accessToken, cookieOpts());
     res.cookie("refreshToken", refreshToken, cookieOpts());
 
-    res.json({ message: "Login successful", user });
+    res.json({
+      message: { en: "Login successful", bn: "লগইন সফল" },
+      user,
+    });
   } catch (err) {
     next(err);
   }
@@ -746,6 +792,53 @@ export const updatePermissions = async (
     res.json({
       message: "Permissions updated",
       user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /user/forgot-password
+ * OTP verify-এর পরে নতুন পাসওয়ার্ড সেট করে।
+ * ⚠️ এখানে কোনো OTP check নেই। Frontend আগেই /otp/verify call করেছে।
+ * username দিয়ে user খুঁজে password reset করা হয়।
+ */
+export const forgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { username, newPassword } = req.body as {
+      username: string;
+      newPassword: string;
+    };
+
+    if (!username || !newPassword) {
+      return res.status(400).json({
+        message: {
+          en: "Username and new password required",
+          bn: "ইউজারনেম ও নতুন পাসওয়ার্ড প্রয়োজন",
+        },
+      });
+    }
+
+    const user = await Model.findOne({ username });
+    if (!user) {
+      return res.status(404).json({
+        message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({
+      message: {
+        en: "Password reset successful",
+        bn: "পাসওয়ার্ড রিসেট সফল হয়েছে",
+      },
     });
   } catch (err) {
     next(err);
