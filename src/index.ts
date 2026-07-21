@@ -44,14 +44,15 @@ dotenv.config();
 
 const app: Express = express();
 const httpServer = createServer(app);
+const origins = [
+  "http://localhost:3000",
+  "https://delwar-mlm-client.vercel.app",
+  "https://alaheebd.com",
+  "https://www.alaheebd.com",
+];
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://localhost:3000",
-      "https://delwar-mlm-client.vercel.app",
-      "https://alaheebd.com",
-      "https://www.alaheebd.com",
-    ],
+    origin: origins,
     credentials: true,
   },
 });
@@ -108,7 +109,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
+    origin: origins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
