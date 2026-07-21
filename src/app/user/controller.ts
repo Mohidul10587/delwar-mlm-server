@@ -271,10 +271,7 @@ export const login = async (
     if (!user.isPhoneVerified) {
       return res.status(403).json({
         code: "UNVERIFIED_PHONE",
-        message: {
-          en: "Phone not verified. Please verify your phone first.",
-          bn: "ফোন যাচাই হয়নি। অনুগ্রহ করে প্রথমে ফোন যাচাই করুন।",
-        },
+        message: "Phone not verified. Please verify your phone first.",
       });
     }
 
@@ -723,7 +720,9 @@ export const changeUserRole = async (
     if (!role || !["user", "admin", "staff", "branch_manager"].includes(role)) {
       return res
         .status(400)
-        .json({ message: "role must be 'user', 'admin', 'staff', or 'branch_manager'" });
+        .json({
+          message: "role must be 'user', 'admin', 'staff', or 'branch_manager'",
+        });
     }
 
     const target = await Model.findById(req.params.id).select("-password");
