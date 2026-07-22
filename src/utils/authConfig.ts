@@ -15,10 +15,13 @@ if (!process.env.JWT_REFRESH_SECRET) {
 export const JWT_SECRET: string = process.env.JWT_SECRET;
 export const JWT_REFRESH_SECRET: string = process.env.JWT_REFRESH_SECRET;
 
-export const cookieOpts = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: (process.env.NODE_ENV === "production" ? "none" : "lax") as
-    | "none"
-    | "lax",
-});
+export const cookieOpts = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    secure: isProduction, // true in production
+    sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
+    // Add this for explicit cross-domain support
+    ...(isProduction && { domain: undefined }), // Let browser handle domain
+  };
+};
