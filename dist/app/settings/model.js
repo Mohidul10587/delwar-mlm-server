@@ -58,7 +58,6 @@ const SettingsSchema = new mongoose_1.Schema({
             },
         },
     ],
-    branches: [{ type: String }],
     investmentConfig: {
         type: {
             monthly: {
@@ -84,14 +83,20 @@ const SettingsSchema = new mongoose_1.Schema({
         }),
     },
     balanceTransferFeePercent: { type: Number, default: 0 },
-    installmentRewardRules: [
-        {
-            targetAmount: { type: Number, required: true },
-            oneTimeReward: { type: Number, required: true },
-            installmentCompletionReward: { type: Number, required: true },
-            _id: false,
+    rewardConfig: {
+        type: {
+            enabled: { type: Boolean, default: false },
+            cycleTargetAmount: { type: Number, default: 100000 },
+            fullPaymentRewardAmount: { type: Number, default: 5000 },
+            splitPaymentRewardAmount: { type: Number, default: 3000 },
         },
-    ],
+        default: () => ({
+            enabled: false,
+            cycleTargetAmount: 100000,
+            fullPaymentRewardAmount: 5000,
+            splitPaymentRewardAmount: 3000,
+        }),
+    },
     companyPaymentMethods: [
         {
             type: {

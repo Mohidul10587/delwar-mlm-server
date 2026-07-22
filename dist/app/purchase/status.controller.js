@@ -20,7 +20,6 @@ const shareSlot_model_1 = require("../project/shareSlot.model");
 const model_5 = require("../project/model");
 const controller_1 = require("../rank/controller");
 const model_6 = require("../wallet/model");
-// [DISABLED] import { checkAndGrantOneTimeReward } from "../../utils/rewardUtils";
 // ── Share allocation helpers ──────────────────────────────────────────────────
 /**
  * Fix F-01: Allocates share slots atomically to prevent race conditions.
@@ -209,14 +208,6 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
                     console.error(`[CASHBACK ERROR] Auto cashback failed for purchaseId=${purchase._id.toString()}:`, cashbackErr);
                 }
             }
-            // Step 5b — One-time reward for cash purchases (full payment at once)
-            // [DISABLED] if (purchase.paymentType === "cash") {
-            //   await checkAndGrantOneTimeReward(
-            //     (purchase._id as any).toString(),
-            //     purchase.userId.toString(),
-            //     purchase.amountPaid
-            //   );
-            // }
             // Step 6 — Ledger entry
             const buyer = yield model_3.User.findById(purchase.userId)
                 .select("name username")

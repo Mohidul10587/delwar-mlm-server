@@ -193,9 +193,14 @@ export const getInstallmentSummary = async (
       .sort({ installmentNo: 1, createdAt: 1 })
       .lean();
 
-    const approvedCount = allPayments.filter(
-      (p) => p.status === "approved"
-    ).length;
+    // A grouped payment may cover several installment slots, so count slots,
+    // not payment documents.
+    const approvedCount = allPayments
+      .filter((p) => p.status === "approved")
+      .reduce(
+        (count, p) => count + (p.installmentNumbers?.length || 1),
+        0
+      );
     const totalPayable =
       (purchase.downPayment ?? 0) + totalInstallments * perInstallment;
     const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
@@ -279,19 +284,26 @@ export const updateInstallmentStatus = async (
       });
     }
 
-    const payment = await InstallmentPayment.findById(req.params.id);
+    // Atomically claim the pending payment.  This guarantees that a grouped
+    // payment is approved/rejected only once even when two admins click at once.
+    const payment = await InstallmentPayment.findOneAndUpdate(
+      { _id: req.params.id, status: "pending" },
+      {
+        $set: {
+          status,
+          reviewNote: String(reviewNote ?? "").trim(),
+          reviewedBy: req.user!._id,
+          reviewedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
     if (!payment) {
-      return res.status(404).json({ message: "Installment not found" });
+      const exists = await InstallmentPayment.exists({ _id: req.params.id });
+      return res.status(exists ? 400 : 404).json({
+        message: exists ? "Already reviewed" : "Installment not found",
+      });
     }
-    if (payment.status !== "pending") {
-      return res.status(400).json({ message: "Already reviewed" });
-    }
-
-    payment.status = status;
-    payment.reviewNote = String(reviewNote ?? "").trim();
-    payment.reviewedBy = req.user!._id;
-    payment.reviewedAt = new Date();
-    await payment.save();
 
     if (status === "approved") {
       // Fix F-04: use atomic $inc to avoid race condition on amountPaid
@@ -349,7 +361,7 @@ export const updateInstallmentStatus = async (
             relatedId: payment._id,
             relatedModel: "InstallmentPayment",
             userId: purchase.userId,
-            note: `Installment #${payment.installmentNo} received — ${
+            note: `Installment${payment.installmentNumbers.length > 1 ? "s" : ""} #${payment.installmentNumbers.join(", #")} received — ${
               purchase.snapshot?.shareTitle ?? ""
             } — Buyer: ${buyerName} (@${buyerUsername}), ৳${payment.amount.toLocaleString()}`,
           });
@@ -365,7 +377,7 @@ export const updateInstallmentStatus = async (
           type: "installment_received",
           amount: payment.amount,
           balanceAfter: 0,
-          note: `Installment #${payment.installmentNo} approved — ${
+          note: `Installment${payment.installmentNumbers.length > 1 ? "s" : ""} #${payment.installmentNumbers.join(", #")} approved — ${
             purchase.snapshot?.shareTitle ?? ""
           }, ৳${payment.amount.toLocaleString()}`,
           relatedPurchaseId: purchase._id,
@@ -380,7 +392,8 @@ export const updateInstallmentStatus = async (
         try {
           await processRewardAfterPayment(
             purchase._id.toString(),
-            payment.amount
+            payment.amount,
+            payment._id.toString()
           );
         } catch (rewardErr) {
           console.error(

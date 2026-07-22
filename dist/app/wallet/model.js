@@ -19,7 +19,7 @@ const WalletSchema = new mongoose_1.Schema({
     loanAmount: { type: Number, default: 0 },
     fixedMonthlySalaryForAdminOnly: { type: Number, default: 0 },
     expenseReimbursementBalance: { type: Number, default: 0 },
-    rewardBalance: { type: Number, default: 0 },
+    rewardBalanceFromInstallment: { type: Number, default: 0 },
 }, { timestamps: true });
 // Fix F-12: totalBalance is recomputed on every save (for .save() calls)
 // For $inc operations callers MUST also $inc totalBalance by the same amount.
@@ -34,7 +34,7 @@ WalletSchema.pre("save", function () {
             ((_f = this.transferBalance) !== null && _f !== void 0 ? _f : 0) +
             ((_g = this.fixedMonthlySalaryForAdminOnly) !== null && _g !== void 0 ? _g : 0) +
             ((_h = this.expenseReimbursementBalance) !== null && _h !== void 0 ? _h : 0) +
-            ((_j = this.rewardBalance) !== null && _j !== void 0 ? _j : 0);
+            ((_j = this.rewardBalanceFromInstallment) !== null && _j !== void 0 ? _j : 0);
     // Note: loanAmount is NOT included in totalBalance (tracked separately)
 });
 // Index for fast userId lookups

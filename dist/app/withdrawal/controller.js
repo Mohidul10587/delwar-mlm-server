@@ -23,7 +23,7 @@ const WITHDRAWABLE_FIELDS = [
     "transferBalance",
     "fixedMonthlySalaryForAdminOnly",
     "expenseReimbursementBalance",
-    "rewardBalance",
+    "rewardBalanceFromInstallment",
 ];
 const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
@@ -101,7 +101,9 @@ const createWithdrawal = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         const updated = yield model_2.Wallet.findOneAndUpdate({
             _id: wallet._id,
             // totalBalance includes cashback, but cashback cannot be withdrawn.
-            totalBalance: { $gte: amt + loanAmount + ((_c = wallet.cashbackBalance) !== null && _c !== void 0 ? _c : 0) },
+            totalBalance: {
+                $gte: amt + loanAmount + ((_c = wallet.cashbackBalance) !== null && _c !== void 0 ? _c : 0),
+            },
         }, { $inc: incPayload }, { new: true });
         if (!updated)
             return res.status(400).json({ message: "Insufficient balance" });
@@ -217,8 +219,11 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
         // A branch manager can review only withdrawals routed to their own branch.
         // Admin and superadmin reviewers retain access to all requests.
         if (req.user.role === "branch_manager") {
-            const branch = yield model_3.Branch.findOne({ managerId: req.user._id }).select("_id").lean();
-            if (!branch || ((_a = withdrawal.branchId) === null || _a === void 0 ? void 0 : _a.toString()) !== branch._id.toString()) {
+            const branch = yield model_3.Branch.findOne({ managerId: req.user._id })
+                .select("_id")
+                .lean();
+            if (!branch ||
+                ((_a = withdrawal.branchId) === null || _a === void 0 ? void 0 : _a.toString()) !== branch._id.toString()) {
                 return res.status(403).json({
                     message: "You can only review withdrawal requests for your branch",
                 });

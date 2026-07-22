@@ -16,6 +16,8 @@ export interface IRewardCycle {
   completedAt: Date;            // Cycle শেষ হওয়ার তারিখ
   rewardAmount: number;         // এই Cycle-এর Reward পরিমাণ (Settings থেকে নেওয়া)
   status: RewardStatus;
+  /** যে approved installment payment থেকে cycle-টি সম্পন্ন হয়েছে */
+  sourcePaymentId?: Types.ObjectId;
   paidAt?: Date;
   note?: string;
 }
@@ -55,6 +57,7 @@ const RewardCycleSchema = new Schema<IRewardCycle>(
     completedAt:      { type: Date, required: true },
     rewardAmount:     { type: Number, required: true, default: 0 },
     status:           { type: String, enum: ["pending", "approved", "paid", "cancelled"], default: "pending" },
+    sourcePaymentId:  { type: Schema.Types.ObjectId, ref: "InstallmentPayment" },
     paidAt:           { type: Date },
     note:             { type: String, default: "" },
   },

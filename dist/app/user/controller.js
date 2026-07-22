@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updatePermissions = exports.changeUserRole = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.updateCoverImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = exports.ALL_PERMISSIONS = void 0;
+exports.forgotPassword = exports.updatePermissions = exports.changeUserRole = exports.getLinkedAccounts = exports.updateInfo = exports.adminUpdateRelations = exports.deleteUser = exports.getUsers = exports.getUserDetails = exports.adminUpdatePassword = exports.adminUpdatePhone = exports.toggleUserActive = exports.changePassword = exports.updatePhone = exports.updateImage = exports.updateCoverImage = exports.switchAccount = exports.verify = exports.logout = exports.refresh = exports.login = exports.adminRegister = exports.register = exports.ALL_PERMISSIONS = void 0;
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../settings/model");
@@ -92,15 +92,26 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
     try {
         const { name, username, phone, password, referrerUsername } = validation_1.registerSchema.parse(req.body);
         const existingUsername = yield model_1.User.findOne({ username });
-        if (existingUsername)
-            return res.status(400).json({ message: "Username already taken" });
+        if (existingUsername) {
+            if (!existingUsername.isPhoneVerified) {
+                return res.status(409).json({
+                    code: "UNVERIFIED_PHONE",
+                    message: "Username registered but phone not verified. Please verify.",
+                });
+            }
+            return res.status(400).json({
+                message: "Username already taken",
+            });
+        }
         let referrerId = null;
         if (referrerUsername) {
             const referrer = yield model_1.User.findOne({
                 username: referrerUsername,
             }).select("_id");
             if (!referrer)
-                return res.status(400).json({ message: "Referrer not found" });
+                return res.status(400).json({
+                    message: "Referrer not found",
+                });
             referrerId = referrer._id;
         }
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
@@ -108,7 +119,7 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
         const firstRankName = yield getFirstRankName();
         const user = yield model_1.User.create(Object.assign({ name,
             username,
-            phone, password: hashedPassword, generationAncestors }, (firstRankName && {
+            phone, password: hashedPassword, generationAncestors, isPhoneVerified: false }, (firstRankName && {
             currentRank: firstRankName,
             currentRankAchievedAt: new Date(),
             earnedRanks: [firstRankName],
@@ -121,10 +132,9 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
             user.linkedPhoneAccounts = siblingIds;
             yield user.save();
         }
-        const { accessToken, refreshToken } = generateTokens(user._id.toString());
-        res.cookie("accessToken", accessToken, (0, authConfig_1.cookieOpts)());
-        res.cookie("refreshToken", refreshToken, (0, authConfig_1.cookieOpts)());
-        res.status(201).json({ message: "Registered successfully", user });
+        res.status(201).json({
+            message: "Registered. Please verify your phone.",
+        });
     }
     catch (err) {
         next(err);
@@ -182,16 +192,31 @@ const login = (req, res, next) => __awaiter(void 0, void 0, void 0, function* ()
         const { username, password } = validation_1.loginSchema.parse(req.body);
         const user = yield model_1.User.findOne({ username });
         if (!user)
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({
+                message: "User not found",
+            });
+        if (!user.isPhoneVerified) {
+            return res.status(403).json({
+                code: "UNVERIFIED_PHONE",
+                message: "Phone not verified. Please verify your phone first.",
+            });
+        }
         if (!user.isActive)
-            return res.status(403).json({ message: "Account is inactive" });
+            return res.status(403).json({
+                message: "Account is inactive",
+            });
         const isValid = yield bcryptjs_1.default.compare(password, user.password);
         if (!isValid)
-            return res.status(401).json({ message: "Invalid password" });
+            return res.status(401).json({
+                message: "Invalid password",
+            });
         const { accessToken, refreshToken } = generateTokens(user._id.toString());
         res.cookie("accessToken", accessToken, (0, authConfig_1.cookieOpts)());
         res.cookie("refreshToken", refreshToken, (0, authConfig_1.cookieOpts)());
-        res.json({ message: "Login successful", user });
+        res.json({
+            message: "Login successful",
+            user,
+        });
     }
     catch (err) {
         next(err);
@@ -540,7 +565,9 @@ const changeUserRole = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         if (!role || !["user", "admin", "staff", "branch_manager"].includes(role)) {
             return res
                 .status(400)
-                .json({ message: "role must be 'user', 'admin', 'staff', or 'branch_manager'" });
+                .json({
+                message: "role must be 'user', 'admin', 'staff', or 'branch_manager'",
+            });
         }
         const target = yield model_1.User.findById(req.params.id).select("-password");
         if (!target)
@@ -603,3 +630,34 @@ const updatePermissions = (req, res, next) => __awaiter(void 0, void 0, void 0, 
     }
 });
 exports.updatePermissions = updatePermissions;
+/**
+ * POST /user/forgot-password
+ * OTP verify-এর পরে নতুন পাসওয়ার্ড সেট করে।
+ * ⚠️ এখানে কোনো OTP check নেই। Frontend আগেই /otp/verify call করেছে।
+ * username দিয়ে user খুঁজে password reset করা হয়।
+ */
+const forgotPassword = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { username, newPassword } = req.body;
+        if (!username || !newPassword) {
+            return res.status(400).json({
+                message: "Username and new password required",
+            });
+        }
+        const user = yield model_1.User.findOne({ username });
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found",
+            });
+        }
+        user.password = yield bcryptjs_1.default.hash(newPassword, 10);
+        yield user.save();
+        res.json({
+            message: "Password reset successful",
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.forgotPassword = forgotPassword;

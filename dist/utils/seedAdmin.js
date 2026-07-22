@@ -27,6 +27,7 @@ const seedAdmin = () => __awaiter(void 0, void 0, void 0, function* () {
                 password: hashedPassword,
                 role: "superadmin",
                 isActive: true,
+                isPhoneVerified: true,
                 permissions: [],
             });
             console.log(`✅ Super Admin created — username: ${admin.username}, password: 01700000000`);

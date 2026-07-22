@@ -15,6 +15,7 @@ exports.OUTFLOW_TYPES = [
     "withdrawal_paid",
     "incentive_bonus_paid",
     "cashback_paid",
+    "installment_reward_paid",
     "loan_given",
     "loan_adjusted",
     "expense_recorded",

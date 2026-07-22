@@ -40,8 +40,6 @@ export interface ISettings extends Document {
       minTotalPersonalPurchaseQtyForSalary: number;
     };
   }[];
-  // Branches
-  branches: string[];
   // Investment config
   investmentConfig: {
     monthly: {
@@ -63,16 +61,9 @@ export interface ISettings extends Document {
   // Balance transfer fee
   balanceTransferFeePercent: number;
 
-  installmentRewardRules: {
-    targetAmount: number;
-    oneTimeReward: number;
-    installmentCompletionReward: number;
-  }[];
-
   /**
    * Reward Config — ভবিষ্যৎ-উপযোগী reward system কনফিগারেশন।
-   * installmentRewardRules-এর পাশাপাশি এই কনফিগ থেকে
-   * reward cycle target, full/split reward amounts নির্ধারণ হবে।
+   * এই কনফিগ থেকেই reward cycle target ও full/split reward amounts নির্ধারণ হবে।
    */
   rewardConfig: {
     enabled: boolean;
@@ -154,7 +145,6 @@ const SettingsSchema = new Schema<ISettings>(
         },
       },
     ],
-    branches: [{ type: String }],
     investmentConfig: {
       type: {
         monthly: {
@@ -180,14 +170,6 @@ const SettingsSchema = new Schema<ISettings>(
       }),
     },
     balanceTransferFeePercent: { type: Number, default: 0 },
-    installmentRewardRules: [
-      {
-        targetAmount: { type: Number, required: true },
-        oneTimeReward: { type: Number, required: true },
-        installmentCompletionReward: { type: Number, required: true },
-        _id: false,
-      },
-    ],
     rewardConfig: {
       type: {
         enabled: { type: Boolean, default: false },

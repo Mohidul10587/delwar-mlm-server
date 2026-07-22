@@ -47,7 +47,8 @@ const routes_19 = __importDefault(require("./app/expense/routes"));
 const routes_20 = __importDefault(require("./app/achievers/routes"));
 const routes_21 = __importDefault(require("./app/admin-salary/routes"));
 const routes_22 = __importDefault(require("./app/branch/routes"));
-// [DISABLED] import rewardRulesRoutes from "./app/reward-rules/routes";
+const routes_23 = __importDefault(require("./app/otp/routes"));
+const routes_24 = __importDefault(require("./app/reward-tracker/routes"));
 const controller_1 = require("./app/admin-salary/controller");
 const controller_2 = require("./app/rank/controller");
 const controller_3 = require("./app/notice/controller");
@@ -55,9 +56,15 @@ const node_cron_1 = __importDefault(require("node-cron"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
+const origins = [
+    "http://localhost:3000",
+    "https://delwar-mlm-client.vercel.app",
+    "https://alaheebd.com",
+    "https://www.alaheebd.com",
+];
 const io = new socket_io_1.Server(httpServer, {
     cors: {
-        origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
+        origin: origins,
         credentials: true,
     },
 });
@@ -103,7 +110,7 @@ app.use(body_parser_1.default.json({ limit: "10mb" }));
 app.use(body_parser_1.default.urlencoded({ extended: true, limit: "10mb" }));
 app.use((0, cookie_parser_1.default)());
 app.use((0, cors_1.default)({
-    origin: ["http://localhost:3000", "https://delwar-mlm-client.vercel.app"],
+    origin: origins,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
 }));
@@ -166,7 +173,8 @@ app.use("/expense", routes_19.default);
 app.use("/achievers", routes_20.default);
 app.use("/admin-salary", routes_21.default);
 app.use("/branch", routes_22.default);
-// [DISABLED] app.use("/reward-rules", rewardRulesRoutes);
+app.use("/otp", routes_23.default);
+app.use("/reward-tracker", routes_24.default);
 app.use(errorHandler_1.errorHandler);
 if (process.env.VERCEL !== "1") {
     httpServer.listen(port, () => console.log(`Server running on port ${port}`));

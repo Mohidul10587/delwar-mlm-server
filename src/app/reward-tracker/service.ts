@@ -15,6 +15,8 @@
 import { RewardTracker, IRewardCycle } from "./model";
 import { Settings } from "../settings/model";
 import { Purchase } from "../purchase/model";
+import { Wallet, TransactionLog } from "../wallet/model";
+import { CompanyLedger } from "../ledger/model";
 
 /**
  * একটি payment approve হওয়ার পরে RewardTracker update করো।
@@ -26,28 +28,20 @@ import { Purchase } from "../purchase/model";
 export const processRewardAfterPayment = async (
   purchaseId: string,
   paymentAmount: number,
-  isFirstPayment = false
+  sourcePaymentId?: string
 ): Promise<void> => {
   try {
     const purchase = await Purchase.findById(purchaseId).lean();
     if (!purchase) return;
 
     const settings = await Settings.findOne().lean();
-    const rules = (settings as any)?.installmentRewardRules ?? [];
-
-    // Settings-এ targetAmount: 100000 (১ লক্ষ) এর রুল খুঁজি
-    // Default: প্রথম রুলটি ব্যবহার করি। যদি না থাকে, reward system নিষ্ক্রিয়।
-    if (!rules || rules.length === 0) return;
-
-    // সবচেয়ে ছোট targetAmount-এর রুল — এটাই cycle target
-    const sortedRules = [...rules].sort(
-      (a: any, b: any) => a.targetAmount - b.targetAmount
-    );
-    const primaryRule = sortedRules[0];
-    const cycleTargetAmount: number = primaryRule.targetAmount;
-    const fullPaymentRewardAmount: number = primaryRule.oneTimeReward ?? 0;
-    const splitPaymentRewardAmount: number =
-      primaryRule.installmentCompletionReward ?? 0;
+    const config = (settings as any)?.rewardConfig;
+    if (!config?.enabled || !config.cycleTargetAmount || config.cycleTargetAmount <= 0) {
+      return;
+    }
+    const cycleTargetAmount: number = config.cycleTargetAmount;
+    const fullPaymentRewardAmount: number = config.fullPaymentRewardAmount ?? 0;
+    const splitPaymentRewardAmount: number = config.splitPaymentRewardAmount ?? 0;
 
     // Tracker খুঁজি বা তৈরি করি
     let tracker = await RewardTracker.findOne({ purchaseId });
@@ -111,7 +105,10 @@ export const processRewardAfterPayment = async (
         completedAmount: cycleTargetAmount,
         completedAt: new Date(),
         rewardAmount,
-        status: "pending",
+        // Reward is credited as part of payment approval, so it is already paid.
+        status: "paid",
+        paidAt: new Date(),
+        sourcePaymentId: sourcePaymentId as any,
       });
 
       remainingNewMoney -= needed;
@@ -132,6 +129,47 @@ export const processRewardAfterPayment = async (
     tracker.cycles = [...(tracker.cycles ?? []), ...newCycles];
     tracker.markModified("cycles");
     await tracker.save();
+
+    // Reward credits are deliberately done once for the grouped payment, after
+    // all of its installment slots have been approved.  The payment status is
+    // atomically claimed by the caller, which prevents duplicate credits.
+    for (const cycle of newCycles) {
+      if (cycle.rewardAmount <= 0) continue;
+
+      await Wallet.findOneAndUpdate(
+        { userId: purchase.userId },
+        {
+          $setOnInsert: { userId: purchase.userId },
+          $inc: {
+            rewardBalanceFromInstallment: cycle.rewardAmount,
+            totalBalance: cycle.rewardAmount,
+          },
+        },
+        { upsert: true }
+      );
+      const wallet = await Wallet.findOne({ userId: purchase.userId }).lean();
+      const label = cycle.cycleType === "full_payment" ? "Full payment" : "Split payment";
+      const note = `${label} installment reward — Cycle #${cycle.cycleNumber}, ৳${cycle.completedAmount.toLocaleString()} target, reward ৳${cycle.rewardAmount.toLocaleString()}`;
+      const transaction = await TransactionLog.create({
+        userId: purchase.userId,
+        type: cycle.cycleType === "full_payment"
+          ? "installment_reward_one_time"
+          : "installment_reward_completion",
+        amount: cycle.rewardAmount,
+        balanceAfter: wallet?.rewardBalanceFromInstallment ?? cycle.rewardAmount,
+        note,
+        relatedPurchaseId: purchase._id,
+      });
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "installment_reward_paid",
+        amount: cycle.rewardAmount,
+        relatedId: transaction._id,
+        relatedModel: "TransactionLog",
+        userId: purchase.userId,
+        note,
+      });
+    }
   } catch (err) {
     console.error(
       `[REWARD TRACKER] processRewardAfterPayment failed for purchaseId=${purchaseId}:`,

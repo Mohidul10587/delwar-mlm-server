@@ -20,12 +20,21 @@ var __rest = (this && this.__rest) || function (s, e) {
     return t;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCompanyPaymentMethod = exports.toggleCompanyPaymentMethod = exports.updateCompanyPaymentMethod = exports.addCompanyPaymentMethod = exports.getCompanyPaymentMethods = exports.updateSettings = exports.getSettings = exports.getPublicSettings = void 0;
+exports.deleteCompanyPaymentMethod = exports.toggleCompanyPaymentMethod = exports.updateCompanyPaymentMethod = exports.addCompanyPaymentMethod = exports.getCompanyPaymentMethods = exports.updateRewardConfig = exports.updateSettings = exports.getSettings = exports.getPublicSettings = void 0;
 const model_1 = require("./model");
 const getOrCreate = () => __awaiter(void 0, void 0, void 0, function* () {
     // L-09 fix: atomic upsert — prevents two concurrent requests creating two Settings docs
     return yield model_1.Settings.findOneAndUpdate({}, { $setOnInsert: {} }, { upsert: true, new: true, setDefaultsOnInsert: true });
 });
+// Legacy Settings documents may contain fields from retired modules. Never
+// expose or accept them through the active Settings API.
+const withoutRetiredSettingsFields = (doc) => {
+    const settings = doc.toObject
+        ? doc.toObject({ schemaFieldsOnly: true })
+        : Object.assign({}, doc);
+    delete settings.branches;
+    return settings;
+};
 // H-02 fix: public endpoint returns only UI-safe fields (no financial/sensitive data)
 const getPublicSettings = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -44,7 +53,6 @@ const getPublicSettings = (_req, res, next) => __awaiter(void 0, void 0, void 0,
                 contactAddress: doc.contactAddress,
                 socialFacebook: doc.socialFacebook,
                 socialYoutube: doc.socialYoutube,
-                branches: doc.branches,
                 investmentConfig: doc.investmentConfig,
                 balanceTransferFeePercent: doc.balanceTransferFeePercent,
                 // Return only active payment methods for checkout display
@@ -60,7 +68,7 @@ exports.getPublicSettings = getPublicSettings;
 // Full settings — admin only
 const getSettings = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        res.json({ settings: yield getOrCreate() });
+        res.json({ settings: withoutRetiredSettingsFields(yield getOrCreate()) });
     }
     catch (err) {
         next(err);
@@ -72,17 +80,52 @@ const updateSettings = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
     try {
         const doc = yield getOrCreate();
         // Prevent overwriting ranks through this endpoint — use /rank routes instead
-        const _a = req.body, { ranks, companyPaymentMethods } = _a, safeBody = __rest(_a, ["ranks", "companyPaymentMethods"]);
+        const _a = req.body, { ranks, companyPaymentMethods, branches } = _a, safeBody = __rest(_a, ["ranks", "companyPaymentMethods", "branches"]);
         Object.assign(doc, safeBody);
         yield doc.save();
-        res.json({ message: "Settings updated", settings: doc });
+        res.json({ message: "Settings updated", settings: withoutRetiredSettingsFields(doc) });
     }
     catch (err) {
         next(err);
     }
 });
 exports.updateSettings = updateSettings;
-// ── Company Payment Methods CRUD ──────────────────────────────────────────────
+// PATCH /settings/reward-config — update reward configuration
+const updateRewardConfig = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { enabled, cycleTargetAmount, fullPaymentRewardAmount, splitPaymentRewardAmount } = req.body;
+        const doc = yield getOrCreate();
+        if (enabled !== undefined)
+            doc.rewardConfig.enabled = Boolean(enabled);
+        if (cycleTargetAmount !== undefined) {
+            const val = Number(cycleTargetAmount);
+            if (isNaN(val) || val <= 0) {
+                return res.status(400).json({ message: "cycleTargetAmount must be a positive number" });
+            }
+            doc.rewardConfig.cycleTargetAmount = val;
+        }
+        if (fullPaymentRewardAmount !== undefined) {
+            const val = Number(fullPaymentRewardAmount);
+            if (isNaN(val) || val < 0) {
+                return res.status(400).json({ message: "fullPaymentRewardAmount must be >= 0" });
+            }
+            doc.rewardConfig.fullPaymentRewardAmount = val;
+        }
+        if (splitPaymentRewardAmount !== undefined) {
+            const val = Number(splitPaymentRewardAmount);
+            if (isNaN(val) || val < 0) {
+                return res.status(400).json({ message: "splitPaymentRewardAmount must be >= 0" });
+            }
+            doc.rewardConfig.splitPaymentRewardAmount = val;
+        }
+        yield doc.save();
+        res.json({ message: "Reward config updated", rewardConfig: doc.rewardConfig });
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.updateRewardConfig = updateRewardConfig;
 // GET /settings/payment-methods — all payment methods (admin)
 const getCompanyPaymentMethods = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;

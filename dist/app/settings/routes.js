@@ -7,6 +7,8 @@ const router = (0, express_1.Router)();
 router.get("/public", controller_1.getPublicSettings); // H-02: public safe fields only
 router.get("/", auth_1.verifyAdmin, controller_1.getSettings); // H-02: full settings requires admin
 router.put("/", auth_1.verifySuperAdmin, controller_1.updateSettings);
+// ── Reward Config ─────────────────────────────────────────────────────────────
+router.patch("/reward-config", auth_1.verifySuperAdmin, controller_1.updateRewardConfig);
 // ── Company Payment Methods ───────────────────────────────────────────────────
 router.get("/payment-methods", auth_1.verifyAdmin, controller_1.getCompanyPaymentMethods);
 router.post("/payment-methods", auth_1.verifySuperAdmin, controller_1.addCompanyPaymentMethod);

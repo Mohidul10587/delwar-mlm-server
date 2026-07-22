@@ -31,6 +31,7 @@ export type LedgerType =
   | "withdrawal_paid"
   | "incentive_bonus_paid"
   | "cashback_paid"
+  | "installment_reward_paid"
   | "loan_given"
   | "loan_adjusted"
   | "expense_recorded";
@@ -49,6 +50,7 @@ export const OUTFLOW_TYPES: LedgerType[] = [
   "withdrawal_paid",
   "incentive_bonus_paid",
   "cashback_paid",
+  "installment_reward_paid",
   "loan_given",
   "loan_adjusted",
   "expense_recorded",

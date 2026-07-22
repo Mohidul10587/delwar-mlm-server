@@ -8,6 +8,7 @@ const router = (0, express_1.Router)();
 router.post("/register", controller_1.register);
 router.post("/admin/register", auth_1.verifySuperAdmin, controller_1.adminRegister);
 router.post("/login", controller_1.login);
+router.post("/forgot-password", controller_1.forgotPassword);
 router.get("/verify", controller_1.verify);
 router.post("/refresh", controller_1.refresh);
 router.post("/logout", auth_1.verifyUser, controller_1.logout);

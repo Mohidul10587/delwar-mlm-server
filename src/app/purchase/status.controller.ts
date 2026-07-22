@@ -9,7 +9,6 @@ import { ShareSlot } from "../project/shareSlot.model";
 import { Project } from "../project/model";
 import { recalcUserRank } from "../rank/controller";
 import { Wallet, TransactionLog } from "../wallet/model";
-// [DISABLED] import { checkAndGrantOneTimeReward } from "../../utils/rewardUtils";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
 
@@ -242,15 +241,6 @@ export const updatePurchaseStatus = async (
           );
         }
       }
-
-      // Step 5b — One-time reward for cash purchases (full payment at once)
-      // [DISABLED] if (purchase.paymentType === "cash") {
-      //   await checkAndGrantOneTimeReward(
-      //     (purchase._id as any).toString(),
-      //     purchase.userId.toString(),
-      //     purchase.amountPaid
-      //   );
-      // }
 
       // Step 6 — Ledger entry
       const buyer = await User.findById(purchase.userId)

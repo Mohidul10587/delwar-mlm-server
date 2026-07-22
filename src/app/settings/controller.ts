@@ -10,6 +10,16 @@ const getOrCreate = async () => {
   );
 };
 
+// Legacy Settings documents may contain fields from retired modules. Never
+// expose or accept them through the active Settings API.
+const withoutRetiredSettingsFields = (doc: any) => {
+  const settings = doc.toObject
+    ? doc.toObject({ schemaFieldsOnly: true })
+    : { ...doc };
+  delete settings.branches;
+  return settings;
+};
+
 // H-02 fix: public endpoint returns only UI-safe fields (no financial/sensitive data)
 export const getPublicSettings = async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -27,7 +37,6 @@ export const getPublicSettings = async (_req: Request, res: Response, next: Next
         contactAddress: doc.contactAddress,
         socialFacebook: doc.socialFacebook,
         socialYoutube: doc.socialYoutube,
-        branches: doc.branches,
         investmentConfig: doc.investmentConfig,
         balanceTransferFeePercent: doc.balanceTransferFeePercent,
         // Return only active payment methods for checkout display
@@ -40,7 +49,7 @@ export const getPublicSettings = async (_req: Request, res: Response, next: Next
 // Full settings — admin only
 export const getSettings = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    res.json({ settings: await getOrCreate() });
+    res.json({ settings: withoutRetiredSettingsFields(await getOrCreate()) });
   } catch (err) { next(err); }
 };
 
@@ -49,10 +58,10 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
   try {
     const doc = await getOrCreate();
     // Prevent overwriting ranks through this endpoint — use /rank routes instead
-    const { ranks, companyPaymentMethods, ...safeBody } = req.body;
+    const { ranks, companyPaymentMethods, branches, ...safeBody } = req.body;
     Object.assign(doc, safeBody);
     await doc.save();
-    res.json({ message: "Settings updated", settings: doc });
+    res.json({ message: "Settings updated", settings: withoutRetiredSettingsFields(doc) });
   } catch (err) { next(err); }
 };
 

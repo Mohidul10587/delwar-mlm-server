@@ -18,9 +18,8 @@ if (!process.env.JWT_REFRESH_SECRET) {
 }
 exports.JWT_SECRET = process.env.JWT_SECRET;
 exports.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
-const cookieOpts = () => ({
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: (process.env.NODE_ENV === "production" ? "none" : "lax"),
-});
+const cookieOpts = () => {
+    const isProduction = process.env.NODE_ENV === "production";
+    return Object.assign({ httpOnly: true, secure: isProduction, sameSite: (isProduction ? "none" : "lax") }, (isProduction && { domain: undefined }));
+};
 exports.cookieOpts = cookieOpts;

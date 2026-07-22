@@ -17,6 +17,7 @@ const UserSchema = new mongoose_1.Schema({
         default: "user",
     },
     isActive: { type: Boolean, default: true },
+    isPhoneVerified: { type: Boolean, default: false },
     image: { type: String, default: null },
     coverImage: { type: String, default: null },
     linkedPhoneAccounts: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
