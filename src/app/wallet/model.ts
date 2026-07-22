@@ -12,7 +12,7 @@ export interface IWallet extends Document {
   loanAmount: number; // admin-granted loan, tracked separately
   fixedMonthlySalaryForAdminOnly: number; // salary released by super admin
   expenseReimbursementBalance: number; // approved expense reimbursements
-  rewardBalance: number; // earned from installment reward system
+  rewardBalanceFromInstallment: number; // earned from installment reward system
 }
 
 export interface ITransactionLog extends Document {
@@ -63,7 +63,7 @@ const WalletSchema = new Schema<IWallet>(
     loanAmount: { type: Number, default: 0 },
     fixedMonthlySalaryForAdminOnly: { type: Number, default: 0 },
     expenseReimbursementBalance: { type: Number, default: 0 },
-    rewardBalance: { type: Number, default: 0 },
+    rewardBalanceFromInstallment: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -80,7 +80,7 @@ WalletSchema.pre("save", function () {
     (this.transferBalance ?? 0) +
     (this.fixedMonthlySalaryForAdminOnly ?? 0) +
     (this.expenseReimbursementBalance ?? 0) +
-    (this.rewardBalance ?? 0);
+    (this.rewardBalanceFromInstallment ?? 0);
   // Note: loanAmount is NOT included in totalBalance (tracked separately)
 });
 

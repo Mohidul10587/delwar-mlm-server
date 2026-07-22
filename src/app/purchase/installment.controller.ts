@@ -8,7 +8,7 @@ import { User } from "../user/model";
 import { distributeInstallmentPaymentCommission } from "./commissions";
 import { CompanyLedger } from "../ledger/model";
 import { isTransactionIdUsed } from "../../utils/isTransactionIdUsed";
-// [DISABLED] import { checkAndGrantInstallmentReward } from "../../utils/rewardUtils";
+import { processRewardAfterPayment } from "../reward-tracker/service";
 
 // Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
 const getWallet = async (userId: string) => {
@@ -22,13 +22,15 @@ export const createInstallmentPayment = async (
 ) => {
   try {
     const {
-      installmentNo,
+      installmentNumbers,   // new: number[] — একাধিক কিস্তি
+      installmentNo,        // legacy: single number (backward compat)
       amount,
       senderAccount,
       transactionId,
       paymentMethod,
       receiptImage,
     } = req.body;
+
     const purchase = await Purchase.findById(req.params.purchaseId).populate(
       "projectId",
       "installment"
@@ -50,13 +52,40 @@ export const createInstallmentPayment = async (
       });
     }
 
-    // Fix V-03: validate installmentNo
-    const instNo = parseInt(String(installmentNo), 10);
-    if (!Number.isInteger(instNo) || instNo < 1) {
-      return res.status(400).json({ message: "Invalid installment number" });
+    // ── Resolve installment numbers ──────────────────────────────────────────
+    // Client can send either installmentNumbers (array) or installmentNo (legacy single).
+    let resolvedNumbers: number[] = [];
+
+    if (Array.isArray(installmentNumbers) && installmentNumbers.length > 0) {
+      resolvedNumbers = installmentNumbers.map((n: any) => parseInt(String(n), 10));
+    } else if (installmentNo !== undefined) {
+      const single = parseInt(String(installmentNo), 10);
+      if (!Number.isInteger(single) || single < 1) {
+        return res.status(400).json({ message: "Invalid installment number" });
+      }
+      resolvedNumbers = [single];
+    } else {
+      return res.status(400).json({ message: "installmentNumbers is required" });
     }
 
-    // Fix F-09: check transactionId uniqueness for installments
+    // Validate each installment number
+    for (const n of resolvedNumbers) {
+      if (!Number.isInteger(n) || n < 1) {
+        return res.status(400).json({ message: `Invalid installment number: ${n}` });
+      }
+      if (n > (purchase.installmentCount ?? 0)) {
+        return res.status(400).json({
+          message: `Installment #${n} does not exist for this purchase`,
+        });
+      }
+    }
+
+    // Deduplicate
+    const uniqueNumbers = [...new Set(resolvedNumbers)].sort((a, b) => a - b);
+    const installmentCount = uniqueNumbers.length;
+    const firstNo = uniqueNumbers[0];
+
+    // Fix F-09: check transactionId uniqueness
     if (!transactionId || !String(transactionId).trim()) {
       return res.status(400).json({ message: "Transaction ID is required" });
     }
@@ -70,12 +99,9 @@ export const createInstallmentPayment = async (
     // Validate payment method
     const resolvedPaymentMethod = paymentMethod ?? "cash";
     if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Invalid payment method. Must be cash, bank, or mobile_banking",
-        });
+      return res.status(400).json({
+        message: "Invalid payment method. Must be cash, bank, or mobile_banking",
+      });
     }
 
     // Receipt image is required for bank and mobile_banking payments
@@ -83,24 +109,47 @@ export const createInstallmentPayment = async (
       ["bank", "mobile_banking"].includes(resolvedPaymentMethod) &&
       !receiptImage
     ) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Receipt image is required for bank or mobile banking payments",
-        });
+      return res.status(400).json({
+        message: "Receipt image is required for bank or mobile banking payments",
+      });
     }
 
-    // Validate amount
+    // Validate amount — must equal installmentCount × perInstallment
+    const perInstallment = purchase.installmentAmount ?? 0;
+    const expectedAmount = perInstallment * installmentCount;
     const parsedAmount = Number(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return res.status(400).json({ message: "Amount must be greater than 0" });
+    }
+    if (parsedAmount !== expectedAmount) {
+      return res.status(400).json({
+        message: `Amount must be ৳${expectedAmount.toLocaleString()} for ${installmentCount} installment(s) (${installmentCount} × ৳${perInstallment.toLocaleString()})`,
+      });
+    }
+
+    // Check that none of the selected installments are already paid/pending
+    const existingPayments = await InstallmentPayment.find({
+      purchaseId: purchase._id,
+      installmentNumbers: { $in: uniqueNumbers },
+      status: { $in: ["approved", "pending"] },
+    }).lean();
+    if (existingPayments.length > 0) {
+      const conflict = existingPayments.flatMap((p) =>
+        (p.installmentNumbers ?? [p.installmentNo]).filter((n: number) =>
+          uniqueNumbers.includes(n)
+        )
+      );
+      return res.status(400).json({
+        message: `Installment(s) #${[...new Set(conflict)].join(", ")} already paid or under review`,
+      });
     }
 
     const payment = await InstallmentPayment.create({
       purchaseId: purchase._id,
       userId: req.user!._id,
-      installmentNo: instNo,
+      installmentNumbers: uniqueNumbers,
+      installmentNo: firstNo,             // legacy field
+      installmentCount,
       amount: parsedAmount,
       senderAccount,
       transactionId: String(transactionId).trim(),
@@ -328,18 +377,17 @@ export const updateInstallmentStatus = async (
         });
 
         // Check and grant installment completion reward (non-critical)
-        // [DISABLED]
-        // try {
-        //   await checkAndGrantInstallmentReward(
-        //     purchase._id.toString(),
-        //     purchase.userId.toString()
-        //   );
-        // } catch (rewardErr) {
-        //   console.error(
-        //     `[REWARD ERROR] installment reward check failed for purchaseId=${purchase._id}:`,
-        //     rewardErr
-        //   );
-        // }
+        try {
+          await processRewardAfterPayment(
+            purchase._id.toString(),
+            payment.amount
+          );
+        } catch (rewardErr) {
+          console.error(
+            `[REWARD ERROR] processRewardAfterPayment failed for purchaseId=${purchase._id}:`,
+            rewardErr
+          );
+        }
       }
     }
 

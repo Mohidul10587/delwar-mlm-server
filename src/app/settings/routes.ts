@@ -3,6 +3,7 @@ import {
   getPublicSettings,
   getSettings,
   updateSettings,
+  updateRewardConfig,
   getCompanyPaymentMethods,
   addCompanyPaymentMethod,
   updateCompanyPaymentMethod,
@@ -16,6 +17,9 @@ const router = Router();
 router.get("/public", getPublicSettings);       // H-02: public safe fields only
 router.get("/", verifyAdmin, getSettings);      // H-02: full settings requires admin
 router.put("/", verifySuperAdmin, updateSettings);
+
+// ── Reward Config ─────────────────────────────────────────────────────────────
+router.patch("/reward-config", verifySuperAdmin, updateRewardConfig);
 
 // ── Company Payment Methods ───────────────────────────────────────────────────
 router.get("/payment-methods", verifyAdmin, getCompanyPaymentMethods);

@@ -56,7 +56,39 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 };
 
-// ── Company Payment Methods CRUD ──────────────────────────────────────────────
+// PATCH /settings/reward-config — update reward configuration
+export const updateRewardConfig = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { enabled, cycleTargetAmount, fullPaymentRewardAmount, splitPaymentRewardAmount } = req.body;
+    const doc = await getOrCreate();
+
+    if (enabled !== undefined) doc.rewardConfig.enabled = Boolean(enabled);
+    if (cycleTargetAmount !== undefined) {
+      const val = Number(cycleTargetAmount);
+      if (isNaN(val) || val <= 0) {
+        return res.status(400).json({ message: "cycleTargetAmount must be a positive number" });
+      }
+      doc.rewardConfig.cycleTargetAmount = val;
+    }
+    if (fullPaymentRewardAmount !== undefined) {
+      const val = Number(fullPaymentRewardAmount);
+      if (isNaN(val) || val < 0) {
+        return res.status(400).json({ message: "fullPaymentRewardAmount must be >= 0" });
+      }
+      doc.rewardConfig.fullPaymentRewardAmount = val;
+    }
+    if (splitPaymentRewardAmount !== undefined) {
+      const val = Number(splitPaymentRewardAmount);
+      if (isNaN(val) || val < 0) {
+        return res.status(400).json({ message: "splitPaymentRewardAmount must be >= 0" });
+      }
+      doc.rewardConfig.splitPaymentRewardAmount = val;
+    }
+
+    await doc.save();
+    res.json({ message: "Reward config updated", rewardConfig: doc.rewardConfig });
+  } catch (err) { next(err); }
+};
 
 // GET /settings/payment-methods — all payment methods (admin)
 export const getCompanyPaymentMethods = async (_req: Request, res: Response, next: NextFunction) => {

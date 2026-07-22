@@ -69,6 +69,21 @@ export interface ISettings extends Document {
     installmentCompletionReward: number;
   }[];
 
+  /**
+   * Reward Config — ভবিষ্যৎ-উপযোগী reward system কনফিগারেশন।
+   * installmentRewardRules-এর পাশাপাশি এই কনফিগ থেকে
+   * reward cycle target, full/split reward amounts নির্ধারণ হবে।
+   */
+  rewardConfig: {
+    enabled: boolean;
+    /** প্রতি কত টাকায় একটি Reward Cycle পূর্ণ হবে */
+    cycleTargetAmount: number;
+    /** একটি transaction-এ cycleTargetAmount পূর্ণ করলে reward */
+    fullPaymentRewardAmount: number;
+    /** ধীরে ধীরে cycleTargetAmount পূর্ণ করলে reward */
+    splitPaymentRewardAmount: number;
+  };
+
   // Company Payment Methods — shown to users at checkout
   companyPaymentMethods: {
     _id?: any;
@@ -173,6 +188,20 @@ const SettingsSchema = new Schema<ISettings>(
         _id: false,
       },
     ],
+    rewardConfig: {
+      type: {
+        enabled: { type: Boolean, default: false },
+        cycleTargetAmount: { type: Number, default: 100000 },
+        fullPaymentRewardAmount: { type: Number, default: 5000 },
+        splitPaymentRewardAmount: { type: Number, default: 3000 },
+      },
+      default: () => ({
+        enabled: false,
+        cycleTargetAmount: 100000,
+        fullPaymentRewardAmount: 5000,
+        splitPaymentRewardAmount: 3000,
+      }),
+    },
     companyPaymentMethods: [
       {
         type: {

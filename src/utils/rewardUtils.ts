@@ -16,7 +16,7 @@ const getActiveRewardRules = async () => {
 };
 
 /**
- * Credits rewardBalance to the user's wallet and logs a TransactionLog entry.
+ * Credits rewardBalanceFromInstallment to the user's wallet and logs a TransactionLog entry.
  * Uses $inc to avoid race conditions.
  */
 const creditReward = async (
@@ -28,12 +28,12 @@ const creditReward = async (
 ) => {
   await Wallet.findOneAndUpdate(
     { userId },
-    { $inc: { rewardBalance: amount, totalBalance: amount } },
+    { $inc: { rewardBalanceFromInstallment: amount, totalBalance: amount } },
     { upsert: true }
   );
 
   const wallet = await Wallet.findOne({ userId }).lean();
-  const balanceAfter = wallet?.rewardBalance ?? amount;
+  const balanceAfter = wallet?.rewardBalanceFromInstallment ?? amount;
 
   await TransactionLog.create({
     userId,
@@ -85,7 +85,10 @@ export const checkAndGrantOneTimeReward = async (
       purchaseId
     );
   } catch (err) {
-    console.error(`[REWARD ERROR] checkAndGrantOneTimeReward failed for purchaseId=${purchaseId}:`, err);
+    console.error(
+      `[REWARD ERROR] checkAndGrantOneTimeReward failed for purchaseId=${purchaseId}:`,
+      err
+    );
   }
 };
 
@@ -139,6 +142,9 @@ export const checkAndGrantInstallmentReward = async (
       );
     }
   } catch (err) {
-    console.error(`[REWARD ERROR] checkAndGrantInstallmentReward failed for purchaseId=${purchaseId}:`, err);
+    console.error(
+      `[REWARD ERROR] checkAndGrantInstallmentReward failed for purchaseId=${purchaseId}:`,
+      err
+    );
   }
 };

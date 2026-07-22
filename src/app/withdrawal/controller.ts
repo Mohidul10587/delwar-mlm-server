@@ -13,7 +13,7 @@ const WITHDRAWABLE_FIELDS = [
   "transferBalance",
   "fixedMonthlySalaryForAdminOnly",
   "expenseReimbursementBalance",
-  "rewardBalance",
+  "rewardBalanceFromInstallment",
 ] as const;
 
 export const createWithdrawal = async (
@@ -109,7 +109,9 @@ export const createWithdrawal = async (
       {
         _id: wallet._id,
         // totalBalance includes cashback, but cashback cannot be withdrawn.
-        totalBalance: { $gte: amt + loanAmount + (wallet.cashbackBalance ?? 0) },
+        totalBalance: {
+          $gte: amt + loanAmount + (wallet.cashbackBalance ?? 0),
+        },
       },
       { $inc: incPayload },
       { new: true }
@@ -245,8 +247,13 @@ export const updateWithdrawalStatus = async (
     // A branch manager can review only withdrawals routed to their own branch.
     // Admin and superadmin reviewers retain access to all requests.
     if (req.user!.role === "branch_manager") {
-      const branch = await Branch.findOne({ managerId: req.user!._id }).select("_id").lean();
-      if (!branch || withdrawal.branchId?.toString() !== branch._id.toString()) {
+      const branch = await Branch.findOne({ managerId: req.user!._id })
+        .select("_id")
+        .lean();
+      if (
+        !branch ||
+        withdrawal.branchId?.toString() !== branch._id.toString()
+      ) {
         return res.status(403).json({
           message: "You can only review withdrawal requests for your branch",
         });
