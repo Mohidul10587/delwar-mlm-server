@@ -28,6 +28,12 @@ const model_2 = require("../settings/model");
 const model_3 = require("../purchase/model");
 const model_4 = require("../wallet/model");
 const model_5 = require("../ledger/model");
+const LEGACY_REWARD_CONFIG = {
+    enabled: false,
+    cycleTargetAmount: 100000,
+    fullPaymentRewardAmount: 5000,
+    splitPaymentRewardAmount: 3000,
+};
 /**
  * একটি payment approve হওয়ার পরে RewardTracker update করো।
  *
@@ -36,12 +42,18 @@ const model_5 = require("../ledger/model");
  * @param isFirstPayment true হলে (down payment) এটি প্রথম payment
  */
 const processRewardAfterPayment = (purchaseId, paymentAmount, sourcePaymentId) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
         const purchase = yield model_3.Purchase.findById(purchaseId).lean();
         if (!purchase)
             return;
-        const settings = yield model_2.Settings.findOne().lean();
+        let settings = yield model_2.Settings.findOne().lean();
+        // Older installations can have a Settings document created before
+        // rewardConfig existed. Persist a disabled default so this is visible and
+        // configurable instead of silently remaining absent forever.
+        if (settings && !settings.rewardConfig) {
+            settings = yield model_2.Settings.findOneAndUpdate({ _id: settings._id, rewardConfig: { $exists: false } }, { $set: { rewardConfig: LEGACY_REWARD_CONFIG } }, { new: true }).lean();
+        }
         const config = settings === null || settings === void 0 ? void 0 : settings.rewardConfig;
         if (!(config === null || config === void 0 ? void 0 : config.enabled) || !config.cycleTargetAmount || config.cycleTargetAmount <= 0) {
             return;
@@ -60,9 +72,17 @@ const processRewardAfterPayment = (purchaseId, paymentAmount, sourcePaymentId) =
                 carryForwardAmount: 0,
                 completedCycles: 0,
                 cycles: [],
+                processedPaymentIds: [],
                 fullPaymentRewardAmount,
                 splitPaymentRewardAmount,
             });
+        }
+        // Approval routes normally call this once, but this guard makes retries
+        // and administrative backfills safe even when a payment does not complete
+        // a reward cycle.
+        if (sourcePaymentId &&
+            ((_c = tracker.processedPaymentIds) !== null && _c !== void 0 ? _c : []).some((id) => id.toString() === sourcePaymentId)) {
+            return;
         }
         // ── Payment processing ────────────────────────────────────────────────────
         //
@@ -116,10 +136,17 @@ const processRewardAfterPayment = (purchaseId, paymentAmount, sourcePaymentId) =
             ? remainingNewMoney // cycle(s) হয়েছে, carry = বাকি নতুন টাকা
             : carry + remainingNewMoney; // কোনো cycle হয়নি, পুরনো + নতুন
         // Tracker update
-        tracker.totalPaidAmount = ((_c = tracker.totalPaidAmount) !== null && _c !== void 0 ? _c : 0) + paymentAmount;
+        tracker.totalPaidAmount = ((_d = tracker.totalPaidAmount) !== null && _d !== void 0 ? _d : 0) + paymentAmount;
         tracker.carryForwardAmount = newCarry;
         tracker.completedCycles = prevCycles + newCycles.length;
-        tracker.cycles = [...((_d = tracker.cycles) !== null && _d !== void 0 ? _d : []), ...newCycles];
+        tracker.cycles = [...((_e = tracker.cycles) !== null && _e !== void 0 ? _e : []), ...newCycles];
+        if (sourcePaymentId) {
+            tracker.processedPaymentIds = [
+                ...((_f = tracker.processedPaymentIds) !== null && _f !== void 0 ? _f : []),
+                sourcePaymentId,
+            ];
+            tracker.markModified("processedPaymentIds");
+        }
         tracker.markModified("cycles");
         yield tracker.save();
         // Reward credits are deliberately done once for the grouped payment, after
@@ -144,7 +171,7 @@ const processRewardAfterPayment = (purchaseId, paymentAmount, sourcePaymentId) =
                     ? "installment_reward_one_time"
                     : "installment_reward_completion",
                 amount: cycle.rewardAmount,
-                balanceAfter: (_e = wallet === null || wallet === void 0 ? void 0 : wallet.rewardBalanceFromInstallment) !== null && _e !== void 0 ? _e : cycle.rewardAmount,
+                balanceAfter: (_g = wallet === null || wallet === void 0 ? void 0 : wallet.rewardBalanceFromInstallment) !== null && _g !== void 0 ? _g : cycle.rewardAmount,
                 note,
                 relatedPurchaseId: purchase._id,
             });

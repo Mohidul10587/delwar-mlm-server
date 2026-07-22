@@ -18,6 +18,13 @@ import { Purchase } from "../purchase/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { CompanyLedger } from "../ledger/model";
 
+const LEGACY_REWARD_CONFIG = {
+  enabled: false,
+  cycleTargetAmount: 100000,
+  fullPaymentRewardAmount: 5000,
+  splitPaymentRewardAmount: 3000,
+};
+
 /**
  * একটি payment approve হওয়ার পরে RewardTracker update করো।
  *
@@ -34,7 +41,19 @@ export const processRewardAfterPayment = async (
     const purchase = await Purchase.findById(purchaseId).lean();
     if (!purchase) return;
 
-    const settings = await Settings.findOne().lean();
+    let settings = await Settings.findOne().lean();
+
+    // Older installations can have a Settings document created before
+    // rewardConfig existed. Persist a disabled default so this is visible and
+    // configurable instead of silently remaining absent forever.
+    if (settings && !(settings as any).rewardConfig) {
+      settings = await Settings.findOneAndUpdate(
+        { _id: (settings as any)._id, rewardConfig: { $exists: false } },
+        { $set: { rewardConfig: LEGACY_REWARD_CONFIG } },
+        { new: true }
+      ).lean();
+    }
+
     const config = (settings as any)?.rewardConfig;
     if (!config?.enabled || !config.cycleTargetAmount || config.cycleTargetAmount <= 0) {
       return;
@@ -54,9 +73,22 @@ export const processRewardAfterPayment = async (
         carryForwardAmount: 0,
         completedCycles: 0,
         cycles: [],
+        processedPaymentIds: [],
         fullPaymentRewardAmount,
         splitPaymentRewardAmount,
       });
+    }
+
+    // Approval routes normally call this once, but this guard makes retries
+    // and administrative backfills safe even when a payment does not complete
+    // a reward cycle.
+    if (
+      sourcePaymentId &&
+      (tracker.processedPaymentIds ?? []).some(
+        (id) => id.toString() === sourcePaymentId
+      )
+    ) {
+      return;
     }
 
     // ── Payment processing ────────────────────────────────────────────────────
@@ -127,6 +159,13 @@ export const processRewardAfterPayment = async (
     tracker.carryForwardAmount = newCarry;
     tracker.completedCycles = prevCycles + newCycles.length;
     tracker.cycles = [...(tracker.cycles ?? []), ...newCycles];
+    if (sourcePaymentId) {
+      tracker.processedPaymentIds = [
+        ...(tracker.processedPaymentIds ?? []),
+        sourcePaymentId as any,
+      ];
+      tracker.markModified("processedPaymentIds");
+    }
     tracker.markModified("cycles");
     await tracker.save();
 

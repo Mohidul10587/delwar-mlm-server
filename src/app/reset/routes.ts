@@ -8,6 +8,7 @@ import { RankSalaryLog } from "../rank/salary-log.model";
 import { CompanyLedger } from "../ledger/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Settings } from "../settings/model";
+import { RewardTracker } from "../reward-tracker/model";
 
 const router = Router();
 
@@ -40,6 +41,7 @@ router.get("/", async (_req: Request, res: Response) => {
     await Promise.all([
       Purchase.deleteMany({}),
       InstallmentPayment.deleteMany({}),
+      RewardTracker.deleteMany({}),
       Certificate.deleteMany({}),
       TransactionLog.deleteMany({}),
       RankSalaryLog.deleteMany({}),
@@ -57,6 +59,7 @@ router.get("/", async (_req: Request, res: Response) => {
             loanAmount: 0,
             fixedMonthlySalaryForAdminOnly: 0,
             expenseReimbursementBalance: 0,
+            rewardBalanceFromInstallment: 0,
             totalBalance: 0,
           },
         }

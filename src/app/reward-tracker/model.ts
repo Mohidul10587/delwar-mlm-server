@@ -41,6 +41,12 @@ export interface IRewardTracker extends Document {
   /** প্রতিটি Cycle-এর বিবরণ */
   cycles: IRewardCycle[];
 
+  /**
+   * যে approved installment payment group-গুলো ইতিমধ্যে tracker-এ process হয়েছে।
+   * কোনো group target পূরণ না করলেও তার ID রাখা হয়, যাতে replay হলে carry দ্বিগুণ না হয়।
+   */
+  processedPaymentIds: Types.ObjectId[];
+
   /** Reward config snapshot (Settings থেকে) */
   fullPaymentRewardAmount: number;       // একবারে ১ লক্ষ দিলে reward
   splitPaymentRewardAmount: number;      // ধীরে ধীরে ১ লক্ষ পূর্ণ করলে reward
@@ -74,6 +80,7 @@ const RewardTrackerSchema = new Schema<IRewardTracker>(
     carryForwardAmount:      { type: Number, default: 0 },
     completedCycles:         { type: Number, default: 0 },
     cycles:                  { type: [RewardCycleSchema], default: [] },
+    processedPaymentIds:     { type: [{ type: Schema.Types.ObjectId, ref: "InstallmentPayment" }], default: [] },
 
     fullPaymentRewardAmount:  { type: Number, default: 0 },
     splitPaymentRewardAmount: { type: Number, default: 0 },

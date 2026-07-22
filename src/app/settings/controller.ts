@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import { Settings } from "./model";
 
+const DEFAULT_REWARD_CONFIG = {
+  enabled: false,
+  cycleTargetAmount: 100000,
+  fullPaymentRewardAmount: 5000,
+  splitPaymentRewardAmount: 3000,
+};
+
 const getOrCreate = async () => {
   // L-09 fix: atomic upsert — prevents two concurrent requests creating two Settings docs
   return await Settings.findOneAndUpdate(
@@ -70,6 +77,12 @@ export const updateRewardConfig = async (req: Request, res: Response, next: Next
   try {
     const { enabled, cycleTargetAmount, fullPaymentRewardAmount, splitPaymentRewardAmount } = req.body;
     const doc = await getOrCreate();
+
+    // Documents created before the reward feature do not receive schema
+    // defaults retroactively. Initialise the nested config before patching it.
+    if (!doc.rewardConfig) {
+      doc.rewardConfig = { ...DEFAULT_REWARD_CONFIG };
+    }
 
     if (enabled !== undefined) doc.rewardConfig.enabled = Boolean(enabled);
     if (cycleTargetAmount !== undefined) {

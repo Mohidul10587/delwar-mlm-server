@@ -19,6 +19,7 @@ const salary_log_model_1 = require("../rank/salary-log.model");
 const model_5 = require("../ledger/model");
 const shareSlot_model_1 = require("../project/shareSlot.model");
 const model_6 = require("../settings/model");
+const model_7 = require("../reward-tracker/model");
 const router = (0, express_1.Router)();
 router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (process.env.NODE_ENV === "production") {
@@ -45,6 +46,7 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
         yield Promise.all([
             model_1.Purchase.deleteMany({}),
             installment_model_1.InstallmentPayment.deleteMany({}),
+            model_7.RewardTracker.deleteMany({}),
             model_2.Certificate.deleteMany({}),
             model_3.TransactionLog.deleteMany({}),
             salary_log_model_1.RankSalaryLog.deleteMany({}),
@@ -60,6 +62,7 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     loanAmount: 0,
                     fixedMonthlySalaryForAdminOnly: 0,
                     expenseReimbursementBalance: 0,
+                    rewardBalanceFromInstallment: 0,
                     totalBalance: 0,
                 },
             }),

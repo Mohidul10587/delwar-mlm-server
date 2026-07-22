@@ -22,6 +22,12 @@ var __rest = (this && this.__rest) || function (s, e) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCompanyPaymentMethod = exports.toggleCompanyPaymentMethod = exports.updateCompanyPaymentMethod = exports.addCompanyPaymentMethod = exports.getCompanyPaymentMethods = exports.updateRewardConfig = exports.updateSettings = exports.getSettings = exports.getPublicSettings = void 0;
 const model_1 = require("./model");
+const DEFAULT_REWARD_CONFIG = {
+    enabled: false,
+    cycleTargetAmount: 100000,
+    fullPaymentRewardAmount: 5000,
+    splitPaymentRewardAmount: 3000,
+};
 const getOrCreate = () => __awaiter(void 0, void 0, void 0, function* () {
     // L-09 fix: atomic upsert — prevents two concurrent requests creating two Settings docs
     return yield model_1.Settings.findOneAndUpdate({}, { $setOnInsert: {} }, { upsert: true, new: true, setDefaultsOnInsert: true });
@@ -95,6 +101,11 @@ const updateRewardConfig = (req, res, next) => __awaiter(void 0, void 0, void 0,
     try {
         const { enabled, cycleTargetAmount, fullPaymentRewardAmount, splitPaymentRewardAmount } = req.body;
         const doc = yield getOrCreate();
+        // Documents created before the reward feature do not receive schema
+        // defaults retroactively. Initialise the nested config before patching it.
+        if (!doc.rewardConfig) {
+            doc.rewardConfig = Object.assign({}, DEFAULT_REWARD_CONFIG);
+        }
         if (enabled !== undefined)
             doc.rewardConfig.enabled = Boolean(enabled);
         if (cycleTargetAmount !== undefined) {

@@ -21,6 +21,7 @@ const RewardTrackerSchema = new mongoose_1.Schema({
     carryForwardAmount: { type: Number, default: 0 },
     completedCycles: { type: Number, default: 0 },
     cycles: { type: [RewardCycleSchema], default: [] },
+    processedPaymentIds: { type: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "InstallmentPayment" }], default: [] },
     fullPaymentRewardAmount: { type: Number, default: 0 },
     splitPaymentRewardAmount: { type: Number, default: 0 },
 }, { timestamps: true });
