@@ -60,6 +60,12 @@ export interface IPurchase extends Document {
   quantity: number;
   paymentType: PaymentType;
   paymentMethod: PaymentMethod;
+  /** Portion of the initial payment funded from the buyer's cashback balance. */
+  cashbackAmount: number;
+  /** Portion of the initial payment funded through paymentMethod. */
+  otherPaymentAmount: number;
+  /** Set once cashback has been returned after a rejected purchase. */
+  cashbackRefunded: boolean;
   receiptImage?: string;
   downPayment: number;
   installmentCount: number;
@@ -163,6 +169,9 @@ const PurchaseSchema = new Schema<IPurchase>(
       enum: ["cash", "bank", "mobile_banking"],
       default: "cash",
     },
+    cashbackAmount: { type: Number, default: 0, min: 0 },
+    otherPaymentAmount: { type: Number, default: 0, min: 0 },
+    cashbackRefunded: { type: Boolean, default: false },
     receiptImage: { type: String, default: null },
     downPayment: { type: Number, required: true },
     installmentCount: { type: Number, required: true },

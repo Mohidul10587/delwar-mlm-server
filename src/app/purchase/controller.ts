@@ -7,6 +7,7 @@ import { Settings } from "../settings/model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 import { ShareSlot } from "../project/shareSlot.model";
+import { Wallet, TransactionLog } from "../wallet/model";
 
 // Helper — build slotsByPurchase map from a list of purchaseIds
 async function fetchSlotsByPurchase(
@@ -46,6 +47,7 @@ export const createPurchase = async (
       buyerInfo,
       paymentMethod,
       receiptImage,
+      cashbackAmount,
     } = req.body;
 
     // Fix V-01: validate quantity
@@ -197,6 +199,29 @@ export const createPurchase = async (
     );
     const amountPaid = resolvedDP;
 
+    // Cashback is an additional payment source, not a replacement for the
+    // selected external payment method. It can cover at most 10% of the total
+    // project price and no more than the payment currently due.
+    const requestedCashbackAmount = Number(cashbackAmount ?? 0);
+    const currentPaymentAmount =
+      paymentType === "cash" ? totalPayable : amountPaid;
+    const maxCashbackAmount = Math.min(totalPayable * 0.1, currentPaymentAmount);
+    if (
+      !Number.isFinite(requestedCashbackAmount) ||
+      requestedCashbackAmount < 0 ||
+      requestedCashbackAmount > maxCashbackAmount
+    ) {
+      return res.status(400).json({
+        message: `Cashback payment cannot exceed ৳${maxCashbackAmount.toLocaleString()}`,
+      });
+    }
+    const otherPaymentAmount = currentPaymentAmount - requestedCashbackAmount;
+    if (otherPaymentAmount <= 0) {
+      return res.status(400).json({
+        message: "A remaining amount must be paid using another payment method",
+      });
+    }
+
     const settings = await Settings.findOne().lean();
     const ranks = (settings?.ranks ?? []) as any[];
     const snapshot = {
@@ -233,6 +258,8 @@ export const createPurchase = async (
       quantity: qty,
       paymentType,
       paymentMethod: resolvedPaymentMethod,
+      cashbackAmount: requestedCashbackAmount,
+      otherPaymentAmount,
       receiptImage: receiptImage ?? null,
       downPayment: resolvedDP,
       installmentCount: resolvedCount,
@@ -247,6 +274,37 @@ export const createPurchase = async (
       buyerInfo: resolvedBuyerInfo,
       snapshot,
     });
+
+    // Reserve cashback immediately so it cannot be used by another pending
+    // purchase. Rejected purchases refund this exact amount in status.controller.
+    if (requestedCashbackAmount > 0) {
+      const wallet = await Wallet.findOneAndUpdate(
+        {
+          userId: req.user!._id,
+          cashbackBalance: { $gte: requestedCashbackAmount },
+        },
+        {
+          $inc: {
+            cashbackBalance: -requestedCashbackAmount,
+            totalBalance: -requestedCashbackAmount,
+          },
+        },
+        { new: true }
+      );
+      if (!wallet) {
+        await Purchase.findByIdAndDelete(purchase._id);
+        return res.status(400).json({ message: "Insufficient cashback balance" });
+      }
+
+      await TransactionLog.create({
+        userId: req.user!._id,
+        type: "cashback_payment",
+        amount: requestedCashbackAmount,
+        balanceAfter: wallet.totalBalance,
+        relatedPurchaseId: purchase._id,
+        note: `Cashback used for ${share.title} x${qty}`,
+      });
+    }
 
     await Certificate.create({
       userId: req.user!._id,

@@ -145,6 +145,7 @@ export const updatePurchaseStatus = async (
       return res.status(404).json({ message: "Purchase not found" });
 
     const wasAlreadyApproved = purchase.status === "approved";
+    const wasAlreadyRejected = purchase.status === "rejected";
 
     // Step 1 — Allocate share slots (only on first approval)
     if (status === "approved" && !wasAlreadyApproved) {
@@ -172,6 +173,36 @@ export const updatePurchaseStatus = async (
     purchase.reviewedBy = req.user!._id as any;
     purchase.reviewedAt = new Date();
     await purchase.save();
+
+    // Cashback is reserved when the request is submitted. A rejected request
+    // returns only that reserved portion; approved purchases keep it applied.
+    if (
+      status === "rejected" &&
+      !wasAlreadyRejected &&
+      purchase.cashbackAmount > 0 &&
+      !purchase.cashbackRefunded
+    ) {
+      const wallet = await Wallet.findOneAndUpdate(
+        { userId: purchase.userId },
+        {
+          $inc: {
+            cashbackBalance: purchase.cashbackAmount,
+            totalBalance: purchase.cashbackAmount,
+          },
+        },
+        { new: true, upsert: true }
+      );
+      purchase.cashbackRefunded = true;
+      await purchase.save();
+      await TransactionLog.create({
+        userId: purchase.userId,
+        type: "cashback_payment_refund",
+        amount: purchase.cashbackAmount,
+        balanceAfter: wallet.totalBalance,
+        relatedPurchaseId: purchase._id,
+        note: `Cashback refunded for rejected purchase ${purchase._id.toString()}`,
+      });
+    }
 
     // Respond immediately
     res.json({ message: `Purchase ${status}`, purchase });
