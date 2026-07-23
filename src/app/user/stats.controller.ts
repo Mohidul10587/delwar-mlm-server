@@ -15,6 +15,8 @@ export const getSuperAdminStats = async (
     const [
       totalUsers,
       activeUsers,
+      totalAdmins,
+      totalBranchManagers,
       totalShares,
       totalPurchases,
       pendingPurchases,
@@ -25,6 +27,8 @@ export const getSuperAdminStats = async (
     ] = await Promise.all([
       User.countDocuments({ role: "user" }),
       User.countDocuments({ role: "user", isActive: true }),
+      User.countDocuments({ role: "admin" }),
+      User.countDocuments({ role: "branch_manager" }),
       Project.countDocuments(),
       Purchase.countDocuments(),
       Purchase.countDocuments({ status: "pending" }),
@@ -58,6 +62,8 @@ export const getSuperAdminStats = async (
     res.json({
       totalUsers,
       activeUsers,
+      totalAdmins,
+      totalBranchManagers,
       totalShares,
       totalPurchases,
       pendingPurchases,
