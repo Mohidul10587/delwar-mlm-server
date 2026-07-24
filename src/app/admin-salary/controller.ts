@@ -196,6 +196,18 @@ export const autoReleaseMonthlySalaries = async (): Promise<void> => {
     return;
   }
 
+  // One lookup for the entire run replaces one release query per admin.
+  const alreadyReleased = new Set(
+    (
+      await AdminSalaryRelease.find({
+        month,
+        adminId: { $in: configs.map((config) => config.adminId._id) },
+      })
+        .select("adminId")
+        .lean()
+    ).map((release) => release.adminId.toString())
+  );
+
   let released = 0;
   let skipped = 0;
 
@@ -203,8 +215,7 @@ export const autoReleaseMonthlySalaries = async (): Promise<void> => {
     const adminId = config.adminId._id;
 
     // Skip if already released this month
-    const existing = await AdminSalaryRelease.findOne({ adminId, month }).lean();
-    if (existing) {
+    if (alreadyReleased.has(adminId.toString())) {
       skipped++;
       continue;
     }
@@ -213,7 +224,7 @@ export const autoReleaseMonthlySalaries = async (): Promise<void> => {
 
     try {
       // 1. Credit wallet
-      await Wallet.findOneAndUpdate(
+      const updatedWallet = await Wallet.findOneAndUpdate(
         { userId: adminId },
         {
           $inc: {
@@ -221,10 +232,8 @@ export const autoReleaseMonthlySalaries = async (): Promise<void> => {
             totalBalance: amount,
           },
         },
-        { upsert: true }
+        { new: true, upsert: true }
       );
-
-      const updatedWallet = await Wallet.findOne({ userId: adminId }).lean();
 
       // 2. Transaction log
       await TransactionLog.create({

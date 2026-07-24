@@ -36,32 +36,29 @@ async function allocateShares(
     };
   }
 
-  // Fix F-01: Atomically claim each slot — only succeeds if status is still "available"
-  let claimed = 0;
-  const claimedIds: any[] = [];
-  for (const slot of available) {
-    const updated = await ShareSlot.findOneAndUpdate(
-      { _id: slot._id, status: "available" }, // atomic guard
-      {
-        $set: {
-          status: "sold",
-          userId: purchase.userId,
-          purchaseId: purchase._id,
-        },
+  // Atomically claim the selected slots in one guarded update. MongoDB checks
+  // the status predicate while applying the update, so concurrent approvals
+  // cannot take a slot that was already sold.
+  const candidateIds = available.map((slot) => slot._id);
+  const claimResult = await ShareSlot.updateMany(
+    { _id: { $in: candidateIds }, status: "available" },
+    {
+      $set: {
+        status: "sold",
+        userId: purchase.userId,
+        purchaseId: purchase._id,
       },
-      { new: true }
-    );
-    if (updated) {
-      claimed++;
-      claimedIds.push(slot._id);
     }
-  }
+  );
+  const claimed = claimResult.modifiedCount;
 
   if (claimed < purchase.quantity) {
     // Roll back whatever we already claimed
-    if (claimedIds.length > 0) {
+    if (claimed > 0) {
       await ShareSlot.updateMany(
-        { _id: { $in: claimedIds } },
+        // Only roll back slots claimed by this purchase; never touch a slot
+        // concurrently allocated by somebody else.
+        { _id: { $in: candidateIds }, purchaseId: purchase._id, status: "sold" },
         { $set: { status: "available", userId: null, purchaseId: null } }
       );
     }

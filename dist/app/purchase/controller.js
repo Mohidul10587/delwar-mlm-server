@@ -51,6 +51,7 @@ const model_4 = require("../settings/model");
 const service_1 = require("./service");
 const model_5 = require("../certificate/model");
 const shareSlot_model_1 = require("../project/shareSlot.model");
+const model_6 = require("../wallet/model");
 // Helper — build slotsByPurchase map from a list of purchaseIds
 function fetchSlotsByPurchase(purchaseIds) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -76,7 +77,7 @@ function fetchSlotsByPurchase(purchaseIds) {
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
     try {
-        const { projectId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage, } = req.body;
+        const { projectId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage, cashbackAmount, } = req.body;
         // Fix V-01: validate quantity
         const qty = parseInt(String(quantity), 10);
         if (!Number.isInteger(qty) || qty < 1) {
@@ -205,6 +206,25 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
         const resolvedInstallmentAmount = Math.ceil((totalPayable - resolvedDP) / resolvedCount);
         const amountPaid = resolvedDP;
+        // Cashback is an additional payment source, not a replacement for the
+        // selected external payment method. It can cover at most 10% of the total
+        // project price and no more than the payment currently due.
+        const requestedCashbackAmount = Number(cashbackAmount !== null && cashbackAmount !== void 0 ? cashbackAmount : 0);
+        const currentPaymentAmount = paymentType === "cash" ? totalPayable : amountPaid;
+        const maxCashbackAmount = Math.min(totalPayable * 0.1, currentPaymentAmount);
+        if (!Number.isFinite(requestedCashbackAmount) ||
+            requestedCashbackAmount < 0 ||
+            requestedCashbackAmount > maxCashbackAmount) {
+            return res.status(400).json({
+                message: `Cashback payment cannot exceed ৳${maxCashbackAmount.toLocaleString()}`,
+            });
+        }
+        const otherPaymentAmount = currentPaymentAmount - requestedCashbackAmount;
+        if (otherPaymentAmount <= 0) {
+            return res.status(400).json({
+                message: "A remaining amount must be paid using another payment method",
+            });
+        }
         const settings = yield model_4.Settings.findOne().lean();
         const ranks = ((_p = settings === null || settings === void 0 ? void 0 : settings.ranks) !== null && _p !== void 0 ? _p : []);
         const snapshot = {
@@ -242,6 +262,8 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             quantity: qty,
             paymentType,
             paymentMethod: resolvedPaymentMethod,
+            cashbackAmount: requestedCashbackAmount,
+            otherPaymentAmount,
             receiptImage: receiptImage !== null && receiptImage !== void 0 ? receiptImage : null,
             downPayment: resolvedDP,
             installmentCount: resolvedCount,
@@ -256,6 +278,31 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             buyerInfo: resolvedBuyerInfo,
             snapshot,
         });
+        // Reserve cashback immediately so it cannot be used by another pending
+        // purchase. Rejected purchases refund this exact amount in status.controller.
+        if (requestedCashbackAmount > 0) {
+            const wallet = yield model_6.Wallet.findOneAndUpdate({
+                userId: req.user._id,
+                cashbackBalance: { $gte: requestedCashbackAmount },
+            }, {
+                $inc: {
+                    cashbackBalance: -requestedCashbackAmount,
+                    totalBalance: -requestedCashbackAmount,
+                },
+            }, { new: true });
+            if (!wallet) {
+                yield model_1.Purchase.findByIdAndDelete(purchase._id);
+                return res.status(400).json({ message: "Insufficient cashback balance" });
+            }
+            yield model_6.TransactionLog.create({
+                userId: req.user._id,
+                type: "cashback_payment",
+                amount: requestedCashbackAmount,
+                balanceAfter: wallet.totalBalance,
+                relatedPurchaseId: purchase._id,
+                note: `Cashback used for ${share.title} x${qty}`,
+            });
+        }
         yield model_5.Certificate.create({
             userId: req.user._id,
             purchaseId: purchase._id,

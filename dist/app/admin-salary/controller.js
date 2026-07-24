@@ -192,26 +192,31 @@ const autoReleaseMonthlySalaries = () => __awaiter(void 0, void 0, void 0, funct
         console.log("[AUTO SALARY] No salary configs found. Skipping.");
         return;
     }
+    // One lookup for the entire run replaces one release query per admin.
+    const alreadyReleased = new Set((yield model_1.AdminSalaryRelease.find({
+        month,
+        adminId: { $in: configs.map((config) => config.adminId._id) },
+    })
+        .select("adminId")
+        .lean()).map((release) => release.adminId.toString()));
     let released = 0;
     let skipped = 0;
     for (const config of configs) {
         const adminId = config.adminId._id;
         // Skip if already released this month
-        const existing = yield model_1.AdminSalaryRelease.findOne({ adminId, month }).lean();
-        if (existing) {
+        if (alreadyReleased.has(adminId.toString())) {
             skipped++;
             continue;
         }
         const amount = config.monthlySalary;
         try {
             // 1. Credit wallet
-            yield model_2.Wallet.findOneAndUpdate({ userId: adminId }, {
+            const updatedWallet = yield model_2.Wallet.findOneAndUpdate({ userId: adminId }, {
                 $inc: {
                     fixedMonthlySalaryForAdminOnly: amount,
                     totalBalance: amount,
                 },
-            }, { upsert: true });
-            const updatedWallet = yield model_2.Wallet.findOne({ userId: adminId }).lean();
+            }, { new: true, upsert: true });
             // 2. Transaction log
             yield model_2.TransactionLog.create({
                 userId: adminId,

@@ -42,27 +42,25 @@ function allocateShares(purchase) {
                 error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required`,
             };
         }
-        // Fix F-01: Atomically claim each slot — only succeeds if status is still "available"
-        let claimed = 0;
-        const claimedIds = [];
-        for (const slot of available) {
-            const updated = yield shareSlot_model_1.ShareSlot.findOneAndUpdate({ _id: slot._id, status: "available" }, // atomic guard
-            {
-                $set: {
-                    status: "sold",
-                    userId: purchase.userId,
-                    purchaseId: purchase._id,
-                },
-            }, { new: true });
-            if (updated) {
-                claimed++;
-                claimedIds.push(slot._id);
-            }
-        }
+        // Atomically claim the selected slots in one guarded update. MongoDB checks
+        // the status predicate while applying the update, so concurrent approvals
+        // cannot take a slot that was already sold.
+        const candidateIds = available.map((slot) => slot._id);
+        const claimResult = yield shareSlot_model_1.ShareSlot.updateMany({ _id: { $in: candidateIds }, status: "available" }, {
+            $set: {
+                status: "sold",
+                userId: purchase.userId,
+                purchaseId: purchase._id,
+            },
+        });
+        const claimed = claimResult.modifiedCount;
         if (claimed < purchase.quantity) {
             // Roll back whatever we already claimed
-            if (claimedIds.length > 0) {
-                yield shareSlot_model_1.ShareSlot.updateMany({ _id: { $in: claimedIds } }, { $set: { status: "available", userId: null, purchaseId: null } });
+            if (claimed > 0) {
+                yield shareSlot_model_1.ShareSlot.updateMany(
+                // Only roll back slots claimed by this purchase; never touch a slot
+                // concurrently allocated by somebody else.
+                { _id: { $in: candidateIds }, purchaseId: purchase._id, status: "sold" }, { $set: { status: "available", userId: null, purchaseId: null } });
             }
             return {
                 error: `Only ${claimed} slot(s) could be allocated (concurrent conflict). Please retry.`,
@@ -135,6 +133,7 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
         if (!purchase)
             return res.status(404).json({ message: "Purchase not found" });
         const wasAlreadyApproved = purchase.status === "approved";
+        const wasAlreadyRejected = purchase.status === "rejected";
         // Step 1 — Allocate share slots (only on first approval)
         if (status === "approved" && !wasAlreadyApproved) {
             const allocationError = yield allocateShares(purchase);
@@ -157,6 +156,29 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
         purchase.reviewedBy = req.user._id;
         purchase.reviewedAt = new Date();
         yield purchase.save();
+        // Cashback is reserved when the request is submitted. A rejected request
+        // returns only that reserved portion; approved purchases keep it applied.
+        if (status === "rejected" &&
+            !wasAlreadyRejected &&
+            purchase.cashbackAmount > 0 &&
+            !purchase.cashbackRefunded) {
+            const wallet = yield model_6.Wallet.findOneAndUpdate({ userId: purchase.userId }, {
+                $inc: {
+                    cashbackBalance: purchase.cashbackAmount,
+                    totalBalance: purchase.cashbackAmount,
+                },
+            }, { new: true, upsert: true });
+            purchase.cashbackRefunded = true;
+            yield purchase.save();
+            yield model_6.TransactionLog.create({
+                userId: purchase.userId,
+                type: "cashback_payment_refund",
+                amount: purchase.cashbackAmount,
+                balanceAfter: wallet.totalBalance,
+                relatedPurchaseId: purchase._id,
+                note: `Cashback refunded for rejected purchase ${purchase._id.toString()}`,
+            });
+        }
         // Respond immediately
         res.json({ message: `Purchase ${status}`, purchase });
         if (status === "approved" && !wasAlreadyApproved) {

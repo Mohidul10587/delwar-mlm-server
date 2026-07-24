@@ -149,41 +149,45 @@ const processRewardAfterPayment = (purchaseId, paymentAmount, sourcePaymentId) =
         }
         tracker.markModified("cycles");
         yield tracker.save();
-        // Reward credits are deliberately done once for the grouped payment, after
-        // all of its installment slots have been approved.  The payment status is
-        // atomically claimed by the caller, which prevents duplicate credits.
-        for (const cycle of newCycles) {
-            if (cycle.rewardAmount <= 0)
-                continue;
-            yield model_4.Wallet.findOneAndUpdate({ userId: purchase.userId }, {
+        // Credit all cycles in one atomic wallet update, then write the matching
+        // transaction and ledger rows in batches. This prevents an N+1 sequence
+        // when one grouped installment completes multiple reward cycles.
+        const payableCycles = newCycles.filter((cycle) => cycle.rewardAmount > 0);
+        if (payableCycles.length > 0) {
+            const totalReward = payableCycles.reduce((sum, cycle) => sum + cycle.rewardAmount, 0);
+            const wallet = yield model_4.Wallet.findOneAndUpdate({ userId: purchase.userId }, {
                 $setOnInsert: { userId: purchase.userId },
                 $inc: {
-                    rewardBalanceFromInstallment: cycle.rewardAmount,
-                    totalBalance: cycle.rewardAmount,
+                    rewardBalanceFromInstallment: totalReward,
+                    totalBalance: totalReward,
                 },
-            }, { upsert: true });
-            const wallet = yield model_4.Wallet.findOne({ userId: purchase.userId }).lean();
-            const label = cycle.cycleType === "full_payment" ? "Full payment" : "Split payment";
-            const note = `${label} installment reward — Cycle #${cycle.cycleNumber}, ৳${cycle.completedAmount.toLocaleString()} target, reward ৳${cycle.rewardAmount.toLocaleString()}`;
-            const transaction = yield model_4.TransactionLog.create({
-                userId: purchase.userId,
-                type: cycle.cycleType === "full_payment"
-                    ? "installment_reward_one_time"
-                    : "installment_reward_completion",
-                amount: cycle.rewardAmount,
-                balanceAfter: (_g = wallet === null || wallet === void 0 ? void 0 : wallet.rewardBalanceFromInstallment) !== null && _g !== void 0 ? _g : cycle.rewardAmount,
-                note,
-                relatedPurchaseId: purchase._id,
+            }, { new: true, upsert: true }).lean();
+            let runningRewardBalance = ((_g = wallet === null || wallet === void 0 ? void 0 : wallet.rewardBalanceFromInstallment) !== null && _g !== void 0 ? _g : totalReward) - totalReward;
+            const transactionPayloads = payableCycles.map((cycle) => {
+                runningRewardBalance += cycle.rewardAmount;
+                const label = cycle.cycleType === "full_payment" ? "Full payment" : "Split payment";
+                const note = `${label} installment reward — Cycle #${cycle.cycleNumber}, ৳${cycle.completedAmount.toLocaleString()} target, reward ৳${cycle.rewardAmount.toLocaleString()}`;
+                return {
+                    userId: purchase.userId,
+                    type: cycle.cycleType === "full_payment"
+                        ? "installment_reward_one_time"
+                        : "installment_reward_completion",
+                    amount: cycle.rewardAmount,
+                    balanceAfter: runningRewardBalance,
+                    note,
+                    relatedPurchaseId: purchase._id,
+                };
             });
-            yield model_5.CompanyLedger.create({
+            const transactions = yield model_4.TransactionLog.insertMany(transactionPayloads);
+            yield model_5.CompanyLedger.insertMany(transactions.map((transaction, index) => ({
                 date: new Date(),
                 type: "installment_reward_paid",
-                amount: cycle.rewardAmount,
+                amount: payableCycles[index].rewardAmount,
                 relatedId: transaction._id,
                 relatedModel: "TransactionLog",
                 userId: purchase.userId,
-                note,
-            });
+                note: transactionPayloads[index].note,
+            })));
         }
     }
     catch (err) {

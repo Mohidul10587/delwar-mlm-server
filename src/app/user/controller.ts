@@ -77,15 +77,37 @@ async function cascadeGenerationAncestors(
       .select("_id generationAncestors")
       .lean();
     if (children.length === 0) break;
-    await Promise.all(
-      children.map(async (child) => {
-        const parentId = (child as any).generationAncestors?.[0]
-          ?.userId as mongoose.Types.ObjectId;
-        const newAncestors = await buildGenerationAncestors(parentId);
-        return Model.updateOne(
-          { _id: child._id },
-          { $set: { generationAncestors: newAncestors } }
-        );
+    const parentIds = children
+      .map((child: any) => child.generationAncestors?.[0]?.userId)
+      .filter(Boolean);
+    const parents = await Model.find({ _id: { $in: parentIds } })
+      .select("_id generationAncestors")
+      .lean();
+    const ancestorsByParent = new Map(
+      parents.map((parent: any) => [String(parent._id), parent.generationAncestors ?? []])
+    );
+
+    // A bulk write replaces the previous find-by-id + update-one pair for
+    // every descendant in this level of the referral tree.
+    await Model.bulkWrite(
+      children.map((child: any) => {
+        const parentId = child.generationAncestors?.[0]?.userId;
+        const parentAncestors = ancestorsByParent.get(String(parentId)) ?? [];
+        const newAncestors = parentId
+          ? [
+              { level: 1, userId: parentId },
+              ...parentAncestors.map((ancestor: any) => ({
+                level: ancestor.level + 1,
+                userId: ancestor.userId,
+              })),
+            ]
+          : [];
+        return {
+          updateOne: {
+            filter: { _id: child._id },
+            update: { $set: { generationAncestors: newAncestors } },
+          },
+        };
       })
     );
     queue = children.map((c) => c._id as mongoose.Types.ObjectId);

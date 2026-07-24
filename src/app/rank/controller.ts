@@ -13,6 +13,71 @@ const getSettings = async () => {
   return s;
 };
 
+type SalaryLogStats = { paidCount: number; alreadyPaidThisMonth: boolean };
+
+const salaryStatsKey = (userId: unknown, rankName: string) =>
+  `${String(userId)}:${rankName}`;
+
+/**
+ * Loads salary-payment history and this month's direct-sales totals for an
+ * entire user list. Keeping these as set-based queries prevents one query per
+ * salary-eligible user in the cron and admin eligibility screen.
+ */
+const loadSalaryEligibilityStats = async (
+  userIds: mongoose.Types.ObjectId[],
+  rankNames: string[],
+  year: number,
+  month: number,
+  monthStart: Date,
+  monthEnd: Date
+): Promise<{ salaryLogs: Map<string, SalaryLogStats>; directSales: Map<string, number> }> => {
+  if (!userIds.length) return { salaryLogs: new Map(), directSales: new Map() };
+
+  const [logRows, salesRows] = await Promise.all([
+    RankSalaryLog.aggregate<{ _id: { userId: mongoose.Types.ObjectId; rankName: string }; paidCount: number; alreadyPaidThisMonth: number }>([
+      { $match: { userId: { $in: userIds }, rankName: { $in: rankNames } } },
+      {
+        $group: {
+          _id: { userId: "$userId", rankName: "$rankName" },
+          paidCount: { $sum: 1 },
+          alreadyPaidThisMonth: {
+            $max: {
+              $cond: [
+                { $and: [{ $eq: ["$year", year] }, { $eq: ["$month", month] }] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]),
+    Purchase.aggregate<{ _id: mongoose.Types.ObjectId; count: number }>([
+      { $match: { status: "approved", reviewedAt: { $gte: monthStart, $lt: monthEnd } } },
+      { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "buyer" } },
+      { $unwind: "$buyer" },
+      { $unwind: "$buyer.generationAncestors" },
+      {
+        $match: {
+          "buyer.generationAncestors.level": 1,
+          "buyer.generationAncestors.userId": { $in: userIds },
+        },
+      },
+      { $group: { _id: "$buyer.generationAncestors.userId", count: { $sum: "$quantity" } } },
+    ]),
+  ]);
+
+  return {
+    salaryLogs: new Map(
+      logRows.map((row) => [
+        salaryStatsKey(row._id.userId, row._id.rankName),
+        { paidCount: row.paidCount, alreadyPaidThisMonth: Boolean(row.alreadyPaidThisMonth) },
+      ])
+    ),
+    directSales: new Map(salesRows.map((row) => [String(row._id), row.count])),
+  };
+};
+
 // ── Rank CRUD (stored in Settings) ───────────────────────────────────────────
 
 export const getRanks = async (
@@ -426,6 +491,15 @@ export const processMonthlySalaries = async (): Promise<number> => {
     currentRank: { $in: ranks.map((r: any) => r.name) },
   }).select("_id currentRank currentRankAchievedAt personalPurchaseCount");
 
+  const { salaryLogs, directSales } = await loadSalaryEligibilityStats(
+    users.map((user) => user._id),
+    ranks.map((rank: any) => rank.name),
+    currentYear,
+    currentMonth,
+    monthStart,
+    monthEnd
+  );
+
   for (const user of users) {
     const rank = ranks.find((r: any) => r.name === (user as any).currentRank);
     if (!rank) continue;
@@ -441,56 +515,17 @@ export const processMonthlySalaries = async (): Promise<number> => {
 
     if (now < salaryStartMonth) continue;
 
-    // Check duration: how many salary months have been paid for this rank
-    const paidCount = await RankSalaryLog.countDocuments({
-      userId: user._id,
-      rankName: rank.name,
-    });
+    // Check duration and this month's dedup from the batch-loaded log stats.
+    const logStats = salaryLogs.get(salaryStatsKey(user._id, rank.name));
+    const paidCount = logStats?.paidCount ?? 0;
     const maxDuration: number = sal.salaryDurationMonths ?? 3;
     if (paidCount >= maxDuration) continue;
 
     // Dedup: already paid this month for this rank?
-    const alreadyPaid = await RankSalaryLog.findOne({
-      userId: user._id,
-      rankName: rank.name,
-      year: currentYear,
-      month: currentMonth,
-    });
-    if (alreadyPaid) continue;
+    if (logStats?.alreadyPaidThisMonth) continue;
 
     // ── Condition 1: current-month direct sales ──────────────────────────────
-    // Count approved purchases this month where the buyer's gen-1 ancestor is this user.
-    const monthlySalesResult = await Purchase.aggregate([
-      {
-        $match: {
-          status: "approved",
-          reviewedAt: { $gte: monthStart, $lt: monthEnd },
-        },
-      },
-      {
-        $lookup: {
-          from: "users",
-          localField: "userId",
-          foreignField: "_id",
-          as: "buyer",
-        },
-      },
-      { $unwind: "$buyer" },
-      {
-        $match: {
-          "buyer.generationAncestors": {
-            $elemMatch: {
-              level: 1,
-              userId: user._id,
-            },
-          },
-        },
-      },
-      {
-        $group: { _id: null, count: { $sum: "$quantity" } },
-      },
-    ]);
-    const monthlySalesCount: number = monthlySalesResult[0]?.count ?? 0;
+    const monthlySalesCount = directSales.get(String(user._id)) ?? 0;
     if (monthlySalesCount < (sal.minMonthlySalesQty ?? 0)) continue;
 
     // ── Condition 2: cumulative personal purchase count ──────────────────────
@@ -581,9 +616,17 @@ export const getSalaryEligibleUsers = async (
       )
       .lean();
 
-    // For each user, count this month's direct sales and check all conditions
-    const rows = await Promise.all(
-      users.map(async (user) => {
+    const { salaryLogs, directSales } = await loadSalaryEligibilityStats(
+      users.map((user: any) => user._id),
+      salaryRanks.map((rank: any) => rank.name),
+      currentYear,
+      currentMonth,
+      monthStart,
+      monthEnd
+    );
+
+    // All database-backed stats were loaded above, so formatting each row is in-memory.
+    const rows = users.map((user) => {
         const rank = salaryRanks.find(
           (r: any) => r.name === (user as any).currentRank
         );
@@ -601,48 +644,16 @@ export const getSalaryEligibleUsers = async (
         const salaryStarted = now >= salaryStartMonth;
 
         // How many salary months have been paid
-        const paidCount = await RankSalaryLog.countDocuments({
-          userId: user._id,
-          rankName: rank.name,
-        });
+        const logStats = salaryLogs.get(salaryStatsKey(user._id, rank.name));
+        const paidCount = logStats?.paidCount ?? 0;
         const maxDuration: number = sal.salaryDurationMonths ?? 3;
         const durationExceeded = paidCount >= maxDuration;
 
         // Already paid this month?
-        const alreadyPaidThisMonth = !!(await RankSalaryLog.findOne({
-          userId: user._id,
-          rankName: rank.name,
-          year: currentYear,
-          month: currentMonth,
-        }).lean());
+        const alreadyPaidThisMonth = logStats?.alreadyPaidThisMonth ?? false;
 
         // This month's direct sales
-        const salesAgg = await Purchase.aggregate([
-          {
-            $match: {
-              status: "approved",
-              reviewedAt: { $gte: monthStart, $lt: monthEnd },
-            },
-          },
-          {
-            $lookup: {
-              from: "users",
-              localField: "userId",
-              foreignField: "_id",
-              as: "buyer",
-            },
-          },
-          { $unwind: "$buyer" },
-          {
-            $match: {
-              "buyer.generationAncestors": {
-                $elemMatch: { level: 1, userId: user._id },
-              },
-            },
-          },
-          { $group: { _id: null, count: { $sum: "$quantity" } } },
-        ]);
-        const monthlySalesCount: number = salesAgg[0]?.count ?? 0;
+        const monthlySalesCount = directSales.get(String(user._id)) ?? 0;
         const minMonthlySalesQty: number = sal.minMonthlySalesQty ?? 0;
         const salesNeeded = Math.max(0, minMonthlySalesQty - monthlySalesCount);
         // salesConditionMet is only meaningful if salary has already started
@@ -699,8 +710,7 @@ export const getSalaryEligibleUsers = async (
           alreadyPaidThisMonth,
           eligibleThisMonth,
         };
-      })
-    );
+      });
 
     const result = rows.filter(Boolean);
 

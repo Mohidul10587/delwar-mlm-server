@@ -19,9 +19,11 @@ const model_5 = require("../wallet/model");
 const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f;
     try {
-        const [totalUsers, activeUsers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
+        const [totalUsers, activeUsers, totalAdmins, totalBranchManagers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
             model_1.User.countDocuments({ role: "user" }),
             model_1.User.countDocuments({ role: "user", isActive: true }),
+            model_1.User.countDocuments({ role: "admin" }),
+            model_1.User.countDocuments({ role: "branch_manager" }),
             model_2.Project.countDocuments(),
             model_3.Purchase.countDocuments(),
             model_3.Purchase.countDocuments({ status: "pending" }),
@@ -54,6 +56,8 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
         res.json({
             totalUsers,
             activeUsers,
+            totalAdmins,
+            totalBranchManagers,
             totalShares,
             totalPurchases,
             pendingPurchases,

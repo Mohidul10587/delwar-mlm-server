@@ -78,12 +78,35 @@ function cascadeGenerationAncestors(rootId) {
                 .lean();
             if (children.length === 0)
                 break;
-            yield Promise.all(children.map((child) => __awaiter(this, void 0, void 0, function* () {
-                var _a, _b;
+            const parentIds = children
+                .map((child) => { var _a, _b; return (_b = (_a = child.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId; })
+                .filter(Boolean);
+            const parents = yield model_1.User.find({ _id: { $in: parentIds } })
+                .select("_id generationAncestors")
+                .lean();
+            const ancestorsByParent = new Map(parents.map((parent) => { var _a; return [String(parent._id), (_a = parent.generationAncestors) !== null && _a !== void 0 ? _a : []]; }));
+            // A bulk write replaces the previous find-by-id + update-one pair for
+            // every descendant in this level of the referral tree.
+            yield model_1.User.bulkWrite(children.map((child) => {
+                var _a, _b, _c;
                 const parentId = (_b = (_a = child.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId;
-                const newAncestors = yield buildGenerationAncestors(parentId);
-                return model_1.User.updateOne({ _id: child._id }, { $set: { generationAncestors: newAncestors } });
-            })));
+                const parentAncestors = (_c = ancestorsByParent.get(String(parentId))) !== null && _c !== void 0 ? _c : [];
+                const newAncestors = parentId
+                    ? [
+                        { level: 1, userId: parentId },
+                        ...parentAncestors.map((ancestor) => ({
+                            level: ancestor.level + 1,
+                            userId: ancestor.userId,
+                        })),
+                    ]
+                    : [];
+                return {
+                    updateOne: {
+                        filter: { _id: child._id },
+                        update: { $set: { generationAncestors: newAncestors } },
+                    },
+                };
+            }));
             queue = children.map((c) => c._id);
         }
     });

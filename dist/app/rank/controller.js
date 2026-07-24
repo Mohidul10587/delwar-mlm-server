@@ -26,6 +26,56 @@ const getSettings = () => __awaiter(void 0, void 0, void 0, function* () {
         s = yield model_1.Settings.create({});
     return s;
 });
+const salaryStatsKey = (userId, rankName) => `${String(userId)}:${rankName}`;
+/**
+ * Loads salary-payment history and this month's direct-sales totals for an
+ * entire user list. Keeping these as set-based queries prevents one query per
+ * salary-eligible user in the cron and admin eligibility screen.
+ */
+const loadSalaryEligibilityStats = (userIds, rankNames, year, month, monthStart, monthEnd) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!userIds.length)
+        return { salaryLogs: new Map(), directSales: new Map() };
+    const [logRows, salesRows] = yield Promise.all([
+        salary_log_model_1.RankSalaryLog.aggregate([
+            { $match: { userId: { $in: userIds }, rankName: { $in: rankNames } } },
+            {
+                $group: {
+                    _id: { userId: "$userId", rankName: "$rankName" },
+                    paidCount: { $sum: 1 },
+                    alreadyPaidThisMonth: {
+                        $max: {
+                            $cond: [
+                                { $and: [{ $eq: ["$year", year] }, { $eq: ["$month", month] }] },
+                                1,
+                                0,
+                            ],
+                        },
+                    },
+                },
+            },
+        ]),
+        model_3.Purchase.aggregate([
+            { $match: { status: "approved", reviewedAt: { $gte: monthStart, $lt: monthEnd } } },
+            { $lookup: { from: "users", localField: "userId", foreignField: "_id", as: "buyer" } },
+            { $unwind: "$buyer" },
+            { $unwind: "$buyer.generationAncestors" },
+            {
+                $match: {
+                    "buyer.generationAncestors.level": 1,
+                    "buyer.generationAncestors.userId": { $in: userIds },
+                },
+            },
+            { $group: { _id: "$buyer.generationAncestors.userId", count: { $sum: "$quantity" } } },
+        ]),
+    ]);
+    return {
+        salaryLogs: new Map(logRows.map((row) => [
+            salaryStatsKey(row._id.userId, row._id.rankName),
+            { paidCount: row.paidCount, alreadyPaidThisMonth: Boolean(row.alreadyPaidThisMonth) },
+        ])),
+        directSales: new Map(salesRows.map((row) => [String(row._id), row.count])),
+    };
+});
 // ── Rank CRUD (stored in Settings) ───────────────────────────────────────────
 const getRanks = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -363,6 +413,7 @@ const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function*
     const users = yield model_2.User.find({
         currentRank: { $in: ranks.map((r) => r.name) },
     }).select("_id currentRank currentRankAchievedAt personalPurchaseCount");
+    const { salaryLogs, directSales } = yield loadSalaryEligibilityStats(users.map((user) => user._id), ranks.map((rank) => rank.name), currentYear, currentMonth, monthStart, monthEnd);
     for (const user of users) {
         const rank = ranks.find((r) => r.name === user.currentRank);
         if (!rank)
@@ -376,56 +427,17 @@ const processMonthlySalaries = () => __awaiter(void 0, void 0, void 0, function*
         salaryStartMonth.setHours(0, 0, 0, 0);
         if (now < salaryStartMonth)
             continue;
-        // Check duration: how many salary months have been paid for this rank
-        const paidCount = yield salary_log_model_1.RankSalaryLog.countDocuments({
-            userId: user._id,
-            rankName: rank.name,
-        });
-        const maxDuration = (_c = sal.salaryDurationMonths) !== null && _c !== void 0 ? _c : 3;
+        // Check duration and this month's dedup from the batch-loaded log stats.
+        const logStats = salaryLogs.get(salaryStatsKey(user._id, rank.name));
+        const paidCount = (_c = logStats === null || logStats === void 0 ? void 0 : logStats.paidCount) !== null && _c !== void 0 ? _c : 0;
+        const maxDuration = (_d = sal.salaryDurationMonths) !== null && _d !== void 0 ? _d : 3;
         if (paidCount >= maxDuration)
             continue;
         // Dedup: already paid this month for this rank?
-        const alreadyPaid = yield salary_log_model_1.RankSalaryLog.findOne({
-            userId: user._id,
-            rankName: rank.name,
-            year: currentYear,
-            month: currentMonth,
-        });
-        if (alreadyPaid)
+        if (logStats === null || logStats === void 0 ? void 0 : logStats.alreadyPaidThisMonth)
             continue;
         // ── Condition 1: current-month direct sales ──────────────────────────────
-        // Count approved purchases this month where the buyer's gen-1 ancestor is this user.
-        const monthlySalesResult = yield model_3.Purchase.aggregate([
-            {
-                $match: {
-                    status: "approved",
-                    reviewedAt: { $gte: monthStart, $lt: monthEnd },
-                },
-            },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "userId",
-                    foreignField: "_id",
-                    as: "buyer",
-                },
-            },
-            { $unwind: "$buyer" },
-            {
-                $match: {
-                    "buyer.generationAncestors": {
-                        $elemMatch: {
-                            level: 1,
-                            userId: user._id,
-                        },
-                    },
-                },
-            },
-            {
-                $group: { _id: null, count: { $sum: "$quantity" } },
-            },
-        ]);
-        const monthlySalesCount = (_e = (_d = monthlySalesResult[0]) === null || _d === void 0 ? void 0 : _d.count) !== null && _e !== void 0 ? _e : 0;
+        const monthlySalesCount = (_e = directSales.get(String(user._id))) !== null && _e !== void 0 ? _e : 0;
         if (monthlySalesCount < ((_f = sal.minMonthlySalesQty) !== null && _f !== void 0 ? _f : 0))
             continue;
         // ── Condition 2: cumulative personal purchase count ──────────────────────
@@ -492,9 +504,10 @@ const getSalaryEligibleUsers = (_req, res, next) => __awaiter(void 0, void 0, vo
         })
             .select("_id name username phone currentRank currentRankAchievedAt personalPurchaseCount")
             .lean();
-        // For each user, count this month's direct sales and check all conditions
-        const rows = yield Promise.all(users.map((user) => __awaiter(void 0, void 0, void 0, function* () {
-            var _a, _b, _c, _d, _e, _f, _g;
+        const { salaryLogs, directSales } = yield loadSalaryEligibilityStats(users.map((user) => user._id), salaryRanks.map((rank) => rank.name), currentYear, currentMonth, monthStart, monthEnd);
+        // All database-backed stats were loaded above, so formatting each row is in-memory.
+        const rows = users.map((user) => {
+            var _a, _b, _c, _d, _e, _f, _g, _h;
             const rank = salaryRanks.find((r) => r.name === user.currentRank);
             if (!rank)
                 return null;
@@ -507,54 +520,22 @@ const getSalaryEligibleUsers = (_req, res, next) => __awaiter(void 0, void 0, vo
             salaryStartMonth.setHours(0, 0, 0, 0);
             const salaryStarted = now >= salaryStartMonth;
             // How many salary months have been paid
-            const paidCount = yield salary_log_model_1.RankSalaryLog.countDocuments({
-                userId: user._id,
-                rankName: rank.name,
-            });
-            const maxDuration = (_b = sal.salaryDurationMonths) !== null && _b !== void 0 ? _b : 3;
+            const logStats = salaryLogs.get(salaryStatsKey(user._id, rank.name));
+            const paidCount = (_b = logStats === null || logStats === void 0 ? void 0 : logStats.paidCount) !== null && _b !== void 0 ? _b : 0;
+            const maxDuration = (_c = sal.salaryDurationMonths) !== null && _c !== void 0 ? _c : 3;
             const durationExceeded = paidCount >= maxDuration;
             // Already paid this month?
-            const alreadyPaidThisMonth = !!(yield salary_log_model_1.RankSalaryLog.findOne({
-                userId: user._id,
-                rankName: rank.name,
-                year: currentYear,
-                month: currentMonth,
-            }).lean());
+            const alreadyPaidThisMonth = (_d = logStats === null || logStats === void 0 ? void 0 : logStats.alreadyPaidThisMonth) !== null && _d !== void 0 ? _d : false;
             // This month's direct sales
-            const salesAgg = yield model_3.Purchase.aggregate([
-                {
-                    $match: {
-                        status: "approved",
-                        reviewedAt: { $gte: monthStart, $lt: monthEnd },
-                    },
-                },
-                {
-                    $lookup: {
-                        from: "users",
-                        localField: "userId",
-                        foreignField: "_id",
-                        as: "buyer",
-                    },
-                },
-                { $unwind: "$buyer" },
-                {
-                    $match: {
-                        "buyer.generationAncestors": {
-                            $elemMatch: { level: 1, userId: user._id },
-                        },
-                    },
-                },
-                { $group: { _id: null, count: { $sum: "$quantity" } } },
-            ]);
-            const monthlySalesCount = (_d = (_c = salesAgg[0]) === null || _c === void 0 ? void 0 : _c.count) !== null && _d !== void 0 ? _d : 0;
-            const minMonthlySalesQty = (_e = sal.minMonthlySalesQty) !== null && _e !== void 0 ? _e : 0;
+            const monthlySalesCount = (_e = directSales.get(String(user._id))) !== null && _e !== void 0 ? _e : 0;
+            const minMonthlySalesQty = (_f = sal.minMonthlySalesQty) !== null && _f !== void 0 ? _f : 0;
             const salesNeeded = Math.max(0, minMonthlySalesQty - monthlySalesCount);
             // salesConditionMet is only meaningful if salary has already started
             const salesConditionMet = salaryStarted &&
                 (minMonthlySalesQty === 0 || monthlySalesCount >= minMonthlySalesQty);
             // Cumulative personal purchase condition
-            const minTotalPersonalQty = (_f = sal.minTotalPersonalPurchaseQtyForSalary) !== null && _f !== void 0 ? _f : 0;
-            const personalPurchaseCount = (_g = user.personalPurchaseCount) !== null && _g !== void 0 ? _g : 0;
+            const minTotalPersonalQty = (_g = sal.minTotalPersonalPurchaseQtyForSalary) !== null && _g !== void 0 ? _g : 0;
+            const personalPurchaseCount = (_h = user.personalPurchaseCount) !== null && _h !== void 0 ? _h : 0;
             const personalPurchaseNeeded = Math.max(0, minTotalPersonalQty - personalPurchaseCount);
             const personalConditionMet = minTotalPersonalQty === 0 ||
                 personalPurchaseCount >= minTotalPersonalQty;
@@ -592,7 +573,7 @@ const getSalaryEligibleUsers = (_req, res, next) => __awaiter(void 0, void 0, vo
                 alreadyPaidThisMonth,
                 eligibleThisMonth,
             };
-        })));
+        });
         const result = rows.filter(Boolean);
         res.json({
             year: currentYear,

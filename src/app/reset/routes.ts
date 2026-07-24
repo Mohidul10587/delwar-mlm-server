@@ -10,6 +10,7 @@ import { ShareSlot } from "../project/shareSlot.model";
 import { Settings } from "../settings/model";
 import { RewardTracker } from "../reward-tracker/model";
 import { Withdrawal } from "../withdrawal/model";
+import { AdminExpense } from "../expense/model";
 
 const router = Router();
 
@@ -48,6 +49,7 @@ router.get("/", async (_req: Request, res: Response) => {
       RankSalaryLog.deleteMany({}),
       CompanyLedger.deleteMany({}),
       Withdrawal.deleteMany({}),
+      AdminExpense.deleteMany({}),
       Wallet.updateMany(
         {},
         {

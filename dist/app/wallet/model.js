@@ -57,6 +57,8 @@ const TransactionLogSchema = new mongoose_1.Schema({
             "installment_received",
             "incentive_bonus",
             "cashback",
+            "cashback_payment",
+            "cashback_payment_refund",
             "transfer_sent",
             "transfer_received",
             "loan_given",

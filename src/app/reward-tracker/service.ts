@@ -169,45 +169,56 @@ export const processRewardAfterPayment = async (
     tracker.markModified("cycles");
     await tracker.save();
 
-    // Reward credits are deliberately done once for the grouped payment, after
-    // all of its installment slots have been approved.  The payment status is
-    // atomically claimed by the caller, which prevents duplicate credits.
-    for (const cycle of newCycles) {
-      if (cycle.rewardAmount <= 0) continue;
-
-      await Wallet.findOneAndUpdate(
+    // Credit all cycles in one atomic wallet update, then write the matching
+    // transaction and ledger rows in batches. This prevents an N+1 sequence
+    // when one grouped installment completes multiple reward cycles.
+    const payableCycles = newCycles.filter((cycle) => cycle.rewardAmount > 0);
+    if (payableCycles.length > 0) {
+      const totalReward = payableCycles.reduce(
+        (sum, cycle) => sum + cycle.rewardAmount,
+        0
+      );
+      const wallet = await Wallet.findOneAndUpdate(
         { userId: purchase.userId },
         {
           $setOnInsert: { userId: purchase.userId },
           $inc: {
-            rewardBalanceFromInstallment: cycle.rewardAmount,
-            totalBalance: cycle.rewardAmount,
+            rewardBalanceFromInstallment: totalReward,
+            totalBalance: totalReward,
           },
         },
-        { upsert: true }
+        { new: true, upsert: true }
+      ).lean();
+
+      let runningRewardBalance =
+        (wallet?.rewardBalanceFromInstallment ?? totalReward) - totalReward;
+      const transactionPayloads = payableCycles.map((cycle) => {
+        runningRewardBalance += cycle.rewardAmount;
+        const label = cycle.cycleType === "full_payment" ? "Full payment" : "Split payment";
+        const note = `${label} installment reward — Cycle #${cycle.cycleNumber}, ৳${cycle.completedAmount.toLocaleString()} target, reward ৳${cycle.rewardAmount.toLocaleString()}`;
+        return {
+          userId: purchase.userId,
+          type: cycle.cycleType === "full_payment"
+            ? "installment_reward_one_time" as const
+            : "installment_reward_completion" as const,
+          amount: cycle.rewardAmount,
+          balanceAfter: runningRewardBalance,
+          note,
+          relatedPurchaseId: purchase._id,
+        };
+      });
+      const transactions = await TransactionLog.insertMany(transactionPayloads);
+      await CompanyLedger.insertMany(
+        transactions.map((transaction, index) => ({
+          date: new Date(),
+          type: "installment_reward_paid" as const,
+          amount: payableCycles[index].rewardAmount,
+          relatedId: transaction._id,
+          relatedModel: "TransactionLog" as const,
+          userId: purchase.userId,
+          note: transactionPayloads[index].note,
+        }))
       );
-      const wallet = await Wallet.findOne({ userId: purchase.userId }).lean();
-      const label = cycle.cycleType === "full_payment" ? "Full payment" : "Split payment";
-      const note = `${label} installment reward — Cycle #${cycle.cycleNumber}, ৳${cycle.completedAmount.toLocaleString()} target, reward ৳${cycle.rewardAmount.toLocaleString()}`;
-      const transaction = await TransactionLog.create({
-        userId: purchase.userId,
-        type: cycle.cycleType === "full_payment"
-          ? "installment_reward_one_time"
-          : "installment_reward_completion",
-        amount: cycle.rewardAmount,
-        balanceAfter: wallet?.rewardBalanceFromInstallment ?? cycle.rewardAmount,
-        note,
-        relatedPurchaseId: purchase._id,
-      });
-      await CompanyLedger.create({
-        date: new Date(),
-        type: "installment_reward_paid",
-        amount: cycle.rewardAmount,
-        relatedId: transaction._id,
-        relatedModel: "TransactionLog",
-        userId: purchase.userId,
-        note,
-      });
     }
   } catch (err) {
     console.error(
