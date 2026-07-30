@@ -15,7 +15,10 @@ export const registerSchema = baseSchema.extend({
 // Superadmin registration: referrer optional, role assignable (no superadmin)
 export const adminRegisterSchema = baseSchema.extend({
   referrerUsername: z.string().optional(),
-  role: z.enum(["admin", "staff", "user"]).optional().default("user"),
+  role: z
+    .enum(["admin", "staff", "branch_manager", "user"])
+    .optional()
+    .default("user"),
 });
 
 export const loginSchema = z.object({

@@ -190,7 +190,10 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         const firstRankName = yield getFirstRankName();
         const user = yield model_1.User.create(Object.assign({ name,
             username,
-            phone, password: hashedPassword, role, permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [], generationAncestors }, (firstRankName && {
+            phone, password: hashedPassword, role,
+            // Accounts created by a superadmin are trusted internal registrations.
+            // Do not require the new user to complete the public OTP flow.
+            isPhoneVerified: true, permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [], generationAncestors }, (firstRankName && {
             currentRank: firstRankName,
             currentRankAchievedAt: new Date(),
             earnedRanks: [firstRankName],
@@ -218,12 +221,6 @@ const login = (req, res, next) => __awaiter(void 0, void 0, void 0, function* ()
             return res.status(404).json({
                 message: "User not found",
             });
-        if (!user.isPhoneVerified) {
-            return res.status(403).json({
-                code: "UNVERIFIED_PHONE",
-                message: "Phone not verified. Please verify your phone first.",
-            });
-        }
         if (!user.isActive)
             return res.status(403).json({
                 message: "Account is inactive",
@@ -233,6 +230,12 @@ const login = (req, res, next) => __awaiter(void 0, void 0, void 0, function* ()
             return res.status(401).json({
                 message: "Invalid password",
             });
+        if (!user.isPhoneVerified) {
+            return res.status(403).json({
+                code: "UNVERIFIED_PHONE",
+                message: "Phone not verified. Please verify your phone first.",
+            });
+        }
         const { accessToken, refreshToken } = generateTokens(user._id.toString());
         res.cookie("accessToken", accessToken, (0, authConfig_1.cookieOpts)());
         res.cookie("refreshToken", refreshToken, (0, authConfig_1.cookieOpts)());

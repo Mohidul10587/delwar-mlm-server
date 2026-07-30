@@ -15,7 +15,10 @@ exports.registerSchema = baseSchema.extend({
 // Superadmin registration: referrer optional, role assignable (no superadmin)
 exports.adminRegisterSchema = baseSchema.extend({
     referrerUsername: zod_1.z.string().optional(),
-    role: zod_1.z.enum(["admin", "staff", "user"]).optional().default("user"),
+    role: zod_1.z
+        .enum(["admin", "staff", "branch_manager", "user"])
+        .optional()
+        .default("user"),
 });
 exports.loginSchema = zod_1.z.object({
     username: zod_1.z.string().min(1),

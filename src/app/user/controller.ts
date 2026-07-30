@@ -232,6 +232,9 @@ export const adminRegister = async (
       phone,
       password: hashedPassword,
       role,
+      // Accounts created by a superadmin are trusted internal registrations.
+      // Do not require the new user to complete the public OTP flow.
+      isPhoneVerified: true,
       permissions: defaultPermissionsByRole[role] ?? [],
       generationAncestors,
       ...(firstRankName && {
@@ -276,13 +279,6 @@ export const login = async (
         message: "User not found",
       });
 
-    if (!user.isPhoneVerified) {
-      return res.status(403).json({
-        code: "UNVERIFIED_PHONE",
-        message: "Phone not verified. Please verify your phone first.",
-      });
-    }
-
     if (!user.isActive)
       return res.status(403).json({
         message: "Account is inactive",
@@ -293,6 +289,13 @@ export const login = async (
       return res.status(401).json({
         message: "Invalid password",
       });
+
+    if (!user.isPhoneVerified) {
+      return res.status(403).json({
+        code: "UNVERIFIED_PHONE",
+        message: "Phone not verified. Please verify your phone first.",
+      });
+    }
 
     const { accessToken, refreshToken } = generateTokens(user._id.toString());
     res.cookie("accessToken", accessToken, cookieOpts());
