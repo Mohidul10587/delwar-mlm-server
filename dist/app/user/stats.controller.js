@@ -15,11 +15,12 @@ const model_2 = require("../project/model");
 const model_3 = require("../purchase/model");
 const model_4 = require("../withdrawal/model");
 const model_5 = require("../wallet/model");
+const model_6 = require("../capital/model");
 // H-07 fix: added try/catch and next(err)
 const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
-        const [totalUsers, activeUsers, totalAdmins, totalBranchManagers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg,] = yield Promise.all([
+        const [totalUsers, activeUsers, totalAdmins, totalBranchManagers, totalShares, totalPurchases, pendingPurchases, approvedPurchases, pendingWithdrawals, approvedWithdrawals, walletAgg, capitalAgg,] = yield Promise.all([
             model_1.User.countDocuments({ role: "user" }),
             model_1.User.countDocuments({ role: "user", isActive: true }),
             model_1.User.countDocuments({ role: "admin" }),
@@ -52,6 +53,7 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
                     },
                 },
             ]),
+            model_6.Capital.aggregate([{ $group: { _id: null, totalCapital: { $sum: "$amount" } } }]),
         ]);
         res.json({
             totalUsers,
@@ -67,6 +69,7 @@ const getSuperAdminStats = (_req, res, next) => __awaiter(void 0, void 0, void 0
             totalWalletBalance: (_b = (_a = walletAgg[0]) === null || _a === void 0 ? void 0 : _a.totalBalance) !== null && _b !== void 0 ? _b : 0,
             totalManCommFromDownPayment: (_d = (_c = walletAgg[0]) === null || _c === void 0 ? void 0 : _c.totalDPCommission) !== null && _d !== void 0 ? _d : 0,
             totalManCommFromInstallment: (_f = (_e = walletAgg[0]) === null || _e === void 0 ? void 0 : _e.totalInstallmentCommission) !== null && _f !== void 0 ? _f : 0,
+            totalCapital: (_h = (_g = capitalAgg[0]) === null || _g === void 0 ? void 0 : _g.totalCapital) !== null && _h !== void 0 ? _h : 0,
         });
     }
     catch (err) {

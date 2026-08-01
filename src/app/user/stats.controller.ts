@@ -4,6 +4,7 @@ import { Project } from "../project/model";
 import { Purchase } from "../purchase/model";
 import { Withdrawal } from "../withdrawal/model";
 import { Wallet } from "../wallet/model";
+import { Capital } from "../capital/model";
 
 // H-07 fix: added try/catch and next(err)
 export const getSuperAdminStats = async (
@@ -24,6 +25,7 @@ export const getSuperAdminStats = async (
       pendingWithdrawals,
       approvedWithdrawals,
       walletAgg,
+      capitalAgg,
     ] = await Promise.all([
       User.countDocuments({ role: "user" }),
       User.countDocuments({ role: "user", isActive: true }),
@@ -57,6 +59,7 @@ export const getSuperAdminStats = async (
           },
         },
       ]),
+      Capital.aggregate([{ $group: { _id: null, totalCapital: { $sum: "$amount" } } }]),
     ]);
 
     res.json({
@@ -74,6 +77,7 @@ export const getSuperAdminStats = async (
       totalManCommFromDownPayment: walletAgg[0]?.totalDPCommission ?? 0,
       totalManCommFromInstallment:
         walletAgg[0]?.totalInstallmentCommission ?? 0,
+      totalCapital: capitalAgg[0]?.totalCapital ?? 0,
     });
   } catch (err) {
     next(err);

@@ -35,6 +35,7 @@ import adminSalaryRoutes from "./app/admin-salary/routes";
 import branchRoutes from "./app/branch/routes";
 import otpRoutes from "./app/otp/routes";
 import rewardTrackerRoutes from "./app/reward-tracker/routes";
+import capitalRoutes from "./app/capital/routes";
 import { autoReleaseMonthlySalaries } from "./app/admin-salary/controller";
 import { processMonthlySalaries } from "./app/rank/controller";
 import { setSocketIO } from "./app/notice/controller";
@@ -182,6 +183,7 @@ app.use("/admin-salary", adminSalaryRoutes);
 app.use("/branch", branchRoutes);
 app.use("/otp", otpRoutes);
 app.use("/reward-tracker", rewardTrackerRoutes);
+app.use("/capital", capitalRoutes);
 app.use(errorHandler);
 
 if (process.env.VERCEL !== "1") {

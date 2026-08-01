@@ -8,7 +8,7 @@ import { Wallet, TransactionLog } from "../wallet/model";
 // POST /expense/admin/submit — admin submits an expense for approval
 export const submitAdminExpense = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { amount, description, paidBy, expenseDate, receiptImage } = req.body;
+    const { amount, description, paidBy, voucherNo, expenseDate, receiptImage } = req.body;
 
     if (!amount || !description || !expenseDate) {
       return res.status(400).json({ message: "amount, description, and expenseDate are required" });
@@ -23,6 +23,7 @@ export const submitAdminExpense = async (req: Request, res: Response, next: Next
       amount: amt,
       description: description.trim(),
       paidBy: paidBy?.trim() ?? "",
+      voucherNo: voucherNo?.trim() ?? "",
       expenseDate: new Date(expenseDate),
       receiptImage: receiptImage ?? null,
       status: "pending",
@@ -137,7 +138,11 @@ export const reviewAdminExpense = async (req: Request, res: Response, next: Next
           relatedId: expense._id,
           relatedModel: "Expense",
           userId: expense.submittedBy,
-          note: expense.description,
+          note: [
+            expense.description,
+            expense.paidBy && `Paid by: ${expense.paidBy}`,
+            expense.voucherNo && `Voucher: ${expense.voucherNo}`,
+          ].filter(Boolean).join(" | "),
           createdAt: expense.expenseDate,
           updatedAt: expense.expenseDate,
         });

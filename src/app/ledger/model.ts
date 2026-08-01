@@ -8,6 +8,7 @@ import { Schema, model, Document, Types } from "mongoose";
  *   installment_received     — individual installment payment approved
  *   investment_received      — investment deposit created
  *   transfer_fee_received    — fee charged on balance transfer between users
+ *   capital_received         — capital received from an investor
  *
  * OUTFLOW (company pays out):
  *   commission_paid          — direct or managerial commission to a user's wallet
@@ -25,6 +26,7 @@ export type LedgerType =
   | "installment_received"
   | "investment_received"
   | "transfer_fee_received"
+  | "capital_received"
   | "commission_paid"
   | "salary_paid"
   | "investment_profit_paid"
@@ -41,6 +43,7 @@ export const INFLOW_TYPES: LedgerType[] = [
   "installment_received",
   "investment_received",
   "transfer_fee_received",
+  "capital_received",
 ];
 
 export const OUTFLOW_TYPES: LedgerType[] = [
@@ -61,7 +64,7 @@ export interface ICompanyLedger extends Document {
   type: LedgerType;
   amount: number;
   relatedId?: Types.ObjectId;
-  relatedModel?: "Purchase" | "InstallmentPayment" | "Investment" | "Withdrawal" | "TransactionLog" | "AdminExpense";
+  relatedModel?: "Purchase" | "InstallmentPayment" | "Investment" | "Withdrawal" | "TransactionLog" | "AdminExpense" | "Capital";
   userId?: Types.ObjectId; // the user involved
   note?: string;
 }
@@ -83,7 +86,7 @@ CompanyLedgerSchema.index({ date: 1, type: 1 });
 // Dedup guard only for inflow types (one ledger row per source document)
 CompanyLedgerSchema.index(
   { relatedId: 1, type: 1 },
-  { unique: true, sparse: true, partialFilterExpression: { type: { $in: ["purchase_received", "installment_received", "investment_received", "withdrawal_paid"] } } }
+  { unique: true, sparse: true, partialFilterExpression: { type: { $in: ["purchase_received", "installment_received", "investment_received", "withdrawal_paid", "capital_received"] } } }
 );
 
 export const CompanyLedger = model<ICompanyLedger>("CompanyLedger", CompanyLedgerSchema);
