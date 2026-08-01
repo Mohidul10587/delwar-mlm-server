@@ -16,6 +16,7 @@ const AdminExpenseSchema = new mongoose_1.Schema({
     },
     reviewNote: { type: String, default: "" },
     paidBy: { type: String, default: "" },
+    voucherNo: { type: String, default: "", trim: true, index: true },
     reviewedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
 }, { timestamps: true });

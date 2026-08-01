@@ -190,7 +190,7 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         const firstRankName = yield getFirstRankName();
         const user = yield model_1.User.create(Object.assign({ name,
             username,
-            phone, password: hashedPassword, role,
+            phone, password: hashedPassword, role, 
             // Accounts created by a superadmin are trusted internal registrations.
             // Do not require the new user to complete the public OTP flow.
             isPhoneVerified: true, permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [], generationAncestors }, (firstRankName && {

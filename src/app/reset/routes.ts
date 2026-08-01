@@ -11,6 +11,7 @@ import { Settings } from "../settings/model";
 import { RewardTracker } from "../reward-tracker/model";
 import { Withdrawal } from "../withdrawal/model";
 import { AdminExpense } from "../expense/model";
+import { Capital } from "../capital/model";
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.get("/", async (_req: Request, res: Response) => {
       CompanyLedger.deleteMany({}),
       Withdrawal.deleteMany({}),
       AdminExpense.deleteMany({}),
+      Capital.deleteMany({}),
       Wallet.updateMany(
         {},
         {
