@@ -22,6 +22,7 @@ const model_6 = require("../settings/model");
 const model_7 = require("../reward-tracker/model");
 const model_8 = require("../withdrawal/model");
 const model_9 = require("../expense/model");
+const model_10 = require("../capital/model");
 const router = (0, express_1.Router)();
 router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (process.env.NODE_ENV === "production") {
@@ -55,6 +56,7 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
             model_5.CompanyLedger.deleteMany({}),
             model_8.Withdrawal.deleteMany({}),
             model_9.AdminExpense.deleteMany({}),
+            model_10.Capital.deleteMany({}),
             model_3.Wallet.updateMany({}, {
                 $set: {
                     directCommissionBalance: 0,

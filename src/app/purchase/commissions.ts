@@ -3,6 +3,16 @@ import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
 import { recalcUserRank } from "../rank/controller";
 import { CompanyLedger } from "../ledger/model";
+import { PendingCommission } from "../pending-commission/model";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Returns today's date as "YYYY-MM-DD" string (UTC) — used as batchId.
+ */
+const getTodayBatchId = (): string => {
+  return new Date().toISOString().slice(0, 10);
+};
 
 // M-10 fix: removed conflicting $setOnInsert + $inc on same fields.
 // Use a two-step upsert: ensure wallet exists first, then $inc atomically.
@@ -67,6 +77,41 @@ const ledgerCommission = async (
   }
 };
 
+/**
+ * Saves a Team Management Commission as Pending (no wallet credit, no ledger).
+ * It will be released later by Super Admin via the batch release process.
+ */
+const savePendingCommission = async (
+  userId: string,
+  purchaseId: any,
+  type: "down_payment_managerial" | "installment_managerial",
+  amount: number,
+  generation: number,
+  note: string
+): Promise<void> => {
+  try {
+    const batchDate = getTodayBatchId();
+    await PendingCommission.create({
+      userId,
+      purchaseId,
+      type,
+      amount,
+      generation,
+      note,
+      status: "pending",
+      batchDate,
+      batchId: batchDate,
+    });
+  } catch (err) {
+    console.error(
+      `[PENDING COMMISSION ERROR] Failed to save pending commission for userId=${userId}, amount=${amount}:`,
+      err
+    );
+  }
+};
+
+// ── Main Commission Distributor ───────────────────────────────────────────────
+
 export const distributeCommissions = async (purchaseId: string) => {
   try {
     const purchase = await Purchase.findOneAndUpdate(
@@ -110,7 +155,8 @@ export const distributeCommissions = async (purchaseId: string) => {
       installmentPortion = 0;
     }
 
-    // ── 1. Direct Sale Commission ─────────────────────────────────────────────
+    // ── 1. Direct Sale / Referral Commission ─────────────────────────────────
+    // এই কমিশন আগের মতোই Instant ক্রেডিট হবে
     if (referrerId) {
       const commission =
         (snap.directSaleCommissionValue / 100) * downPaymentPortion;
@@ -140,6 +186,7 @@ export const distributeCommissions = async (purchaseId: string) => {
     }
 
     // ── 2. Down Payment Managerial Commission ─────────────────────────────────
+    // এই কমিশন এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
     if (downPaymentPortion > 0) {
       const maxGen = snap.downPaymentGenerationRates.length;
       for (let gen = 1; gen <= maxGen; gen++) {
@@ -154,23 +201,18 @@ export const distributeCommissions = async (purchaseId: string) => {
         );
         if (genConfig && genConfig.rate > 0) {
           const commission = (genConfig.rate / 100) * downPaymentPortion;
-          const wallet = await atomicCreditWallet(
-            currentId,
-            "manCommFromDownPayment",
-            commission
-          );
           const note = `Gen ${gen} managerial commission — DP (${
             genConfig.rate
           }% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
-          const tx = await TransactionLog.create({
-            userId: currentId,
-            type: "managerial_commission",
-            amount: commission,
-            balanceAfter: wallet.manCommFromDownPayment,
-            relatedPurchaseId: purchase._id,
-            note,
-          });
-          await ledgerCommission(tx._id, currentId, commission, note);
+          // Pending collection-এ সংরক্ষণ (কোনো wallet update বা ledger entry নয়)
+          await savePendingCommission(
+            currentId,
+            purchase._id,
+            "down_payment_managerial",
+            commission,
+            gen,
+            note
+          );
         }
         await User.findByIdAndUpdate(currentId, {
           $inc: { teamSalesCount: qty },
@@ -180,9 +222,9 @@ export const distributeCommissions = async (purchaseId: string) => {
     }
 
     // ── 3. Installment Portion Managerial Commission ──────────────────────────
+    // এই কমিশনও এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
     // Uses per-generation rates from snap.installmentGenerationRates.
     // Falls back to the legacy flat snap.installmentCommissionRate for old records
-    // that were created before the per-gen array was introduced.
     if (installmentPortion > 0) {
       const instGenRates: { generation: number; rate: number }[] =
         snap.installmentGenerationRates &&
@@ -190,8 +232,6 @@ export const distributeCommissions = async (purchaseId: string) => {
           ? snap.installmentGenerationRates
           : [];
 
-      // Legacy flat-rate fallback: build a synthetic per-gen array where every gen
-      // shares the same rate (old behaviour), but only when the new array is absent.
       const effectiveRates =
         instGenRates.length > 0
           ? instGenRates
@@ -216,23 +256,18 @@ export const distributeCommissions = async (purchaseId: string) => {
 
           const commission = (genConfig.rate / 100) * installmentPortion;
           if (commission > 0) {
-            const wallet = await atomicCreditWallet(
-              currentId,
-              "manCommFromInstallment",
-              commission
-            );
             const note = `Gen ${gen} managerial commission — Installment portion (${
               genConfig.rate
             }% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
-            const tx = await TransactionLog.create({
-              userId: currentId,
-              type: "managerial_installment_commission",
-              amount: commission,
-              balanceAfter: wallet.manCommFromInstallment,
-              relatedPurchaseId: purchase._id,
-              note,
-            });
-            await ledgerCommission(tx._id, currentId, commission, note);
+            // Pending collection-এ সংরক্ষণ
+            await savePendingCommission(
+              currentId,
+              purchase._id,
+              "installment_managerial",
+              commission,
+              gen,
+              note
+            );
           }
         }
       }
@@ -254,6 +289,8 @@ export const distributeCommissions = async (purchaseId: string) => {
     }
   }
 };
+
+// ── Installment Payment Commission ────────────────────────────────────────────
 
 export const distributeInstallmentPaymentCommission = async (
   purchaseId: string,
@@ -279,10 +316,6 @@ export const distributeInstallmentPaymentCommission = async (
       ? `Installment #${installmentNo}`
       : "Installment payment";
 
-    // Resolve effective per-generation rates.
-    // New records: use snap.installmentGenerationRates.
-    // Old records (created before this feature): fall back to the legacy flat rate
-    // applied uniformly across all generations that have a DP rate configured.
     const instGenRates: { generation: number; rate: number }[] =
       snap.installmentGenerationRates &&
       snap.installmentGenerationRates.length > 0
@@ -314,25 +347,18 @@ export const distributeInstallmentPaymentCommission = async (
 
       const commission = (genConfig.rate / 100) * installmentAmount;
       if (commission > 0) {
-        // Fix F-03: atomic $inc
-        const wallet = await atomicCreditWallet(
-          currentId,
-          "manCommFromInstallment",
-          commission
-        );
-
         const note = `Gen ${gen} managerial commission — ${instLabel} (${
           genConfig.rate
         }% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
-        const tx = await TransactionLog.create({
-          userId: currentId,
-          type: "managerial_installment_commission",
-          amount: commission,
-          balanceAfter: wallet.manCommFromInstallment,
-          relatedPurchaseId: purchase._id,
-          note,
-        });
-        await ledgerCommission(tx._id, currentId, commission, note);
+        // এই কমিশনও Pending হিসাবে সংরক্ষণ করা হচ্ছে
+        await savePendingCommission(
+          currentId,
+          purchase._id,
+          "installment_managerial",
+          commission,
+          gen,
+          note
+        );
       }
     }
   } catch (err) {
