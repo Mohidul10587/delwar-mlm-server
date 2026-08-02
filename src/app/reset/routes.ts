@@ -16,10 +16,6 @@ import { Capital } from "../capital/model";
 const router = Router();
 
 router.get("/", async (_req: Request, res: Response) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(403).json({ message: "Not allowed in production" });
-  }
-
   try {
     // Resolve first rank name before resetting users
     const settings = await Settings.findOne().select("ranks").lean();

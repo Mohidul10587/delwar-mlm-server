@@ -15,6 +15,7 @@ export interface IAdminExpense extends Document {
   reviewedBy?: Types.ObjectId; // reviewer user id
   paidBy?: string;
   voucherNo?: string;
+  paymentInfo?: string; // payment method / channel info (same as Capital)
   reviewedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -36,6 +37,7 @@ const AdminExpenseSchema = new Schema<IAdminExpense>(
     reviewNote: { type: String, default: "" },
     paidBy: { type: String, default: "" },
     voucherNo: { type: String, default: "", trim: true, index: true },
+    paymentInfo: { type: String, default: "", trim: true },
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
   },
