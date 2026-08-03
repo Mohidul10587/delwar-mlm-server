@@ -37,7 +37,7 @@ export const createShare = async (
         .select("shareNumber")
         .lean();
       const lastSeq = last
-        ? parseInt(last.shareNumber.replace("THL-", ""), 10)
+        ? parseInt(last.shareNumber.replace("ABD-", ""), 10)
         : 0;
 
       for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
@@ -45,7 +45,7 @@ export const createShare = async (
         const end = Math.min(batch + BATCH_SIZE, totalShares);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+            shareNumber: `ABD-${String(lastSeq + 1 + i).padStart(5, "0")}`,
             projectId: pkg._id,
             status: "available",
             userId: null,
@@ -172,14 +172,14 @@ export const updateShare = async (
         .select("shareNumber")
         .lean();
       const lastSeq = last
-        ? parseInt(last.shareNumber.replace("THL-", ""), 10)
+        ? parseInt(last.shareNumber.replace("ABD-", ""), 10)
         : 0;
       for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
         const docs = [];
         const end = Math.min(batch + BATCH_SIZE, diff);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+            shareNumber: `ABD-${String(lastSeq + 1 + i).padStart(5, "0")}`,
             projectId: old._id,
             status: "available",
             userId: null,
@@ -329,7 +329,7 @@ export const backfillSlots = async (
       .select("shareNumber")
       .lean();
     const lastSeq = last
-      ? parseInt(last.shareNumber.replace("THL-", ""), 10)
+      ? parseInt(last.shareNumber.replace("ABD-", ""), 10)
       : 0;
 
     let created = 0;
@@ -338,7 +338,7 @@ export const backfillSlots = async (
       const end = Math.min(batch + BATCH_SIZE, diff);
       for (let i = batch; i < end; i++) {
         docs.push({
-          shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+          shareNumber: `ABD-${String(lastSeq + 1 + i).padStart(5, "0")}`,
           projectId: share._id,
           status: "available",
           userId: null,
