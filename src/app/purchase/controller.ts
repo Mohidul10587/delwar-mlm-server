@@ -187,7 +187,9 @@ export const createPurchase = async (
       };
     }
 
-    const totalPayable = share.cashPrice * qty;
+    const totalPayable = (paymentType === "installment" && share.installmentPrice)
+      ? share.installmentPrice * qty
+      : share.cashPrice * qty;
 
     const resolvedDP =
       paymentType === "cash"
@@ -228,6 +230,7 @@ export const createPurchase = async (
       shareTitle: share.title,
       shareImage: share.images?.[0] ?? "",
       cashPrice: share.cashPrice,
+      installmentPrice: share.installmentPrice ?? share.cashPrice,
       minDownPayment: share.minDownPayment,
       maxDownPayment: share.maxDownPayment,
       directSaleCommissionValue: share.directSaleCommissionValue,

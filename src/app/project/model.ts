@@ -12,6 +12,9 @@ export interface IProject extends Document {
   cashPrice: number;
   regularPrice?: number;
 
+  // Installment price (optional) — if set, used instead of cashPrice for installment purchases
+  installmentPrice?: number;
+
   // Down payment config
   minDownPayment: number;
   maxDownPayment: number;
@@ -61,6 +64,7 @@ const ProjectSchema = new Schema<IProject>(
     images: [{ type: String }],
     cashPrice: { type: Number, required: true },
     regularPrice: { type: Number },
+    installmentPrice: { type: Number },
 
     minDownPayment: { type: Number, default: 15000 },
     maxDownPayment: { type: Number, default: 50000 },

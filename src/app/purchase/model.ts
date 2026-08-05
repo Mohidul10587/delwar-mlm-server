@@ -27,6 +27,8 @@ export interface IPurchaseSnapshot {
   shareTitle: string;
   shareImage: string;
   cashPrice: number;
+  /** Installment price per share — used for totalPayable when payment type is installment */
+  installmentPrice: number;
   minDownPayment: number;
   maxDownPayment: number;
   directSaleCommissionValue: number;
@@ -114,6 +116,7 @@ const SnapshotSchema = new Schema(
     shareTitle: { type: String },
     shareImage: { type: String },
     cashPrice: { type: Number },
+    installmentPrice: { type: Number },
     minDownPayment: { type: Number },
     maxDownPayment: { type: Number },
     directSaleCommissionValue: { type: Number },

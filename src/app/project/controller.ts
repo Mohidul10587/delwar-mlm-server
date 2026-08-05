@@ -2,8 +2,28 @@ import { Request, Response, NextFunction } from "express";
 import { Project } from "./model";
 import { ShareSlot } from "./shareSlot.model";
 import { Settings } from "../settings/model";
+import { Counter } from "../user/counter";
 
 const BATCH_SIZE = 1000;
+
+/**
+ * Atomically reserves `count` sequential share numbers and returns the
+ * first number in the reserved range.
+ *
+ * Uses a MongoDB findOneAndUpdate with $inc so that concurrent requests
+ * never get overlapping ranges — eliminating the duplicate-key collision
+ * that the old findOne().sort() approach suffered from.
+ */
+async function reserveShareRange(count: number): Promise<number> {
+  const doc = await Counter.findOneAndUpdate(
+    { _id: "abd-share-seq" },
+    { $inc: { seq: count } },
+    { new: false, upsert: true }
+  );
+  // doc.seq is the value *before* the increment — that is our start offset.
+  // If upserting for the first time, doc may be null; treat as 0.
+  return (doc?.seq ?? 0);
+}
 
 /** Returns true if the share's offer is currently active based on dates */
 function isOfferActive(share: any): boolean {
@@ -28,24 +48,17 @@ export const createShare = async (
     const pkg = await Project.create({ ...defaults, ...req.body, totalShares });
 
     if (totalShares > 0) {
-      // M-06 fix: use a mutex-like approach via findOneAndUpdate to get a
-      // reserved sequence range atomically, preventing duplicate share numbers.
-      // We find the global max share number once and use it as the base.
-      // The unique index on shareNumber will still catch any collision.
-      const last = await ShareSlot.findOne()
-        .sort({ shareNumber: -1 })
-        .select("shareNumber")
-        .lean();
-      const lastSeq = last
-        ? parseInt(last.shareNumber.replace("ABD-", ""), 10)
-        : 0;
+      // Atomically reserve a range of `totalShares` sequential numbers.
+      // reserveShareRange returns the value *before* incrementing, so
+      // slot numbers are: start+1 … start+totalShares (1-based).
+      const start = await reserveShareRange(totalShares);
 
       for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
         const docs = [];
         const end = Math.min(batch + BATCH_SIZE, totalShares);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: `ABD-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+            shareNumber: `ABD-${String(start + 1 + i).padStart(5, "0")}`,
             projectId: pkg._id,
             status: "available",
             userId: null,
@@ -53,19 +66,7 @@ export const createShare = async (
             reclaimedAt: null,
           });
         }
-        // ordered: false so a duplicate shareNumber error doesn't block the rest
-        try {
-          await ShareSlot.insertMany(docs, { ordered: false });
-        } catch (insertErr: any) {
-          // Duplicate key on shareNumber — retry with a fresh sequence base
-          if (insertErr?.code === 11000) {
-            return res.status(409).json({
-              message:
-                "Share number conflict due to concurrent creation. Please retry.",
-            });
-          }
-          throw insertErr;
-        }
+        await ShareSlot.insertMany(docs, { ordered: true });
       }
     }
 
@@ -166,20 +167,14 @@ export const updateShare = async (
     const diff = newTotal - old.totalShares;
 
     if (diff > 0) {
-      // Add slots at the end
-      const last = await ShareSlot.findOne()
-        .sort({ shareNumber: -1 })
-        .select("shareNumber")
-        .lean();
-      const lastSeq = last
-        ? parseInt(last.shareNumber.replace("ABD-", ""), 10)
-        : 0;
+      // Atomically reserve `diff` sequential numbers
+      const start = await reserveShareRange(diff);
       for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
         const docs = [];
         const end = Math.min(batch + BATCH_SIZE, diff);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: `ABD-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+            shareNumber: `ABD-${String(start + 1 + i).padStart(5, "0")}`,
             projectId: old._id,
             status: "available",
             userId: null,
@@ -187,7 +182,7 @@ export const updateShare = async (
             reclaimedAt: null,
           });
         }
-        await ShareSlot.insertMany(docs, { ordered: false });
+        await ShareSlot.insertMany(docs, { ordered: true });
       }
     } else if (diff < 0) {
       // Remove the last |diff| available slots only
@@ -323,14 +318,8 @@ export const backfillSlots = async (
       });
     }
 
-    // Find the global max sequence to avoid collisions
-    const last = await ShareSlot.findOne()
-      .sort({ shareNumber: -1 })
-      .select("shareNumber")
-      .lean();
-    const lastSeq = last
-      ? parseInt(last.shareNumber.replace("ABD-", ""), 10)
-      : 0;
+    // Atomically reserve `diff` sequential numbers
+    const start = await reserveShareRange(diff);
 
     let created = 0;
     for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
@@ -338,7 +327,7 @@ export const backfillSlots = async (
       const end = Math.min(batch + BATCH_SIZE, diff);
       for (let i = batch; i < end; i++) {
         docs.push({
-          shareNumber: `ABD-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+          shareNumber: `ABD-${String(start + 1 + i).padStart(5, "0")}`,
           projectId: share._id,
           status: "available",
           userId: null,
@@ -346,17 +335,8 @@ export const backfillSlots = async (
           reclaimedAt: null,
         });
       }
-      try {
-        const result = await ShareSlot.insertMany(docs, { ordered: false });
-        created += result.length;
-      } catch (insertErr: any) {
-        if (insertErr?.code === 11000) {
-          // Count how many actually inserted before the collision
-          created += insertErr?.result?.nInserted ?? 0;
-          break;
-        }
-        throw insertErr;
-      }
+      const result = await ShareSlot.insertMany(docs, { ordered: true });
+      created += result.length;
     }
 
     res.json({
