@@ -13,7 +13,7 @@ export interface IShareSlot extends Document {
 
 const ShareSlotSchema = new Schema<IShareSlot>(
   {
-    shareNumber: { type: String, required: true, unique: true },
+    shareNumber: { type: String, required: true },  // Removed global unique constraint
     projectId:     { type: Schema.Types.ObjectId, ref: "Project", required: true, index: true },
     status:      { type: String, enum: ["available", "sold", "reclaimed"], default: "available", index: true },
     userId:      { type: Schema.Types.ObjectId, ref: "User",     default: null },
@@ -22,6 +22,9 @@ const ShareSlotSchema = new Schema<IShareSlot>(
   },
   { timestamps: true }
 );
+
+// Compound unique index: shareNumber should be unique within each project
+ShareSlotSchema.index({ projectId: 1, shareNumber: 1 }, { unique: true });
 
 // L-06 fix: compound indexes for frequent queries
 ShareSlotSchema.index({ projectId: 1, status: 1 });

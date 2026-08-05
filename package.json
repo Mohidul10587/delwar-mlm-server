@@ -6,11 +6,7 @@
   "scripts": {
     "build": "npx tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "test": "jest --runInBand",
-    "test:watch": "jest --watch",
-    "mm": "node scripts/generateModule.js",
-    "set-admin-referrer": "ts-node src/scripts/set-admin-referrer.ts"
+    "dev": "nodemon src/index.ts"
   },
   "keywords": [],
   "author": "mohid",
