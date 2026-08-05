@@ -86,8 +86,7 @@ WalletSchema.pre("save", function () {
   // Note: loanAmount is NOT included in totalBalance (tracked separately)
 });
 
-// Index for fast userId lookups
-WalletSchema.index({ userId: 1 }, { unique: true });
+// userId already has unique: true constraint, no need for separate index
 
 const TransactionLogSchema = new Schema<ITransactionLog>(
   {

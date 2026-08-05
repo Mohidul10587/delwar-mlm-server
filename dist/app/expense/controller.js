@@ -16,9 +16,9 @@ const model_3 = require("../wallet/model");
 // ─── Admin Expense (approval-based) endpoints ─────────────────────────────────
 // POST /expense/admin/submit — admin submits an expense for approval
 const submitAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c;
     try {
-        const { amount, description, paidBy, voucherNo, expenseDate, receiptImage } = req.body;
+        const { amount, description, paidBy, voucherNo, paymentInfo, expenseDate, receiptImage } = req.body;
         if (!amount || !description || !expenseDate) {
             return res.status(400).json({ message: "amount, description, and expenseDate are required" });
         }
@@ -32,6 +32,7 @@ const submitAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0,
             description: description.trim(),
             paidBy: (_a = paidBy === null || paidBy === void 0 ? void 0 : paidBy.trim()) !== null && _a !== void 0 ? _a : "",
             voucherNo: (_b = voucherNo === null || voucherNo === void 0 ? void 0 : voucherNo.trim()) !== null && _b !== void 0 ? _b : "",
+            paymentInfo: (_c = paymentInfo === null || paymentInfo === void 0 ? void 0 : paymentInfo.trim()) !== null && _c !== void 0 ? _c : "",
             expenseDate: new Date(expenseDate),
             receiptImage: receiptImage !== null && receiptImage !== void 0 ? receiptImage : null,
             status: "pending",
@@ -149,6 +150,7 @@ const reviewAdminExpense = (req, res, next) => __awaiter(void 0, void 0, void 0,
                         expense.description,
                         expense.paidBy && `Paid by: ${expense.paidBy}`,
                         expense.voucherNo && `Voucher: ${expense.voucherNo}`,
+                        expense.paymentInfo && `Payment: ${expense.paymentInfo}`,
                     ].filter(Boolean).join(" | "),
                     createdAt: expense.expenseDate,
                     updatedAt: expense.expenseDate,

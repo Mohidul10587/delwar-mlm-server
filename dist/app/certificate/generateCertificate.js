@@ -23,117 +23,552 @@ function toDataUrl(filename) {
     const data = fs_1.default.readFileSync(filePath).toString("base64");
     return `data:image/${ext};base64,${data}`;
 }
+function numberToWords(n) {
+    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+        "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    if (n === 0)
+        return "Zero";
+    if (n < 20)
+        return ones[n];
+    if (n < 100)
+        return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+    if (n < 1000)
+        return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + numberToWords(n % 100) : "");
+    if (n < 100000)
+        return numberToWords(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + numberToWords(n % 1000) : "");
+    if (n < 10000000)
+        return numberToWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + numberToWords(n % 100000) : "");
+    return numberToWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + numberToWords(n % 10000000) : "");
+}
+function getCss(bgUrl) {
+    return `
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width:4961px; height:3508px;
+    font-family:'Georgia', serif;
+    background: url('${bgUrl}') no-repeat center center;
+    background-size: 100% 100%;
+    overflow: hidden;
+  }
+  .page {
+    position: absolute;
+    inset: 0;
+    padding: 160px 220px 140px 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 50px;
+  }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 68px;
+    color: #1a1a1a;
+  }
+  .cert-no-box, .folio-box {
+    border: 3px solid #666;
+    padding: 10px 30px;
+    font-size: 64px;
+    color: #c0392b;
+    font-weight: bold;
+    min-width: 320px;
+    text-align: center;
+  }
+
+  /* ── LOGO + COMPANY NAME ── */
+  .header-center {
+    text-align: center;
+  }
+  .header-center img.logo {
+    height: 340px;
+    object-fit: contain;
+    display: inline-block;
+  }
+  .company-name {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: left;
+    margin-left: 40px;
+  }
+  .company-name .line1 {
+    font-size: 160px;
+    font-weight: bold;
+    color: #c0392b;
+    line-height: 1.1;
+  }
+  .company-name .line2 {
+    font-size: 80px;
+    color: #333;
+    font-style: italic;
+  }
+  .company-name .line3 {
+    font-size: 160px;
+    font-weight: bold;
+    color: #1a5c1a;
+    line-height: 1.1;
+  }
+  .tagline {
+    font-size: 60px;
+    color: #333;
+    font-style: italic;
+    text-align: center;
+    margin-top: 10px;
+  }
+
+  /* ── CERT ID ── */
+  .cert-id-bar {
+    text-align: center;
+    font-size: 72px;
+    border: 3px solid #444;
+    display: inline-block;
+    padding: 12px 60px;
+    margin: 0 auto;
+    font-family: monospace;
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: #1a1a1a;
+  }
+  .cert-id-wrapper {
+    text-align: center;
+  }
+
+  /* ── SHARE CERTIFICATE TITLE ── */
+  .title-bar {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    justify-content: center;
+  }
+  .title-bar .deco {
+    flex: 1;
+    height: 6px;
+    background: linear-gradient(to right, transparent, #b8860b, transparent);
+  }
+  .title-bar-box {
+    background: #1a5c1a;
+    color: #fff;
+    font-size: 150px;
+    font-weight: bold;
+    letter-spacing: 12px;
+    padding: 24px 80px;
+    text-align: center;
+    text-transform: uppercase;
+    border: 4px solid #b8860b;
+  }
+
+  /* ── CERTIFY TEXT + QR ── */
+  .certify-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 80px;
+  }
+  .certify-text {
+    flex: 1;
+    font-size: 74px;
+    color: #1a1a1a;
+    line-height: 1.8;
+  }
+  .certify-text .italic-intro {
+    font-style: italic;
+    font-size: 82px;
+  }
+  .certify-text .highlight {
+    color: #c0392b;
+    font-weight: bold;
+  }
+  .certify-text .highlight-green {
+    color: #1a5c1a;
+    font-weight: bold;
+  }
+  .qr-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .qr-block img {
+    width: 420px;
+    height: 420px;
+    object-fit: contain;
+    border: 3px solid #ccc;
+  }
+  .qr-block .qr-label {
+    font-size: 52px;
+    color: #555;
+    text-align: center;
+  }
+  .qr-block .qr-link {
+    font-size: 56px;
+    color: #1a5c1a;
+    text-decoration: underline;
+    text-align: center;
+  }
+
+  /* ── TWO COLUMN LAYOUT ── */
+  .two-col {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+  }
+  .left-col { flex: 1.1; }
+  .right-col { flex: 1; }
+
+  /* ── INFO TABLE ── */
+  .info-table {
+    border: 3px solid #888;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 68px;
+    color: #1a1a1a;
+    width: 100%;
+  }
+  .info-table .row {
+    display: flex;
+    align-items: flex-start;
+    padding: 18px 30px;
+    border-bottom: 2px solid #ccc;
+    line-height: 1.5;
+  }
+  .info-table .row:last-child { border-bottom: none; }
+  .info-table .row .icon {
+    width: 80px;
+    font-size: 70px;
+    flex-shrink: 0;
+  }
+  .info-table .row .label {
+    width: 540px;
+    color: #333;
+    flex-shrink: 0;
+  }
+  .info-table .row .sep {
+    margin: 0 20px;
+    color: #888;
+    flex-shrink: 0;
+  }
+  .info-table .row .val {
+    color: #c0392b;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  /* ── SHARE DETAILS TABLE ── */
+  .share-table {
+    border: 3px solid #888;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 68px;
+    color: #1a1a1a;
+    width: 100%;
+    margin-top: 0;
+  }
+  .share-table .row {
+    display: flex;
+    align-items: flex-start;
+    padding: 18px 30px;
+    border-bottom: 2px solid #ccc;
+    line-height: 1.5;
+  }
+  .share-table .row:last-child { border-bottom: none; }
+  .share-table .row .icon {
+    width: 80px;
+    font-size: 70px;
+    flex-shrink: 0;
+  }
+  .share-table .row .label {
+    width: 700px;
+    color: #333;
+    flex-shrink: 0;
+  }
+  .share-table .row .sep {
+    margin: 0 20px;
+    color: #888;
+    flex-shrink: 0;
+  }
+  .share-table .row .val {
+    color: #1a1a1a;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  /* ── CAPITAL STRUCTURE ── */
+  .capital-section {
+    margin-top: 40px;
+  }
+  .capital-title {
+    text-align: center;
+    font-size: 70px;
+    font-weight: bold;
+    color: #1a5c1a;
+    border: 3px solid #1a5c1a;
+    padding: 14px 60px;
+    display: inline-block;
+    letter-spacing: 6px;
+    margin-bottom: 20px;
+  }
+  .capital-title-wrapper { text-align: center; }
+  .capital-grid {
+    display: flex;
+    border: 3px solid #888;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .cap-col {
+    flex: 1;
+    padding: 28px 30px;
+    text-align: center;
+    font-size: 66px;
+    border-right: 2px solid #ccc;
+    line-height: 1.7;
+  }
+  .cap-col:last-child { border-right: none; }
+  .cap-col .cap-head { font-weight: bold; color: #1a1a1a; }
+  .cap-col .cap-amt { font-weight: bold; color: #1a5c1a; font-size: 72px; }
+  .cap-col .cap-sub { color: #555; font-size: 58px; }
+
+  /* ── OFFICE / CONTACT ── */
+  .offices-row {
+    display: flex;
+    gap: 40px;
+    font-size: 62px;
+    color: #1a1a1a;
+    line-height: 1.7;
+  }
+  .office-box {
+    flex: 1;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 20px 28px;
+  }
+  .office-box .off-title { font-weight: bold; color: #1a1a1a; font-size: 68px; }
+  .contact-box {
+    flex: 0.7;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 14px;
+    font-size: 62px;
+    padding: 20px 28px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+  }
+  .contact-box .c-row { display: flex; align-items: center; gap: 16px; }
+
+  /* ── TRANSFER BUTTON ── */
+  .transfer-btn {
+    background: #1a5c1a;
+    color: #fff;
+    font-size: 80px;
+    font-weight: bold;
+    padding: 24px 60px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 20px;
+    float: right;
+    margin-top: 10px;
+  }
+
+  /* ── FOOTER BANNER ── */
+  .footer-banner {
+    background: #1a5c1a;
+    color: #fff;
+    font-size: 66px;
+    text-align: center;
+    padding: 28px 60px;
+    border-radius: 8px;
+    line-height: 1.6;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    justify-content: center;
+  }
+  .footer-banner .lock-icon {
+    font-size: 80px;
+    flex-shrink: 0;
+  }
+  `;
+}
 function buildHtml(c) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
-    const bgUrl = toDataUrl("certificate-bg.jpg");
+    const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
     const logoUrl = toDataUrl("sea-maiden.png");
-    const tuneUrl = toDataUrl("tune.png");
-    const signUrl = toDataUrl("Sign (1).png");
     const buyer = (_b = (_a = c.purchaseId) === null || _a === void 0 ? void 0 : _a.buyerInfo) !== null && _b !== void 0 ? _b : c.userId;
     const share = c.projectId;
     const purchase = c.purchaseId;
     const isIssued = c.status === "issued";
     const fmt = (n) => Number(n).toLocaleString("en-BD");
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-BD") : "—";
-    const isInstallment = (purchase === null || purchase === void 0 ? void 0 : purchase.paymentType) === "installment";
-    const dp = ((_c = purchase === null || purchase === void 0 ? void 0 : purchase.downPayment) !== null && _c !== void 0 ? _c : 0) * ((_d = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _d !== void 0 ? _d : 1);
-    const perInst = ((_e = purchase === null || purchase === void 0 ? void 0 : purchase.installmentAmount) !== null && _e !== void 0 ? _e : 0) * ((_f = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _f !== void 0 ? _f : 1);
-    const totalInst = (_g = purchase === null || purchase === void 0 ? void 0 : purchase.installmentCount) !== null && _g !== void 0 ? _g : 0;
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+    const qty = (_c = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _c !== void 0 ? _c : 1;
+    const shareQty = qty;
+    const shareWords = numberToWords(shareQty);
+    const totalAmt = c.totalPayable;
+    const certNo = `C-${c._id.toString().slice(-6).toUpperCase()}/2026`;
+    const fromShare = (_e = (_d = c.shareNumbers) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : "—";
+    const toShare = (_g = (_f = c.shareNumbers) === null || _f === void 0 ? void 0 : _f[c.shareNumbers.length - 1]) !== null && _g !== void 0 ? _g : "—";
+    const issueDate = c.issuedAt ? fmtDate(c.issuedAt) : (isIssued ? fmtDate(new Date()) : "Pending");
+    const buyerName = (_h = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _h !== void 0 ? _h : "—";
+    const fatherName = (_j = buyer === null || buyer === void 0 ? void 0 : buyer.fatherName) !== null && _j !== void 0 ? _j : "—";
+    const address = (_k = buyer === null || buyer === void 0 ? void 0 : buyer.address) !== null && _k !== void 0 ? _k : ([buyer === null || buyer === void 0 ? void 0 : buyer.upazila, buyer === null || buyer === void 0 ? void 0 : buyer.district].filter(Boolean).join(", ") || "—");
+    const nid = (_l = buyer === null || buyer === void 0 ? void 0 : buyer.nid) !== null && _l !== void 0 ? _l : "—";
+    const mobile = (_m = buyer === null || buyer === void 0 ? void 0 : buyer.phone) !== null && _m !== void 0 ? _m : "—";
+    const email = (_o = buyer === null || buyer === void 0 ? void 0 : buyer.email) !== null && _o !== void 0 ? _o : "—";
+    const customerId = (_p = buyer === null || buyer === void 0 ? void 0 : buyer.customerId) !== null && _p !== void 0 ? _p : c._id.toString().slice(-8).toUpperCase();
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { width:4961px; height:3093px; font-family:serif; line-height:1.7; overflow:hidden;
-    background:url('${bgUrl}') no-repeat center center; background-size:100% 100%; }
-  .inner { position:absolute; inset:0; margin:10% 10% 4% 10%; display:flex; flex-direction:column; gap:28px; overflow:hidden; }
-  .header { text-align:center; border-bottom:2px dashed #b8860b; padding-bottom:24px; }
-  .header img { height:400px; margin:0 auto 8px; object-fit:contain; display:block; }
-  .header h1 { font-size:152px; font-weight:bold; letter-spacing:2px; color:#7a4f10; margin:4px 0; }
-  .header p  { font-size:58px; color:#92681a; }
-  .header p span { font-family:monospace; font-weight:600; }
-  .intro   { font-size:74px; color:#5c3a0a; text-align:justify; }
-  .details { font-size:74px; color:#5c3a0a; }
-  .lbl  { color:#92681a; }
-  .dot  { margin:0 30px; }
-  .shares { font-size:74px; color:#5c3a0a; }
-  .holder { border-top:2px dashed #b8860b; padding-top:20px; font-size:74px; color:#5c3a0a; text-align:justify; }
-  .disclaimer { font-size:56px; color:#7a4f10; text-align:center; font-style:italic; margin-top:100px; }
-  .footer { position:absolute; bottom:80px; left:0; width:100%; padding:0 224px;
-    display:flex; align-items:flex-end; justify-content:space-between;
-    border-top:1px solid #b8860b; padding-top:16px; font-size:74px; color:#92681a; }
-  .footer-left  { display:flex; align-items:center; gap:16px; color:#78350f; }
-  .footer-left img { height:180px; object-fit:contain; }
-  .footer-right { text-align:right; }
-  .footer-right img { height:120px; margin-left:auto; object-fit:contain; display:block; margin-bottom:6px; }
-  .sig-line { width:160px; border-top:1px solid #7a4f10; margin-bottom:6px; }
+${getCss(bgUrl)}
 </style>
 </head>
 <body>
-<div class="inner">
+<div class="page">
 
-  <div class="header">
-    <img src="${logoUrl}" alt="logo" />
-    <h1>${isIssued ? "Share Certificate" : "Certificate (Pending)"}</h1>
-    <p>Certificate No: <span>${c._id}</span></p>
+  <!-- TOP BAR: cert no / logo+name / folio -->
+  <div class="top-bar">
+    <div>Certificate No. : <span class="cert-no-box">${certNo}</span></div>
+    <div style="display:flex;align-items:center;gap:40px;">
+      <img src="${logoUrl}" class="logo" style="height:280px;object-fit:contain;" alt="logo"/>
+      <div class="company-name">
+        <div class="line1">Alahee Developers</div>
+        <div class="line2">&mdash;&nbsp;&amp;&nbsp;&mdash;</div>
+        <div class="line3">Property Bazar Ltd.</div>
+      </div>
+    </div>
+    <div>Folio No. : <span class="folio-box">${customerId}</span></div>
   </div>
 
-  <p class="intro">
-    This is to certify that <b>${(_h = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _h !== void 0 ? _h : "—"}</b>
-    is a registered holder of <b>${(_j = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _j !== void 0 ? _j : "—"}</b> share(s) of
-    <b>${share === null || share === void 0 ? void 0 : share.title}</b>, each valued at <b>৳${fmt((_k = share === null || share === void 0 ? void 0 : share.cashPrice) !== null && _k !== void 0 ? _k : 0)}</b>,
-    totalling <b>৳${fmt(c.totalPayable)}</b>.
-  </p>
-
-  <p class="details">
-    <span class="lbl">Payment Type: </span><b style="text-transform:capitalize">${(_l = purchase === null || purchase === void 0 ? void 0 : purchase.paymentType) !== null && _l !== void 0 ? _l : "—"}</b>
-    <span class="dot">·</span>
-    <span class="lbl">Amount Paid: </span><b>৳${fmt((_m = purchase === null || purchase === void 0 ? void 0 : purchase.amountPaid) !== null && _m !== void 0 ? _m : 0)}</b>
-    ${c.amountRemaining > 0 ? `<span class="dot">·</span><span class="lbl">Remaining: </span><b>৳${fmt(c.amountRemaining)}</b>` : ""}
-    <span class="dot">·</span>
-    <span class="lbl">Purchase Date: </span><b>${fmtDate(purchase === null || purchase === void 0 ? void 0 : purchase.createdAt)}</b>
-    <span class="dot">·</span>
-    <span class="lbl">Issue Date: </span><b>${c.issuedAt ? fmtDate(c.issuedAt) : "Pending"}</b>
-  </p>
-
-  ${isInstallment ? `
-  <p class="details">
-    <span class="lbl">Down Payment: </span><b>৳${fmt(dp)}</b>
-    <span class="dot">·</span>
-    <span class="lbl">Per Installment: </span><b>৳${fmt(perInst)}</b>
-    <span class="dot">·</span>
-    <span class="lbl">Total Installments: </span><b>${totalInst}</b>
-  </p>` : ""}
-
-  ${((_o = c.shareNumbers) === null || _o === void 0 ? void 0 : _o.length) > 0 ? `
-  <p class="shares">
-    <span class="lbl">Assigned Share Numbers: </span>
-    <span style="font-family:monospace;font-weight:600">${c.shareNumbers.join(", ")}</span>
-  </p>` : ""}
-
-  <div class="holder">
-    The holder's personal details are as follows —
-    ${(buyer === null || buyer === void 0 ? void 0 : buyer.phone) ? `<span class="lbl">Phone: </span><b>${buyer.phone}</b>; ` : ""}
-    ${(buyer === null || buyer === void 0 ? void 0 : buyer.dateOfBirth) ? `<span class="lbl">Date of Birth: </span><b>${buyer.dateOfBirth}</b>; ` : ""}
-    ${((buyer === null || buyer === void 0 ? void 0 : buyer.district) || (buyer === null || buyer === void 0 ? void 0 : buyer.upazila)) ? `<span class="lbl">Area: </span><b>${[buyer === null || buyer === void 0 ? void 0 : buyer.upazila, buyer === null || buyer === void 0 ? void 0 : buyer.district].filter(Boolean).join(", ")}</b>.` : ""}
-    ${((_p = buyer === null || buyer === void 0 ? void 0 : buyer.nominee) === null || _p === void 0 ? void 0 : _p.name) ? ` In the event of the holder's demise, the nominee shall be <b>${buyer.nominee.name}</b> (<b>${buyer.nominee.relation}</b>, <b>${buyer.nominee.phone}</b>).` : ""}
+  <!-- TAGLINE -->
+  <div style="text-align:center;font-size:62px;color:#333;font-style:italic;margin-top:-30px;">
+    &mdash; Base of the best future &mdash;
   </div>
 
-  <p class="disclaimer">
-    This certificate is issued under the authority of the organization and is valid subject to the terms and conditions of the share agreement.
-  </p>
+  <!-- CERT ID -->
+  <div class="cert-id-wrapper">
+    <span class="cert-id-bar">${certNo}</span>
+  </div>
 
-  <div class="footer">
-    <div class="footer-left">
-      <p>Issued By</p>
-      <img src="${tuneUrl}" alt="logo" />
+  <!-- TITLE -->
+  <div class="title-bar">
+    <div class="deco"></div>
+    <div class="title-bar-box">SHARE&nbsp;&nbsp;CERTIFICATE</div>
+    <div class="deco"></div>
+  </div>
+
+  <!-- CERTIFY ROW: left (certify text) + right (qr) inside two-col -->
+  <div class="two-col" style="align-items:flex-start;">
+
+    <!-- LEFT: shareholder info table -->
+    <div class="left-col">
+      <div class="info-table">
+        <div class="row"><span class="icon">👤</span><span class="label">Name of Shareholder</span><span class="sep">:</span><span class="val">${buyerName}</span></div>
+        <div class="row"><span class="icon">👥</span><span class="label">S/O, D/O, W/O</span><span class="sep">:</span><span class="val">${fatherName}</span></div>
+        <div class="row"><span class="icon">📍</span><span class="label">Address</span><span class="sep">:</span><span class="val">${address}</span></div>
+        <div class="row"><span class="icon">🪪</span><span class="label">NID / Passport No.</span><span class="sep">:</span><span class="val">${nid}</span></div>
+        <div class="row"><span class="icon">📞</span><span class="label">Mobile No.</span><span class="sep">:</span><span class="val">${mobile}</span></div>
+        <div class="row"><span class="icon">✉️</span><span class="label">Email</span><span class="sep">:</span><span class="val">${email}</span></div>
+        <div class="row"><span class="icon">🔖</span><span class="label">Customer ID</span><span class="sep">:</span><span class="val">${customerId}</span></div>
+      </div>
+
+      <!-- Share details table below -->
+      <div style="margin-top:40px;">
+        <div class="share-table">
+          <div class="row"><span class="icon">📋</span><span class="label">Share Number (Distinctive Nos.)</span><span class="sep">:</span><span class="val">From <b style="color:#c0392b">${fromShare}</b> To <b style="color:#c0392b">${toShare}</b></span></div>
+          <div class="row"><span class="icon">💰</span><span class="label">Face Value Per Share</span><span class="sep">:</span><span class="val">Tk. 100/- (Taka One Hundred Only)</span></div>
+          <div class="row"><span class="icon">📊</span><span class="label">Number of Shares</span><span class="sep">:</span><span class="val"><b style="color:#c0392b">${shareQty}</b> Shares</span></div>
+          <div class="row"><span class="icon">💵</span><span class="label">Total Amount</span><span class="sep">:</span><span class="val">Tk. <b style="color:#c0392b">${fmt(totalAmt)}</b>/-</span></div>
+          <div class="row"><span class="icon">🏷️</span><span class="label">Share Class</span><span class="sep">:</span><span class="val">Ordinary Share</span></div>
+          <div class="row"><span class="icon">📅</span><span class="label">Issue Date</span><span class="sep">:</span><span class="val"><b style="color:#c0392b">${issueDate}</b></span></div>
+        </div>
+      </div>
     </div>
-    <div class="footer-right">
-      <img src="${signUrl}" alt="signature" />
-      <div class="sig-line"></div>
-      <p style="color:#78350f">Authorized Signature</p>
+
+    <!-- RIGHT: certify text + QR -->
+    <div class="right-col">
+      <div class="certify-text">
+        <p class="italic-intro">This is to Certify that</p>
+        <p style="margin-top:30px;">
+          is the Registered Shareholder of <span class="highlight">${shareQty}</span>
+          ( <span class="highlight">${shareWords}</span> )
+        </p>
+        <p>Ordinary Shares of Tk. 100/- (Taka One Hundred) each in</p>
+        <p style="margin-top:20px;">
+          <span class="highlight-green">Alahee Developers &amp; Property Bazar Ltd.</span> subject to
+        </p>
+        <p>the Memorandum and Articles of Association of the Company.</p>
+      </div>
+
+      <!-- QR placeholder (no actual QR lib, show box) -->
+      <div class="qr-block" style="margin-top:50px;">
+        <div style="width:420px;height:420px;border:4px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:52px;color:#999;text-align:center;background:#f9f9f9;">
+          QR Code<br/>Verification
+        </div>
+        <div class="qr-label">Scan to verify this certificate</div>
+        <div class="qr-link">www.alaheebd.com/verify</div>
+      </div>
+
+      <!-- Capital Structure -->
+      <div class="capital-section">
+        <div class="capital-title-wrapper">
+          <span class="capital-title">CAPITAL STRUCTURE</span>
+        </div>
+        <div class="capital-grid">
+          <div class="cap-col">
+            <div class="cap-head">Authorized Capital</div>
+            <div class="cap-amt">Tk. 1,00,00,000/-</div>
+            <div class="cap-sub">(One Crore Taka Only)</div>
+          </div>
+          <div class="cap-col">
+            <div class="cap-head">Paid-up Capital</div>
+            <div class="cap-amt">Tk. 30,00,000/-</div>
+            <div class="cap-sub">(Thirty Lakh Taka Only)</div>
+          </div>
+          <div class="cap-col">
+            <div class="cap-head">Total Authorized Shares</div>
+            <div class="cap-amt">100,000 (One Lakh)</div>
+            <div class="cap-sub">Ordinary Shares</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Offices + Transfer -->
+      <div style="margin-top:40px;">
+        <div class="offices-row">
+          <div class="office-box">
+            <div class="off-title">📍 Paltan Office:</div>
+            <div>Plate-D (12th Floor)</div>
+            <div>Faenaj Tower, 37/2 Purana Paltan</div>
+            <div>Culvert Road, Dhaka-1000.</div>
+          </div>
+          <div class="office-box">
+            <div class="off-title">📍 Mirpur Office:</div>
+            <div>House-25 (Ground Floor),</div>
+            <div>Opposite Orchid Community Centre</div>
+            <div>Avenue-5, Section-6, Mirpur, Dhaka-1216.</div>
+          </div>
+          <div class="contact-box">
+            <div class="c-row">📞 +88 09611243933</div>
+            <div class="c-row">✉️ alahee2021@gmail.com</div>
+            <div class="c-row">🌐 www.alaheebd.com</div>
+          </div>
+        </div>
+        <div style="text-align:right;margin-top:30px;">
+          <span class="transfer-btn">Transfer To &#8644;</span>
+        </div>
+      </div>
     </div>
+  </div>
+
+  <!-- FOOTER BANNER -->
+  <div class="footer-banner">
+    <span class="lock-icon">🔒</span>
+    <span>
+      This is a computer-generated digital share certificate. Digital signature and company seal are embedded<br/>
+      in the QR verification system. No physical seal or handwritten signature is required.
+    </span>
   </div>
 
 </div>
@@ -148,11 +583,11 @@ function generateCertificatePng(c) {
         });
         try {
             const page = yield browser.newPage();
-            yield page.setViewport({ width: 4961, height: 3093, deviceScaleFactor: 1 });
+            yield page.setViewport({ width: 4961, height: 3508, deviceScaleFactor: 1 });
             yield page.setContent(buildHtml(c), { waitUntil: "networkidle0" });
             const screenshot = yield page.screenshot({
                 type: "png",
-                clip: { x: 0, y: 0, width: 4961, height: 3093 },
+                clip: { x: 0, y: 0, width: 4961, height: 3508 },
             });
             return Buffer.from(screenshot);
         }

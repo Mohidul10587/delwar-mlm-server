@@ -50,6 +50,7 @@ const routes_22 = __importDefault(require("./app/branch/routes"));
 const routes_23 = __importDefault(require("./app/otp/routes"));
 const routes_24 = __importDefault(require("./app/reward-tracker/routes"));
 const routes_25 = __importDefault(require("./app/capital/routes"));
+const routes_26 = __importDefault(require("./app/pending-commission/routes"));
 const controller_1 = require("./app/admin-salary/controller");
 const controller_2 = require("./app/rank/controller");
 const controller_3 = require("./app/notice/controller");
@@ -177,6 +178,7 @@ app.use("/branch", routes_22.default);
 app.use("/otp", routes_23.default);
 app.use("/reward-tracker", routes_24.default);
 app.use("/capital", routes_25.default);
+app.use("/pending-commission", routes_26.default);
 app.use(errorHandler_1.errorHandler);
 if (process.env.VERCEL !== "1") {
     httpServer.listen(port, () => console.log(`Server running on port ${port}`));

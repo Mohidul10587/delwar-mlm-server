@@ -37,8 +37,7 @@ WalletSchema.pre("save", function () {
             ((_j = this.rewardBalanceFromInstallment) !== null && _j !== void 0 ? _j : 0);
     // Note: loanAmount is NOT included in totalBalance (tracked separately)
 });
-// Index for fast userId lookups
-WalletSchema.index({ userId: 1 }, { unique: true });
+// userId already has unique: true constraint, no need for separate index
 const TransactionLogSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     type: {

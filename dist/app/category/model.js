@@ -19,7 +19,6 @@ CategorySchema.pre("save", function (next) {
     }
     next();
 });
-// Index for fast ordered queries and slug lookups
+// Index for fast ordered queries
 CategorySchema.index({ order: 1 });
-CategorySchema.index({ slug: 1 });
 exports.Category = (0, mongoose_1.model)("Category", CategorySchema);

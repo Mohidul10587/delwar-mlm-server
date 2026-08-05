@@ -8,6 +8,7 @@ const ProjectSchema = new mongoose_1.Schema({
     images: [{ type: String }],
     cashPrice: { type: Number, required: true },
     regularPrice: { type: Number },
+    installmentPrice: { type: Number },
     minDownPayment: { type: Number, default: 15000 },
     maxDownPayment: { type: Number, default: 50000 },
     minInstallments: { type: Number, default: 5 },

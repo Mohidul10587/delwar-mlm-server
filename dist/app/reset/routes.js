@@ -23,11 +23,9 @@ const model_7 = require("../reward-tracker/model");
 const model_8 = require("../withdrawal/model");
 const model_9 = require("../expense/model");
 const model_10 = require("../capital/model");
+const model_11 = require("../pending-commission/model");
 const router = (0, express_1.Router)();
 router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    if (process.env.NODE_ENV === "production") {
-        return res.status(403).json({ message: "Not allowed in production" });
-    }
     try {
         // Resolve first rank name before resetting users
         const settings = yield model_6.Settings.findOne().select("ranks").lean();
@@ -48,6 +46,7 @@ router.get("/", (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
             };
         yield Promise.all([
             model_1.Purchase.deleteMany({}),
+            model_11.PendingCommission.deleteMany({}),
             installment_model_1.InstallmentPayment.deleteMany({}),
             model_7.RewardTracker.deleteMany({}),
             model_2.Certificate.deleteMany({}),

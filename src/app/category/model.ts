@@ -26,8 +26,7 @@ CategorySchema.pre("save", function (next) {
   next();
 });
 
-// Index for fast ordered queries and slug lookups
+// Index for fast ordered queries
 CategorySchema.index({ order: 1 });
-CategorySchema.index({ slug: 1 });
 
 export const Category = model<ICategory>("Category", CategorySchema);

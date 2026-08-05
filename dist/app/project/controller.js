@@ -13,7 +13,25 @@ exports.getSharesWithStats = exports.getShareStats = exports.backfillSlots = exp
 const model_1 = require("./model");
 const shareSlot_model_1 = require("./shareSlot.model");
 const model_2 = require("../settings/model");
+const counter_1 = require("../user/counter");
 const BATCH_SIZE = 1000;
+/**
+ * Atomically reserves `count` sequential share numbers and returns the
+ * first number in the reserved range.
+ *
+ * Uses a MongoDB findOneAndUpdate with $inc so that concurrent requests
+ * never get overlapping ranges — eliminating the duplicate-key collision
+ * that the old findOne().sort() approach suffered from.
+ */
+function reserveShareRange(count) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const doc = yield counter_1.Counter.findOneAndUpdate({ _id: "abd-share-seq" }, { $inc: { seq: count } }, { new: false, upsert: true });
+        // doc.seq is the value *before* the increment — that is our start offset.
+        // If upserting for the first time, doc may be null; treat as 0.
+        return ((_a = doc === null || doc === void 0 ? void 0 : doc.seq) !== null && _a !== void 0 ? _a : 0);
+    });
+}
 /** Returns true if the share's offer is currently active based on dates */
 function isOfferActive(share) {
     if (!share.isOffer)
@@ -33,23 +51,16 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const totalShares = Number((_b = req.body.totalShares) !== null && _b !== void 0 ? _b : 0);
         const pkg = yield model_1.Project.create(Object.assign(Object.assign(Object.assign({}, defaults), req.body), { totalShares }));
         if (totalShares > 0) {
-            // M-06 fix: use a mutex-like approach via findOneAndUpdate to get a
-            // reserved sequence range atomically, preventing duplicate share numbers.
-            // We find the global max share number once and use it as the base.
-            // The unique index on shareNumber will still catch any collision.
-            const last = yield shareSlot_model_1.ShareSlot.findOne()
-                .sort({ shareNumber: -1 })
-                .select("shareNumber")
-                .lean();
-            const lastSeq = last
-                ? parseInt(last.shareNumber.replace("THL-", ""), 10)
-                : 0;
+            // Atomically reserve a range of `totalShares` sequential numbers.
+            // reserveShareRange returns the value *before* incrementing, so
+            // slot numbers are: start+1 … start+totalShares (1-based).
+            const start = yield reserveShareRange(totalShares);
             for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
                 const docs = [];
                 const end = Math.min(batch + BATCH_SIZE, totalShares);
                 for (let i = batch; i < end; i++) {
                     docs.push({
-                        shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+                        shareNumber: `ABD-${String(start + 1 + i).padStart(5, "0")}`,
                         projectId: pkg._id,
                         status: "available",
                         userId: null,
@@ -57,19 +68,7 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
                         reclaimedAt: null,
                     });
                 }
-                // ordered: false so a duplicate shareNumber error doesn't block the rest
-                try {
-                    yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: false });
-                }
-                catch (insertErr) {
-                    // Duplicate key on shareNumber — retry with a fresh sequence base
-                    if ((insertErr === null || insertErr === void 0 ? void 0 : insertErr.code) === 11000) {
-                        return res.status(409).json({
-                            message: "Share number conflict due to concurrent creation. Please retry.",
-                        });
-                    }
-                    throw insertErr;
-                }
+                yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: true });
             }
         }
         res.status(201).json({ message: "Share created", pkg });
@@ -141,20 +140,14 @@ const updateShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
             : old.totalShares;
         const diff = newTotal - old.totalShares;
         if (diff > 0) {
-            // Add slots at the end
-            const last = yield shareSlot_model_1.ShareSlot.findOne()
-                .sort({ shareNumber: -1 })
-                .select("shareNumber")
-                .lean();
-            const lastSeq = last
-                ? parseInt(last.shareNumber.replace("THL-", ""), 10)
-                : 0;
+            // Atomically reserve `diff` sequential numbers
+            const start = yield reserveShareRange(diff);
             for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
                 const docs = [];
                 const end = Math.min(batch + BATCH_SIZE, diff);
                 for (let i = batch; i < end; i++) {
                     docs.push({
-                        shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+                        shareNumber: `ABD-${String(start + 1 + i).padStart(5, "0")}`,
                         projectId: old._id,
                         status: "available",
                         userId: null,
@@ -162,7 +155,7 @@ const updateShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
                         reclaimedAt: null,
                     });
                 }
-                yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: false });
+                yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: true });
             }
         }
         else if (diff < 0) {
@@ -256,7 +249,7 @@ exports.unsetCoverSlider = unsetCoverSlider;
 // POST /share/:id/backfill-slots — creates missing available slots so that
 // the total slot count matches share.totalShares. Safe to call multiple times.
 const backfillSlots = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a;
     try {
         const share = yield model_1.Project.findById(req.params.id);
         if (!share)
@@ -276,21 +269,15 @@ const backfillSlots = (req, res, next) => __awaiter(void 0, void 0, void 0, func
                 total: existing,
             });
         }
-        // Find the global max sequence to avoid collisions
-        const last = yield shareSlot_model_1.ShareSlot.findOne()
-            .sort({ shareNumber: -1 })
-            .select("shareNumber")
-            .lean();
-        const lastSeq = last
-            ? parseInt(last.shareNumber.replace("THL-", ""), 10)
-            : 0;
+        // Atomically reserve `diff` sequential numbers
+        const start = yield reserveShareRange(diff);
         let created = 0;
         for (let batch = 0; batch < diff; batch += BATCH_SIZE) {
             const docs = [];
             const end = Math.min(batch + BATCH_SIZE, diff);
             for (let i = batch; i < end; i++) {
                 docs.push({
-                    shareNumber: `THL-${String(lastSeq + 1 + i).padStart(5, "0")}`,
+                    shareNumber: `ABD-${String(start + 1 + i).padStart(5, "0")}`,
                     projectId: share._id,
                     status: "available",
                     userId: null,
@@ -298,18 +285,8 @@ const backfillSlots = (req, res, next) => __awaiter(void 0, void 0, void 0, func
                     reclaimedAt: null,
                 });
             }
-            try {
-                const result = yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: false });
-                created += result.length;
-            }
-            catch (insertErr) {
-                if ((insertErr === null || insertErr === void 0 ? void 0 : insertErr.code) === 11000) {
-                    // Count how many actually inserted before the collision
-                    created += (_c = (_b = insertErr === null || insertErr === void 0 ? void 0 : insertErr.result) === null || _b === void 0 ? void 0 : _b.nInserted) !== null && _c !== void 0 ? _c : 0;
-                    break;
-                }
-                throw insertErr;
-            }
+            const result = yield shareSlot_model_1.ShareSlot.insertMany(docs, { ordered: true });
+            created += result.length;
         }
         res.json({
             message: `Backfilled ${created} slots`,

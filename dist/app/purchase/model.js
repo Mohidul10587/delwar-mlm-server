@@ -23,6 +23,7 @@ const SnapshotSchema = new mongoose_1.Schema({
     shareTitle: { type: String },
     shareImage: { type: String },
     cashPrice: { type: Number },
+    installmentPrice: { type: Number },
     minDownPayment: { type: Number },
     maxDownPayment: { type: Number },
     directSaleCommissionValue: { type: Number },

@@ -75,7 +75,7 @@ function fetchSlotsByPurchase(purchaseIds) {
 }
 // POST /purchase  — logged-in user submits a purchase request
 const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u;
     try {
         const { projectId, quantity, paymentType, downPayment, installmentCount, senderAccount, transactionId, buyerInfo, paymentMethod, receiptImage, cashbackAmount, } = req.body;
         // Fix V-01: validate quantity
@@ -199,7 +199,9 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
                 nominee2: (_o = buyer.nominee2) !== null && _o !== void 0 ? _o : undefined,
             };
         }
-        const totalPayable = share.cashPrice * qty;
+        const totalPayable = (paymentType === "installment" && share.installmentPrice)
+            ? share.installmentPrice * qty
+            : share.cashPrice * qty;
         const resolvedDP = paymentType === "cash"
             ? share.maxDownPayment * qty
             : Number(downPayment) * qty;
@@ -231,13 +233,14 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             shareTitle: share.title,
             shareImage: (_r = (_q = share.images) === null || _q === void 0 ? void 0 : _q[0]) !== null && _r !== void 0 ? _r : "",
             cashPrice: share.cashPrice,
+            installmentPrice: (_s = share.installmentPrice) !== null && _s !== void 0 ? _s : share.cashPrice,
             minDownPayment: share.minDownPayment,
             maxDownPayment: share.maxDownPayment,
             directSaleCommissionValue: share.directSaleCommissionValue,
             downPaymentGenerationRates: share.downPaymentGenerationRates,
             installmentCommissionRate: share.installmentCommissionRate,
-            installmentGenerationRates: (_s = share.installmentGenerationRates) !== null && _s !== void 0 ? _s : [],
-            cashbackPercent: (_t = share.cashbackPercent) !== null && _t !== void 0 ? _t : 0,
+            installmentGenerationRates: (_t = share.installmentGenerationRates) !== null && _t !== void 0 ? _t : [],
+            cashbackPercent: (_u = share.cashbackPercent) !== null && _u !== void 0 ? _u : 0,
             rankQualification: ranks.map((r) => {
                 var _a;
                 return ({

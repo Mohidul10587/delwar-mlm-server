@@ -31,7 +31,7 @@ export interface IPendingCommission extends Document {
 
 const PendingCommissionSchema = new Schema<IPendingCommission>(
   {
-    userId:    { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId:    { type: Schema.Types.ObjectId, ref: "User", required: true },
     purchaseId:{ type: Schema.Types.ObjectId, ref: "Purchase", required: true },
     type:      { type: String, enum: ["down_payment_managerial", "installment_managerial"], required: true },
     amount:    { type: Number, required: true },
