@@ -8,8 +8,8 @@ const BATCH_SIZE = 1000;
 
 /**
  * Generate a unique, readable share number using project ID and sequential counter
- * Format: ABD-{projectPrefix}-{sequentialNumber}
- * Example: ABD-A1B2-00001, ABD-C3D4-00002
+ * Format: ADPBL-{projectPrefix}-{sequentialNumber}
+ * Example: ADPBL-A1B2-00001, ADPBL-C3D4-00002
  */
 function generateShareNumber(
   projectId: string,
@@ -18,7 +18,7 @@ function generateShareNumber(
   // Take first 2 and last 2 characters from project ID to create a unique prefix
   const projectPrefix = projectId.slice(-4).toUpperCase();
   const paddedNumber = String(sequentialNumber).padStart(4, "0");
-  return `ABD-${projectPrefix}-${paddedNumber}`;
+  return `ADPBL-${projectPrefix}-${paddedNumber}`;
 }
 
 /**

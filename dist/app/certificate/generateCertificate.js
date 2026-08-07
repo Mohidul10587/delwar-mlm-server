@@ -41,537 +41,217 @@ function numberToWords(n) {
         return numberToWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + numberToWords(n % 100000) : "");
     return numberToWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + numberToWords(n % 10000000) : "");
 }
-function getCss(bgUrl) {
-    return `
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    width:4961px; height:3508px;
-    font-family:'Georgia', serif;
-    background: url('${bgUrl}') no-repeat center center;
-    background-size: 100% 100%;
-    overflow: hidden;
-  }
-  .page {
-    position: absolute;
-    inset: 0;
-    padding: 160px 220px 140px 220px;
-    display: flex;
-    flex-direction: column;
-    gap: 50px;
-  }
-
-  /* ── TOP BAR ── */
-  .top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 68px;
-    color: #1a1a1a;
-  }
-  .cert-no-box, .folio-box {
-    border: 3px solid #666;
-    padding: 10px 30px;
-    font-size: 64px;
-    color: #c0392b;
-    font-weight: bold;
-    min-width: 320px;
-    text-align: center;
-  }
-
-  /* ── LOGO + COMPANY NAME ── */
-  .header-center {
-    text-align: center;
-  }
-  .header-center img.logo {
-    height: 340px;
-    object-fit: contain;
-    display: inline-block;
-  }
-  .company-name {
-    display: inline-block;
-    vertical-align: middle;
-    text-align: left;
-    margin-left: 40px;
-  }
-  .company-name .line1 {
-    font-size: 160px;
-    font-weight: bold;
-    color: #c0392b;
-    line-height: 1.1;
-  }
-  .company-name .line2 {
-    font-size: 80px;
-    color: #333;
-    font-style: italic;
-  }
-  .company-name .line3 {
-    font-size: 160px;
-    font-weight: bold;
-    color: #1a5c1a;
-    line-height: 1.1;
-  }
-  .tagline {
-    font-size: 60px;
-    color: #333;
-    font-style: italic;
-    text-align: center;
-    margin-top: 10px;
-  }
-
-  /* ── CERT ID ── */
-  .cert-id-bar {
-    text-align: center;
-    font-size: 72px;
-    border: 3px solid #444;
-    display: inline-block;
-    padding: 12px 60px;
-    margin: 0 auto;
-    font-family: monospace;
-    font-weight: bold;
-    letter-spacing: 4px;
-    color: #1a1a1a;
-  }
-  .cert-id-wrapper {
-    text-align: center;
-  }
-
-  /* ── SHARE CERTIFICATE TITLE ── */
-  .title-bar {
-    display: flex;
-    align-items: center;
-    gap: 40px;
-    justify-content: center;
-  }
-  .title-bar .deco {
-    flex: 1;
-    height: 6px;
-    background: linear-gradient(to right, transparent, #b8860b, transparent);
-  }
-  .title-bar-box {
-    background: #1a5c1a;
-    color: #fff;
-    font-size: 150px;
-    font-weight: bold;
-    letter-spacing: 12px;
-    padding: 24px 80px;
-    text-align: center;
-    text-transform: uppercase;
-    border: 4px solid #b8860b;
-  }
-
-  /* ── CERTIFY TEXT + QR ── */
-  .certify-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 80px;
-  }
-  .certify-text {
-    flex: 1;
-    font-size: 74px;
-    color: #1a1a1a;
-    line-height: 1.8;
-  }
-  .certify-text .italic-intro {
-    font-style: italic;
-    font-size: 82px;
-  }
-  .certify-text .highlight {
-    color: #c0392b;
-    font-weight: bold;
-  }
-  .certify-text .highlight-green {
-    color: #1a5c1a;
-    font-weight: bold;
-  }
-  .qr-block {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-  }
-  .qr-block img {
-    width: 420px;
-    height: 420px;
-    object-fit: contain;
-    border: 3px solid #ccc;
-  }
-  .qr-block .qr-label {
-    font-size: 52px;
-    color: #555;
-    text-align: center;
-  }
-  .qr-block .qr-link {
-    font-size: 56px;
-    color: #1a5c1a;
-    text-decoration: underline;
-    text-align: center;
-  }
-
-  /* ── TWO COLUMN LAYOUT ── */
-  .two-col {
-    display: flex;
-    gap: 60px;
-    align-items: flex-start;
-  }
-  .left-col { flex: 1.1; }
-  .right-col { flex: 1; }
-
-  /* ── INFO TABLE ── */
-  .info-table {
-    border: 3px solid #888;
-    border-radius: 8px;
-    overflow: hidden;
-    font-size: 68px;
-    color: #1a1a1a;
-    width: 100%;
-  }
-  .info-table .row {
-    display: flex;
-    align-items: flex-start;
-    padding: 18px 30px;
-    border-bottom: 2px solid #ccc;
-    line-height: 1.5;
-  }
-  .info-table .row:last-child { border-bottom: none; }
-  .info-table .row .icon {
-    width: 80px;
-    font-size: 70px;
-    flex-shrink: 0;
-  }
-  .info-table .row .label {
-    width: 540px;
-    color: #333;
-    flex-shrink: 0;
-  }
-  .info-table .row .sep {
-    margin: 0 20px;
-    color: #888;
-    flex-shrink: 0;
-  }
-  .info-table .row .val {
-    color: #c0392b;
-    font-weight: 600;
-    flex: 1;
-  }
-
-  /* ── SHARE DETAILS TABLE ── */
-  .share-table {
-    border: 3px solid #888;
-    border-radius: 8px;
-    overflow: hidden;
-    font-size: 68px;
-    color: #1a1a1a;
-    width: 100%;
-    margin-top: 0;
-  }
-  .share-table .row {
-    display: flex;
-    align-items: flex-start;
-    padding: 18px 30px;
-    border-bottom: 2px solid #ccc;
-    line-height: 1.5;
-  }
-  .share-table .row:last-child { border-bottom: none; }
-  .share-table .row .icon {
-    width: 80px;
-    font-size: 70px;
-    flex-shrink: 0;
-  }
-  .share-table .row .label {
-    width: 700px;
-    color: #333;
-    flex-shrink: 0;
-  }
-  .share-table .row .sep {
-    margin: 0 20px;
-    color: #888;
-    flex-shrink: 0;
-  }
-  .share-table .row .val {
-    color: #1a1a1a;
-    font-weight: 600;
-    flex: 1;
-  }
-
-  /* ── CAPITAL STRUCTURE ── */
-  .capital-section {
-    margin-top: 40px;
-  }
-  .capital-title {
-    text-align: center;
-    font-size: 70px;
-    font-weight: bold;
-    color: #1a5c1a;
-    border: 3px solid #1a5c1a;
-    padding: 14px 60px;
-    display: inline-block;
-    letter-spacing: 6px;
-    margin-bottom: 20px;
-  }
-  .capital-title-wrapper { text-align: center; }
-  .capital-grid {
-    display: flex;
-    border: 3px solid #888;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .cap-col {
-    flex: 1;
-    padding: 28px 30px;
-    text-align: center;
-    font-size: 66px;
-    border-right: 2px solid #ccc;
-    line-height: 1.7;
-  }
-  .cap-col:last-child { border-right: none; }
-  .cap-col .cap-head { font-weight: bold; color: #1a1a1a; }
-  .cap-col .cap-amt { font-weight: bold; color: #1a5c1a; font-size: 72px; }
-  .cap-col .cap-sub { color: #555; font-size: 58px; }
-
-  /* ── OFFICE / CONTACT ── */
-  .offices-row {
-    display: flex;
-    gap: 40px;
-    font-size: 62px;
-    color: #1a1a1a;
-    line-height: 1.7;
-  }
-  .office-box {
-    flex: 1;
-    border: 2px solid #ccc;
-    border-radius: 8px;
-    padding: 20px 28px;
-  }
-  .office-box .off-title { font-weight: bold; color: #1a1a1a; font-size: 68px; }
-  .contact-box {
-    flex: 0.7;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 14px;
-    font-size: 62px;
-    padding: 20px 28px;
-    border: 2px solid #ccc;
-    border-radius: 8px;
-  }
-  .contact-box .c-row { display: flex; align-items: center; gap: 16px; }
-
-  /* ── TRANSFER BUTTON ── */
-  .transfer-btn {
-    background: #1a5c1a;
-    color: #fff;
-    font-size: 80px;
-    font-weight: bold;
-    padding: 24px 60px;
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 20px;
-    float: right;
-    margin-top: 10px;
-  }
-
-  /* ── FOOTER BANNER ── */
-  .footer-banner {
-    background: #1a5c1a;
-    color: #fff;
-    font-size: 66px;
-    text-align: center;
-    padding: 28px 60px;
-    border-radius: 8px;
-    line-height: 1.6;
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    justify-content: center;
-  }
-  .footer-banner .lock-icon {
-    font-size: 80px;
-    flex-shrink: 0;
-  }
-  `;
-}
 function buildHtml(c) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
     const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
-    const logoUrl = toDataUrl("sea-maiden.png");
     const buyer = (_b = (_a = c.purchaseId) === null || _a === void 0 ? void 0 : _a.buyerInfo) !== null && _b !== void 0 ? _b : c.userId;
-    const share = c.projectId;
-    const purchase = c.purchaseId;
     const isIssued = c.status === "issued";
     const fmt = (n) => Number(n).toLocaleString("en-BD");
     const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
-    const qty = (_c = purchase === null || purchase === void 0 ? void 0 : purchase.quantity) !== null && _c !== void 0 ? _c : 1;
-    const shareQty = qty;
-    const shareWords = numberToWords(shareQty);
+    const qty = (_d = (_c = c.purchaseId) === null || _c === void 0 ? void 0 : _c.quantity) !== null && _d !== void 0 ? _d : 1;
+    const shareWords = numberToWords(qty);
     const totalAmt = c.totalPayable;
     const certNo = `C-${c._id.toString().slice(-6).toUpperCase()}/2026`;
-    const fromShare = (_e = (_d = c.shareNumbers) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : "—";
-    const toShare = (_g = (_f = c.shareNumbers) === null || _f === void 0 ? void 0 : _f[c.shareNumbers.length - 1]) !== null && _g !== void 0 ? _g : "—";
+    const fromShare = (_f = (_e = c.shareNumbers) === null || _e === void 0 ? void 0 : _e[0]) !== null && _f !== void 0 ? _f : "—";
+    const toShare = (_h = (_g = c.shareNumbers) === null || _g === void 0 ? void 0 : _g[c.shareNumbers.length - 1]) !== null && _h !== void 0 ? _h : "—";
     const issueDate = c.issuedAt ? fmtDate(c.issuedAt) : (isIssued ? fmtDate(new Date()) : "Pending");
-    const buyerName = (_h = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _h !== void 0 ? _h : "—";
-    const fatherName = (_j = buyer === null || buyer === void 0 ? void 0 : buyer.fatherName) !== null && _j !== void 0 ? _j : "—";
-    const address = (_k = buyer === null || buyer === void 0 ? void 0 : buyer.address) !== null && _k !== void 0 ? _k : ([buyer === null || buyer === void 0 ? void 0 : buyer.upazila, buyer === null || buyer === void 0 ? void 0 : buyer.district].filter(Boolean).join(", ") || "—");
-    const nid = (_l = buyer === null || buyer === void 0 ? void 0 : buyer.nid) !== null && _l !== void 0 ? _l : "—";
-    const mobile = (_m = buyer === null || buyer === void 0 ? void 0 : buyer.phone) !== null && _m !== void 0 ? _m : "—";
-    const email = (_o = buyer === null || buyer === void 0 ? void 0 : buyer.email) !== null && _o !== void 0 ? _o : "—";
-    const customerId = (_p = buyer === null || buyer === void 0 ? void 0 : buyer.customerId) !== null && _p !== void 0 ? _p : c._id.toString().slice(-8).toUpperCase();
+    const buyerName = (_j = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _j !== void 0 ? _j : "—";
+    const fatherName = (_k = buyer === null || buyer === void 0 ? void 0 : buyer.fatherName) !== null && _k !== void 0 ? _k : "—";
+    const address = (_l = buyer === null || buyer === void 0 ? void 0 : buyer.address) !== null && _l !== void 0 ? _l : ([buyer === null || buyer === void 0 ? void 0 : buyer.upazila, buyer === null || buyer === void 0 ? void 0 : buyer.district].filter(Boolean).join(", ") || "—");
+    const nid = (_m = buyer === null || buyer === void 0 ? void 0 : buyer.nid) !== null && _m !== void 0 ? _m : "—";
+    const mobile = (_o = buyer === null || buyer === void 0 ? void 0 : buyer.phone) !== null && _o !== void 0 ? _o : "—";
+    const email = (_p = buyer === null || buyer === void 0 ? void 0 : buyer.email) !== null && _p !== void 0 ? _p : "—";
+    const customerId = (_q = buyer === null || buyer === void 0 ? void 0 : buyer.customerId) !== null && _q !== void 0 ? _q : c._id.toString().slice(-12).toUpperCase();
+    const shareNumberHtml = ((_r = c.shareNumbers) === null || _r === void 0 ? void 0 : _r.length) === 1
+        ? `<span style="color:#c0392b;font-weight:600;">${fromShare}</span>`
+        : `From <span style="color:#c0392b;font-weight:600;">${fromShare}</span> To <span style="color:#c0392b;font-weight:600;">${toShare}</span>`;
+    // Mirrors the React <Row> component exactly:
+    // icon(90px) | label(labelW) | :(sep) | value
+    const row = (iconSvg, label, labelW, valueHtml, noBorder = false) => `
+    <div style="display:flex;align-items:flex-start;padding:20px 28px;${noBorder ? "" : "border-bottom:2px solid #ccc;"}font-size:58px;">
+      <span style="margin-top:16px;width:90px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">${iconSvg}</span>
+      <span style="width:${labelW}px;color:#333;flex-shrink:0;">${label}</span>
+      <span style="margin:0 20px;color:#888;flex-shrink:0;">:</span>
+      <span style="color:#c0392b;font-weight:600;flex:1;">${valueHtml}</span>
+    </div>`;
+    // SVG icons matching lucide icons used in frontend (color #1a5c1a, size 64)
+    const iconPerson = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    const iconPeople = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+    const iconPin = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+    const iconId = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
+    const iconPhone = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+    const iconEmail = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+    const iconShare = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
+    const iconFace = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+    const iconCount = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+    const iconTotal = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`;
+    const iconClass = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+    const iconCal = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
     return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <style>
-${getCss(bgUrl)}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7; overflow:hidden; }
 </style>
 </head>
 <body>
-<div class="page">
 
-  <!-- TOP BAR: cert no / logo+name / folio -->
-  <div class="top-bar">
-    <div>Certificate No. : <span class="cert-no-box">${certNo}</span></div>
-    <div style="display:flex;align-items:center;gap:40px;">
-      <img src="${logoUrl}" class="logo" style="height:280px;object-fit:contain;" alt="logo"/>
-      <div class="company-name">
-        <div class="line1">Alahee Developers</div>
-        <div class="line2">&mdash;&nbsp;&amp;&nbsp;&mdash;</div>
-        <div class="line3">Property Bazar Ltd.</div>
+<!-- Root div: mirrors frontend CertificatePreview root -->
+<div style="width:4961px;height:3508px;position:relative;font-family:'Georgia',serif;line-height:1.7;background-image:url('${bgUrl}');background-size:100% 100%;background-repeat:no-repeat;">
+
+  <!-- Inner absolute layer: padding 160px 220px 140px, flex-col, gap 50 -->
+  <div style="position:absolute;inset:0;padding:160px 220px 140px 220px;display:flex;flex-direction:column;gap:50px;">
+
+    <!-- TOP BAR: margin-top 150, padding 0 60px, font-size 68, justify space-between -->
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:68px;color:#1a1a1a;margin-top:150px;padding:0 60px;">
+      <div>
+        Certificate No. :&nbsp;
+        <span style="border:3px solid #666;padding:10px 30px;font-size:64px;color:#c0392b;font-weight:bold;border-radius:28px;">${certNo}</span>
       </div>
-    </div>
-    <div>Folio No. : <span class="folio-box">${customerId}</span></div>
-  </div>
-
-  <!-- TAGLINE -->
-  <div style="text-align:center;font-size:62px;color:#333;font-style:italic;margin-top:-30px;">
-    &mdash; Base of the best future &mdash;
-  </div>
-
-  <!-- CERT ID -->
-  <div class="cert-id-wrapper">
-    <span class="cert-id-bar">${certNo}</span>
-  </div>
-
-  <!-- TITLE -->
-  <div class="title-bar">
-    <div class="deco"></div>
-    <div class="title-bar-box">SHARE&nbsp;&nbsp;CERTIFICATE</div>
-    <div class="deco"></div>
-  </div>
-
-  <!-- CERTIFY ROW: left (certify text) + right (qr) inside two-col -->
-  <div class="two-col" style="align-items:flex-start;">
-
-    <!-- LEFT: shareholder info table -->
-    <div class="left-col">
-      <div class="info-table">
-        <div class="row"><span class="icon">👤</span><span class="label">Name of Shareholder</span><span class="sep">:</span><span class="val">${buyerName}</span></div>
-        <div class="row"><span class="icon">👥</span><span class="label">S/O, D/O, W/O</span><span class="sep">:</span><span class="val">${fatherName}</span></div>
-        <div class="row"><span class="icon">📍</span><span class="label">Address</span><span class="sep">:</span><span class="val">${address}</span></div>
-        <div class="row"><span class="icon">🪪</span><span class="label">NID / Passport No.</span><span class="sep">:</span><span class="val">${nid}</span></div>
-        <div class="row"><span class="icon">📞</span><span class="label">Mobile No.</span><span class="sep">:</span><span class="val">${mobile}</span></div>
-        <div class="row"><span class="icon">✉️</span><span class="label">Email</span><span class="sep">:</span><span class="val">${email}</span></div>
-        <div class="row"><span class="icon">🔖</span><span class="label">Customer ID</span><span class="sep">:</span><span class="val">${customerId}</span></div>
-      </div>
-
-      <!-- Share details table below -->
-      <div style="margin-top:40px;">
-        <div class="share-table">
-          <div class="row"><span class="icon">📋</span><span class="label">Share Number (Distinctive Nos.)</span><span class="sep">:</span><span class="val">From <b style="color:#c0392b">${fromShare}</b> To <b style="color:#c0392b">${toShare}</b></span></div>
-          <div class="row"><span class="icon">💰</span><span class="label">Face Value Per Share</span><span class="sep">:</span><span class="val">Tk. 100/- (Taka One Hundred Only)</span></div>
-          <div class="row"><span class="icon">📊</span><span class="label">Number of Shares</span><span class="sep">:</span><span class="val"><b style="color:#c0392b">${shareQty}</b> Shares</span></div>
-          <div class="row"><span class="icon">💵</span><span class="label">Total Amount</span><span class="sep">:</span><span class="val">Tk. <b style="color:#c0392b">${fmt(totalAmt)}</b>/-</span></div>
-          <div class="row"><span class="icon">🏷️</span><span class="label">Share Class</span><span class="sep">:</span><span class="val">Ordinary Share</span></div>
-          <div class="row"><span class="icon">📅</span><span class="label">Issue Date</span><span class="sep">:</span><span class="val"><b style="color:#c0392b">${issueDate}</b></span></div>
-        </div>
+      <div>
+        Folio No. :&nbsp;
+        <span style="border:3px solid #666;padding:10px 30px;font-size:64px;color:#c0392b;font-weight:bold;border-radius:28px;">${customerId}</span>
       </div>
     </div>
 
-    <!-- RIGHT: certify text + QR -->
-    <div class="right-col">
-      <div class="certify-text">
-        <p class="italic-intro">This is to Certify that</p>
-        <p style="margin-top:30px;">
-          is the Registered Shareholder of <span class="highlight">${shareQty}</span>
-          ( <span class="highlight">${shareWords}</span> )
-        </p>
-        <p>Ordinary Shares of Tk. 100/- (Taka One Hundred) each in</p>
-        <p style="margin-top:20px;">
-          <span class="highlight-green">Alahee Developers &amp; Property Bazar Ltd.</span> subject to
-        </p>
-        <p>the Memorandum and Articles of Association of the Company.</p>
-      </div>
+    <!-- CERT ID BAR: text-align center, margin-top 280 on span -->
+    <div style="text-align:center;">
+      <span style="border:3px solid #444;display:inline-block;padding:0px 60px;font-family:monospace;font-weight:bold;font-size:62px;letter-spacing:4px;color:#1a1a1a;margin-top:280px;border-radius:28px;">${certNo}</span>
+    </div>
 
-      <!-- QR placeholder (no actual QR lib, show box) -->
-      <div class="qr-block" style="margin-top:50px;">
-        <div style="width:420px;height:420px;border:4px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:52px;color:#999;text-align:center;background:#f9f9f9;">
-          QR Code<br/>Verification
-        </div>
-        <div class="qr-label">Scan to verify this certificate</div>
-        <div class="qr-link">www.alaheebd.com/verify</div>
-      </div>
+    <!-- TWO COLUMN BODY: gap 60, margin-top 250 -->
+    <div style="display:flex;gap:60px;align-items:flex-start;margin-top:250px;">
 
-      <!-- Capital Structure -->
-      <div class="capital-section">
-        <div class="capital-title-wrapper">
-          <span class="capital-title">CAPITAL STRUCTURE</span>
+      <!-- LEFT COLUMN: flex 0.75 -->
+      <div style="flex:0.75;">
+
+        <!-- Shareholder info table: border 3px #888, border-radius 28, overflow hidden, font-size 38 -->
+        <div style="border:3px solid #888;border-radius:28px;overflow:hidden;font-size:38px;">
+          ${row(iconPerson, "Name of Shareholder", 540, buyerName)}
+          ${row(iconPeople, "S/O, D/O, W/O", 540, fatherName)}
+          ${row(iconPin, "Address", 540, address)}
+          ${row(iconId, "NID / Passport No.", 540, nid)}
+          ${row(iconPhone, "Mobile No.", 540, mobile)}
+          ${row(iconEmail, "Email", 540, email, true)}
         </div>
-        <div class="capital-grid">
-          <div class="cap-col">
-            <div class="cap-head">Authorized Capital</div>
-            <div class="cap-amt">Tk. 1,00,00,000/-</div>
-            <div class="cap-sub">(One Crore Taka Only)</div>
-          </div>
-          <div class="cap-col">
-            <div class="cap-head">Paid-up Capital</div>
-            <div class="cap-amt">Tk. 30,00,000/-</div>
-            <div class="cap-sub">(Thirty Lakh Taka Only)</div>
-          </div>
-          <div class="cap-col">
-            <div class="cap-head">Total Authorized Shares</div>
-            <div class="cap-amt">100,000 (One Lakh)</div>
-            <div class="cap-sub">Ordinary Shares</div>
-          </div>
+
+        <!-- Share details table: border 3px #888, border-radius 28, margin-top 40 -->
+        <div style="border:3px solid #888;border-radius:28px;overflow:hidden;margin-top:40px;">
+          ${row(iconShare, "Share Number (Distinctive Nos.)", 700, shareNumberHtml)}
+          ${row(iconFace, "Face Value Per Share", 700, "Tk. 100/- (Taka One Hundred Only)")}
+          ${row(iconCount, "Number of Shares", 700, `<span style="color:#c0392b;">${qty}</span> Shares`)}
+          ${row(iconTotal, "Total Amount", 700, `Tk. <span style="color:#c0392b;">${fmt(totalAmt)}</span>/-`)}
+          ${row(iconClass, "Share Class", 700, "Ordinary Share")}
+          ${row(iconCal, "Issue Date", 700, issueDate, true)}
         </div>
       </div>
 
-      <!-- Offices + Transfer -->
-      <div style="margin-top:40px;">
-        <div class="offices-row">
-          <div class="office-box">
-            <div class="off-title">📍 Paltan Office:</div>
+      <!-- RIGHT COLUMN: flex 1.25, flex-col, gap 50 -->
+      <div style="flex:1.25;display:flex;flex-direction:column;gap:50px;">
+
+        <!-- "This is to Certify that": font-style italic, font-size 68, font-weight bold -->
+        <p style="font-style:italic;font-size:68px;font-weight:bold;color:#1a1a1a;">This is to Certify that</p>
+
+        <!-- Certify text + QR row: display flex, gap 80px (tailwind gap-20) -->
+        <div style="display:flex;gap:80px;">
+
+          <!-- Certify text: font-size 58, line-height 1.8 -->
+          <div style="font-size:58px;color:#1a1a1a;line-height:1.8;">
+            <p style="margin-top:30px;">
+              is the Registered Shareholder of
+              <span style="color:#c0392b;font-weight:bold;">${qty}</span>
+              &nbsp;(&nbsp;<span style="color:#c0392b;font-weight:bold;">${shareWords}</span>&nbsp;)
+            </p>
+            <p>Ordinary Shares of Tk. 100/- (Taka One Hundred) each in</p>
+            <p style="font-weight:bold;">
+              <span style="color:#c0392b;">Alahee </span>
+              <span style="color:#1a5c1a;">Developers &amp; Property</span>
+              <span style="color:#c0392b;"> Bazar Ltd.</span>
+              subject to
+            </p>
+            <p>the Memorandum and Articles of Association of the Company.</p>
+          </div>
+
+          <!-- QR placeholder: 420x420, border 4px #ccc, bg #f9f9f9, border-radius 8 -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:20px;">
+            <div style="width:420px;height:420px;border:4px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:52px;color:#999;text-align:center;background:#f9f9f9;border-radius:8px;">
+              QR Code<br/>Verification
+            </div>
+            <div style="font-size:52px;color:#555;text-align:center;">Scan to verify this certificate</div>
+            <div style="font-size:56px;color:#1a5c1a;text-decoration:underline;text-align:center;">www.alaheebd.com/verify</div>
+          </div>
+        </div>
+
+        <!-- Capital Structure -->
+        <div>
+          <div style="text-align:center;margin-bottom:10px;">
+            <span style="font-size:58px;font-weight:bold;color:white;background:#1a5c1a;border:3px solid #1a5c1a;padding:8px 60px;display:inline-block;letter-spacing:6px;border-radius:48px;">
+              CAPITAL STRUCTURE
+            </span>
+          </div>
+          <div style="display:flex;border:3px solid #888;border-radius:28px;overflow:hidden;font-size:58px;">
+            <div style="flex:1;padding:28px 30px;text-align:center;font-size:58px;line-height:1.7;border-right:2px solid #ccc;">
+              <div style="font-weight:bold;color:#1a1a1a;">Authorized Capital</div>
+              <div style="font-weight:bold;color:#1a5c1a;font-size:58px;">Tk. 1,00,00,000/-</div>
+              <div style="color:#555;font-size:58px;">(One Crore Taka Only)</div>
+            </div>
+            <div style="flex:1;padding:28px 30px;text-align:center;font-size:58px;line-height:1.7;border-right:2px solid #ccc;">
+              <div style="font-weight:bold;color:#1a1a1a;">Paid-up Capital</div>
+              <div style="font-weight:bold;color:#1a5c1a;font-size:58px;">Tk. 30,00,000/-</div>
+              <div style="color:#555;font-size:58px;">(Thirty Lakh Taka Only)</div>
+            </div>
+            <div style="flex:1;padding:28px 30px;text-align:center;font-size:58px;line-height:1.7;">
+              <div style="font-weight:bold;color:#1a1a1a;">Total Authorized Shares</div>
+              <div style="font-weight:bold;color:#1a5c1a;font-size:58px;">100,000 (One Lakh)</div>
+              <div style="color:#555;font-size:58px;">Ordinary Shares</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Offices + contact: display flex, gap 40, border 3px #888, border-radius 28 -->
+        <div style="display:flex;gap:40px;font-size:58px;color:#1a1a1a;line-height:1.7;border:3px solid #888;border-radius:28px;">
+          <div style="flex:0.9;border-radius:8px;padding:20px 28px;">
+            <div style="font-weight:bold;font-size:58px;">Paltan Office:</div>
             <div>Plate-D (12th Floor)</div>
             <div>Faenaj Tower, 37/2 Purana Paltan</div>
             <div>Culvert Road, Dhaka-1000.</div>
           </div>
-          <div class="office-box">
-            <div class="off-title">📍 Mirpur Office:</div>
+          <div style="flex:1.2;border-radius:8px;padding:20px 28px;">
+            <div style="font-weight:bold;font-size:58px;">Mirpur Office:</div>
             <div>House-25 (Ground Floor),</div>
             <div>Opposite Orchid Community Centre</div>
             <div>Avenue-5, Section-6, Mirpur, Dhaka-1216.</div>
           </div>
-          <div class="contact-box">
-            <div class="c-row">📞 +88 09611243933</div>
-            <div class="c-row">✉️ alahee2021@gmail.com</div>
-            <div class="c-row">🌐 www.alaheebd.com</div>
+          <div style="flex:0.8;border-radius:8px;padding:20px 28px;display:flex;flex-direction:column;justify-content:center;gap:14px;">
+            <div style="display:flex;align-items:center;gap:16px;">
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              +88 09611243933
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;">
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              alahee2021@gmail.com
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;">
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              www.alaheebd.com
+            </div>
           </div>
         </div>
-        <div style="text-align:right;margin-top:30px;">
-          <span class="transfer-btn">Transfer To &#8644;</span>
+
+        <!-- Transfer To button: text-align right -->
+        <div style="text-align:right;">
+          <span style="background:#1a5c1a;color:#fff;font-size:58px;font-weight:bold;padding:24px 60px;border-radius:8px;display:inline-flex;align-items:center;gap:20px;">
+            Transfer To &#8644;
+          </span>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- FOOTER BANNER -->
-  <div class="footer-banner">
-    <span class="lock-icon">🔒</span>
-    <span>
-      This is a computer-generated digital share certificate. Digital signature and company seal are embedded<br/>
-      in the QR verification system. No physical seal or handwritten signature is required.
-    </span>
-  </div>
+      </div><!-- /right col -->
+    </div><!-- /two col -->
+  </div><!-- /inner -->
+</div><!-- /root -->
 
-</div>
 </body>
 </html>`;
 }
