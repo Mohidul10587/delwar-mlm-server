@@ -671,6 +671,11 @@ export const updateInfo = async (
 ) => {
   try {
     const {
+      name,
+      email,
+      fatherName,
+      nid,
+      address,
       nominee,
       nominee2,
       district,
@@ -680,6 +685,15 @@ export const updateInfo = async (
     } = req.body;
     const user = await Model.findById(req.user!._id);
     if (!user) return res.status(404).json({ message: "User not found" });
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (!trimmed) return res.status(400).json({ message: "Name cannot be empty" });
+      user.name = trimmed;
+    }
+    if (email !== undefined) user.email = email || null;
+    if (fatherName !== undefined) user.fatherName = fatherName || null;
+    if (nid !== undefined) user.nid = nid || null;
+    if (address !== undefined) user.address = address || null;
     if (nominee !== undefined) user.nominee = nominee;
     if (nominee2 !== undefined) user.nominee2 = nominee2;
     if (district !== undefined) user.district = district;

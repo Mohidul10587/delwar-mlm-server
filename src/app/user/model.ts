@@ -43,6 +43,8 @@ export interface IUser extends Document {
   username: string;
   name: string;
   phone: string;
+  email?: string;
+  fatherName?: string;
   password: string;
   role: "superadmin" | "admin" | "staff" | "branch_manager" | "user";
   isActive: boolean;
@@ -64,6 +66,8 @@ export interface IUser extends Document {
   district?: string;
   upazila?: string;
   dateOfBirth?: string;
+  nid?: string;
+  address?: string;
   paymentMethods?: IPaymentMethods;
 }
 
@@ -80,6 +84,8 @@ const UserSchema = new Schema<IUser>(
     username: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     phone: { type: String, required: true },
+    email: { type: String, default: null },
+    fatherName: { type: String, default: null },
     password: { type: String, required: true },
     role: {
       type: String,
@@ -123,6 +129,8 @@ const UserSchema = new Schema<IUser>(
     district: { type: String, default: null },
     upazila: { type: String, default: null },
     dateOfBirth: { type: String, default: null },
+    nid: { type: String, default: null },
+    address: { type: String, default: null },
     paymentMethods: {
       type: {
         bank: { type: String, default: null },

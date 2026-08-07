@@ -61,7 +61,8 @@ function numberToWords(n: number): string {
 function buildHtml(c: CertData): string {
   const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
 
-  const buyer    = c.purchaseId?.buyerInfo ?? c.userId;
+  const buyer    = c.purchaseId?.buyerInfo;   // snapshot (may lack newer fields)
+  const userProf = c.userId;                   // populated User doc (has email, fatherName, nid, address)
   const isIssued = c.status === "issued";
   const fmt      = (n: number) => Number(n).toLocaleString("en-BD");
   const fmtDate  = (d?: Date | string) =>
@@ -75,13 +76,15 @@ function buildHtml(c: CertData): string {
   const toShare    = c.shareNumbers?.[c.shareNumbers.length - 1] ?? "—";
   const issueDate  = c.issuedAt ? fmtDate(c.issuedAt) : (isIssued ? fmtDate(new Date()) : "Pending");
 
-  const buyerName  = buyer?.name ?? "—";
-  const fatherName = buyer?.fatherName ?? "—";
-  const address    = buyer?.address ?? ([buyer?.upazila, buyer?.district].filter(Boolean).join(", ") || "—");
-  const nid        = buyer?.nid ?? "—";
-  const mobile     = buyer?.phone ?? "—";
-  const email      = buyer?.email ?? "—";
-  const customerId = buyer?.customerId ?? c._id.toString().slice(-12).toUpperCase();
+  // Merge: buyerInfo snapshot takes priority for name/phone; fall back to userProfile for newer fields
+  const buyerName  = buyer?.name      ?? userProf?.name      ?? "—";
+  const fatherName = buyer?.fatherName ?? userProf?.fatherName ?? "—";
+  const address    = buyer?.address   ?? userProf?.address   ??
+                     ([userProf?.upazila, userProf?.district].filter(Boolean).join(", ") || "—");
+  const nid        = buyer?.nid   ?? userProf?.nid   ?? "—";
+  const mobile     = buyer?.phone ?? userProf?.phone ?? "—";
+  const email      = buyer?.email ?? userProf?.email ?? "—";
+  const customerId = buyer?.customerId ?? userProf?.customerId ?? c._id.toString().slice(-12).toUpperCase();
 
   const shareNumberHtml = c.shareNumbers?.length === 1
     ? `<span style="color:#c0392b;font-weight:600;">${fromShare}</span>`

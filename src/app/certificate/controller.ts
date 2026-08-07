@@ -10,7 +10,7 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
     const certificates = await Certificate.find({ userId: req.user!._id })
       .populate("projectId", "title image cashPrice")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
-      .populate("userId", "name phone username nominee dateOfBirth district upazila")
+      .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -93,7 +93,7 @@ export const downloadCertificate = async (req: Request, res: Response, next: Nex
     const cert = await Certificate.findOne({ _id: req.params.id, userId: req.user!._id })
       .populate("projectId", "title image cashPrice")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
-      .populate("userId", "name phone username nominee dateOfBirth district upazila")
+      .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila")
       .lean();
 
     if (!cert)
