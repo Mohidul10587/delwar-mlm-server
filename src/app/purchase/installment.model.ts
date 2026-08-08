@@ -4,6 +4,7 @@ export type InstallmentStatus = "pending" | "approved" | "rejected";
 export type PaymentMethod = "cash" | "bank" | "mobile_banking";
 
 export interface IInstallmentPayment extends Document {
+  paymentId: string;
   purchaseId: Types.ObjectId;
   userId: Types.ObjectId;
   /**
@@ -31,6 +32,7 @@ export interface IInstallmentPayment extends Document {
 
 const InstallmentPaymentSchema = new Schema<IInstallmentPayment>(
   {
+    paymentId: { type: String, unique: true, sparse: true },
     purchaseId: { type: Schema.Types.ObjectId, ref: "Purchase", required: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     // Multi-installment: array of installment numbers covered by this payment

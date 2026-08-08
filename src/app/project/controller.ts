@@ -3,6 +3,7 @@ import { Project } from "./model";
 import { ShareSlot } from "./shareSlot.model";
 import { Settings } from "../settings/model";
 import { Counter } from "../user/counter";
+import { generateCustomId } from "../../utils/generateId";
 
 const BATCH_SIZE = 1000;
 
@@ -64,8 +65,9 @@ export const createShare = async (
     const settings = await Settings.findOne();
     const defaults = settings?.defaultShareConfig ?? {};
     const totalShares: number = Number(req.body.totalShares ?? 0);
+    const projectId = await generateCustomId("PRJ");
 
-    const pkg = await Project.create({ ...defaults, ...req.body, totalShares });
+    const pkg = await Project.create({ ...defaults, ...req.body, totalShares, projectId });
 
     if (totalShares > 0) {
       // Atomically reserve a range of `totalShares` sequential numbers for this project.

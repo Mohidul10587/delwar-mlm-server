@@ -11,6 +11,7 @@ import {
   JWT_REFRESH_SECRET,
   cookieOpts,
 } from "../../utils/authConfig";
+import { generateCustomId } from "../../utils/generateId";
 
 declare module "express" {
   interface Request {
@@ -151,7 +152,9 @@ export const register = async (
     const hashedPassword = await bcrypt.hash(password, 10);
     const generationAncestors = await buildGenerationAncestors(referrerId);
     const firstRankName = await getFirstRankName();
+    const customerId = await generateCustomId("CUS");
     const user = await Model.create({
+      customerId,
       name,
       username,
       phone,
@@ -226,7 +229,9 @@ export const adminRegister = async (
     const hashedPassword = await bcrypt.hash(password, 10);
     const generationAncestors = await buildGenerationAncestors(referrerId);
     const firstRankName = await getFirstRankName();
+    const customerId = await generateCustomId("CUS");
     const user = await Model.create({
+      customerId,
       name,
       username,
       phone,

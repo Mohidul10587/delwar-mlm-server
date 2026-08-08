@@ -9,8 +9,8 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
   try {
     const certificates = await Certificate.find({ userId: req.user!._id })
       .populate("projectId", "title image cashPrice")
-      .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
-      .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila")
+      .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
+      .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -92,8 +92,8 @@ export const downloadCertificate = async (req: Request, res: Response, next: Nex
   try {
     const cert = await Certificate.findOne({ _id: req.params.id, userId: req.user!._id })
       .populate("projectId", "title image cashPrice")
-      .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
-      .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila")
+      .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
+      .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
       .lean();
 
     if (!cert)

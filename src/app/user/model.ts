@@ -40,6 +40,7 @@ export interface IPaymentMethods {
 
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
+  customerId: string;
   username: string;
   name: string;
   phone: string;
@@ -81,6 +82,7 @@ const AncestorEntrySchema = new Schema<IAncestorEntry>(
 
 const UserSchema = new Schema<IUser>(
   {
+    customerId: { type: String, unique: true, sparse: true },
     username: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     phone: { type: String, required: true },

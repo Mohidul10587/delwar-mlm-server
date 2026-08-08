@@ -3,6 +3,7 @@ import { Schema, model, Document, Types } from "mongoose";
 export type CertificateStatus = "pending" | "issued";
 
 export interface ICertificate extends Document {
+  certificateId: string;
   userId: Types.ObjectId;
   purchaseId: Types.ObjectId;
   projectId: Types.ObjectId;
@@ -12,6 +13,7 @@ export interface ICertificate extends Document {
 
 const CertificateSchema = new Schema<ICertificate>(
   {
+    certificateId: { type: String, unique: true, sparse: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     purchaseId: { type: Schema.Types.ObjectId, ref: "Purchase", required: true, unique: true },
     projectId: { type: Schema.Types.ObjectId, ref: "Project", required: true },

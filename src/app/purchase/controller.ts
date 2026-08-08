@@ -8,6 +8,7 @@ import { calculateCertificateStatus, calculateTotalPayable } from "./service";
 import { Certificate } from "../certificate/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Wallet, TransactionLog } from "../wallet/model";
+import { generateCustomId } from "../../utils/generateId";
 
 // Helper — build slotsByPurchase map from a list of purchaseIds
 async function fetchSlotsByPurchase(
@@ -256,6 +257,7 @@ export const createPurchase = async (
     };
 
     const purchase = await Purchase.create({
+      paymentId: await generateCustomId("PAY"),
       userId: req.user!._id,
       projectId,
       quantity: qty,
@@ -310,6 +312,7 @@ export const createPurchase = async (
     }
 
     await Certificate.create({
+      certificateId: await generateCustomId("CERT"),
       userId: req.user!._id,
       purchaseId: purchase._id,
       projectId,
@@ -473,7 +476,7 @@ export const getPurchaseReceipt = async (
 ) => {
   try {
     const purchase = await Purchase.findById(req.params.id)
-      .populate("userId", "name username phone")
+      .populate("userId", "name username phone customerId")
       .populate("projectId", "title cashPrice image")
       .populate("reviewedBy", "name username") // cashier / receiver
       .lean();
@@ -534,7 +537,7 @@ export const getInstallmentReceipt = async (
     const { purchaseId, installmentId } = req.params;
 
     const purchase = await Purchase.findById(purchaseId)
-      .populate("userId", "name username phone")
+      .populate("userId", "name username phone customerId")
       .populate("projectId", "title cashPrice image")
       .lean();
     if (!purchase)

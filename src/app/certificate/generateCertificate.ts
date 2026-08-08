@@ -13,6 +13,7 @@ function toDataUrl(filename: string): string {
 
 export interface CertData {
   _id: string;
+  certificateId?: string;
   status: string;
   issuedAt?: Date;
   totalPayable: number;
@@ -71,7 +72,6 @@ function buildHtml(c: CertData): string {
   const qty        = c.purchaseId?.quantity ?? 1;
   const shareWords = numberToWords(qty);
   const totalAmt   = c.totalPayable;
-  const certNo     = `C-${c._id.toString().slice(-6).toUpperCase()}/2026`;
   const fromShare  = c.shareNumbers?.[0] ?? "—";
   const toShare    = c.shareNumbers?.[c.shareNumbers.length - 1] ?? "—";
   const issueDate  = c.issuedAt ? fmtDate(c.issuedAt) : (isIssued ? fmtDate(new Date()) : "Pending");
@@ -89,6 +89,9 @@ function buildHtml(c: CertData): string {
   const shareNumberHtml = c.shareNumbers?.length === 1
     ? `<span style="color:#c0392b;font-weight:600;">${fromShare}</span>`
     : `From <span style="color:#c0392b;font-weight:600;">${fromShare}</span> To <span style="color:#c0392b;font-weight:600;">${toShare}</span>`;
+
+  // Use actual certificateId if available, otherwise fallback to legacy format
+  const certNo = c.certificateId ?? `CERT-${c._id.toString().slice(-6).toUpperCase()}`;
 
   // Mirrors the React <Row> component exactly:
   // icon(90px) | label(labelW) | :(sep) | value

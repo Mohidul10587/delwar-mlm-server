@@ -9,6 +9,7 @@ import { distributeInstallmentPaymentCommission } from "./commissions";
 import { CompanyLedger } from "../ledger/model";
 import { isTransactionIdUsed } from "../../utils/isTransactionIdUsed";
 import { processRewardAfterPayment } from "../reward-tracker/service";
+import { generateCustomId } from "../../utils/generateId";
 
 // Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
 const getWallet = async (userId: string) => {
@@ -145,6 +146,7 @@ export const createInstallmentPayment = async (
     }
 
     const payment = await InstallmentPayment.create({
+      paymentId: await generateCustomId("PAY"),
       purchaseId: purchase._id,
       userId: req.user!._id,
       installmentNumbers: uniqueNumbers,
