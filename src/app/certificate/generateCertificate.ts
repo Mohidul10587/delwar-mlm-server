@@ -110,6 +110,7 @@ function buildHtml(c: CertData): string {
   const iconId     = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
   const iconPhone  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
   const iconEmail  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+  const iconCustomerId = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>`;
   const iconShare  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
   const iconFace   = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
   const iconCount  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
@@ -164,7 +165,8 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
           ${row(iconPin,    "Address",              540, address)}
           ${row(iconId,     "NID / Passport No.",   540, nid)}
           ${row(iconPhone,  "Mobile No.",           540, mobile)}
-          ${row(iconEmail,  "Email",                540, email, true)}
+          ${row(iconEmail,  "Email",                540, email)}
+          ${row(iconCustomerId, "Customer ID",      540, customerId, true)}
         </div>
 
         <!-- Share details table: border 3px #888, border-radius 28, margin-top 40 -->

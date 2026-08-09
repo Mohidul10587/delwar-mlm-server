@@ -9,6 +9,7 @@ import { Certificate } from "../certificate/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { generateCustomId } from "../../utils/generateId";
+import { generateReceiptPng } from "./generateReceipt";
 
 // Helper — build slotsByPurchase map from a list of purchaseIds
 async function fetchSlotsByPurchase(
@@ -616,6 +617,103 @@ export const getMyPurchases = async (
       };
     });
     res.json({ purchases: enriched });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /purchase/:id/receipt/download — server-side PNG download for purchase receipt
+export const downloadPurchaseReceipt = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const purchase = await Purchase.findById(req.params.id)
+      .populate("userId", "name username phone customerId")
+      .populate("projectId", "title cashPrice image")
+      .populate("reviewedBy", "name username")
+      .lean();
+
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
+
+    const isOwner =
+      purchase.userId &&
+      (purchase.userId as any)._id?.toString() === req.user!._id.toString();
+    const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
+    if (!isOwner && !isStaff)
+      return res.status(403).json({ message: "Forbidden" });
+
+    if (purchase.status !== "approved")
+      return res.status(400).json({ message: "Receipt only available for approved purchases" });
+
+    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+      .select("shareNumber")
+      .sort({ shareNumber: 1 })
+      .lean();
+
+    const pngBuffer = await generateReceiptPng({
+      purchase: purchase as any,
+      shareNumbers: slots.map((s) => s.shareNumber),
+    });
+
+    res.set({
+      "Content-Type": "image/png",
+      "Content-Disposition": `attachment; filename="receipt-${purchase._id}.png"`,
+      "Content-Length": pngBuffer.length,
+      "Cache-Control": "no-store",
+    });
+    res.send(pngBuffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /purchase/:purchaseId/installments/:installmentId/receipt/download
+export const downloadInstallmentReceipt = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { purchaseId, installmentId } = req.params;
+
+    const purchase = await Purchase.findById(purchaseId)
+      .populate("userId", "name username phone customerId")
+      .populate("projectId", "title cashPrice image")
+      .lean();
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
+
+    const isOwner =
+      purchase.userId &&
+      (purchase.userId as any)._id?.toString() === req.user!._id.toString();
+    const isStaff = ["superadmin", "admin", "staff"].includes(req.user!.role);
+    if (!isOwner && !isStaff)
+      return res.status(403).json({ message: "Forbidden" });
+
+    const installment = await InstallmentPayment.findById(installmentId)
+      .populate("reviewedBy", "name username")
+      .lean();
+    if (!installment)
+      return res.status(404).json({ message: "Installment not found" });
+
+    if (installment.status !== "approved")
+      return res.status(400).json({ message: "Receipt only available for approved installments" });
+
+    const pngBuffer = await generateReceiptPng({
+      purchase: purchase as any,
+      installment: installment as any,
+    });
+
+    res.set({
+      "Content-Type": "image/png",
+      "Content-Disposition": `attachment; filename="receipt-inst-${installment._id}.png"`,
+      "Content-Length": pngBuffer.length,
+      "Cache-Control": "no-store",
+    });
+    res.send(pngBuffer);
   } catch (err) {
     next(err);
   }
