@@ -47,56 +47,132 @@ export interface CertData {
 }
 
 function numberToWords(n: number): string {
-  const ones = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine",
-    "Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
-  const tens = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const ones = [
+    "",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+  ];
+  const tens = [
+    "",
+    "",
+    "Twenty",
+    "Thirty",
+    "Forty",
+    "Fifty",
+    "Sixty",
+    "Seventy",
+    "Eighty",
+    "Ninety",
+  ];
   if (n === 0) return "Zero";
   if (n < 20) return ones[n];
-  if (n < 100) return tens[Math.floor(n/10)] + (n % 10 ? " " + ones[n % 10] : "");
-  if (n < 1000) return ones[Math.floor(n/100)] + " Hundred" + (n % 100 ? " " + numberToWords(n % 100) : "");
-  if (n < 100000) return numberToWords(Math.floor(n/1000)) + " Thousand" + (n % 1000 ? " " + numberToWords(n % 1000) : "");
-  if (n < 10000000) return numberToWords(Math.floor(n/100000)) + " Lakh" + (n % 100000 ? " " + numberToWords(n % 100000) : "");
-  return numberToWords(Math.floor(n/10000000)) + " Crore" + (n % 10000000 ? " " + numberToWords(n % 10000000) : "");
+  if (n < 100)
+    return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+  if (n < 1000)
+    return (
+      ones[Math.floor(n / 100)] +
+      " Hundred" +
+      (n % 100 ? " " + numberToWords(n % 100) : "")
+    );
+  if (n < 100000)
+    return (
+      numberToWords(Math.floor(n / 1000)) +
+      " Thousand" +
+      (n % 1000 ? " " + numberToWords(n % 1000) : "")
+    );
+  if (n < 10000000)
+    return (
+      numberToWords(Math.floor(n / 100000)) +
+      " Lakh" +
+      (n % 100000 ? " " + numberToWords(n % 100000) : "")
+    );
+  return (
+    numberToWords(Math.floor(n / 10000000)) +
+    " Crore" +
+    (n % 10000000 ? " " + numberToWords(n % 10000000) : "")
+  );
 }
 
 function buildHtml(c: CertData): string {
   const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
 
-  const buyer    = c.purchaseId?.buyerInfo;   // snapshot (may lack newer fields)
-  const userProf = c.userId;                   // populated User doc (has email, fatherName, nid, address)
+  const buyer = c.purchaseId?.buyerInfo; // snapshot (may lack newer fields)
+  const userProf = c.userId; // populated User doc (has email, fatherName, nid, address)
   const isIssued = c.status === "issued";
-  const fmt      = (n: number) => Number(n).toLocaleString("en-BD");
-  const fmtDate  = (d?: Date | string) =>
-    d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+  const fmt = (n: number) => Number(n).toLocaleString("en-BD");
+  const fmtDate = (d?: Date | string) =>
+    d
+      ? new Date(d).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "—";
 
-  const qty        = c.purchaseId?.quantity ?? 1;
+  const qty = c.purchaseId?.quantity ?? 1;
   const shareWords = numberToWords(qty);
-  const totalAmt   = c.totalPayable;
-  const fromShare  = c.shareNumbers?.[0] ?? "—";
-  const toShare    = c.shareNumbers?.[c.shareNumbers.length - 1] ?? "—";
-  const issueDate  = c.issuedAt ? fmtDate(c.issuedAt) : (isIssued ? fmtDate(new Date()) : "Pending");
+  const totalAmt = c.totalPayable;
+  const fromShare = c.shareNumbers?.[0] ?? "—";
+  const toShare = c.shareNumbers?.[c.shareNumbers.length - 1] ?? "—";
+  const issueDate = c.issuedAt
+    ? fmtDate(c.issuedAt)
+    : isIssued
+    ? fmtDate(new Date())
+    : "Pending";
 
   // Merge: buyerInfo snapshot takes priority for name/phone; fall back to userProfile for newer fields
-  const buyerName  = buyer?.name      ?? userProf?.name      ?? "—";
+  const buyerName = buyer?.name ?? userProf?.name ?? "—";
   const fatherName = buyer?.fatherName ?? userProf?.fatherName ?? "—";
-  const address    = buyer?.address   ?? userProf?.address   ??
-                     ([userProf?.upazila, userProf?.district].filter(Boolean).join(", ") || "—");
-  const nid        = buyer?.nid   ?? userProf?.nid   ?? "—";
-  const mobile     = buyer?.phone ?? userProf?.phone ?? "—";
-  const email      = buyer?.email ?? userProf?.email ?? "—";
-  const customerId = buyer?.customerId ?? userProf?.customerId ?? c._id.toString().slice(-12).toUpperCase();
+  const address =
+    buyer?.address ??
+    userProf?.address ??
+    ([userProf?.upazila, userProf?.district].filter(Boolean).join(", ") || "—");
+  const nid = buyer?.nid ?? userProf?.nid ?? "—";
+  const mobile = buyer?.phone ?? userProf?.phone ?? "—";
+  const email = buyer?.email ?? userProf?.email ?? "—";
+  const customerId =
+    buyer?.customerId ??
+    userProf?.customerId ??
+    c._id.toString().slice(-12).toUpperCase();
 
-  const shareNumberHtml = c.shareNumbers?.length === 1
-    ? `<span style="color:#c0392b;font-weight:600;">${fromShare}</span>`
-    : `From <span style="color:#c0392b;font-weight:600;">${fromShare}</span> To <span style="color:#c0392b;font-weight:600;">${toShare}</span>`;
+  const shareNumberHtml =
+    c.shareNumbers?.length === 1
+      ? `<span style="color:#c0392b;font-weight:600;">${fromShare}</span>`
+      : `From <span style="color:#c0392b;font-weight:600;">${fromShare}</span> To <span style="color:#c0392b;font-weight:600;">${toShare}</span>`;
 
   // Use actual certificateId if available, otherwise fallback to legacy format
-  const certNo = c.certificateId ?? `CERT-${c._id.toString().slice(-6).toUpperCase()}`;
+  const certNo =
+    c.certificateId ?? `CERT-${c._id.toString().slice(-6).toUpperCase()}`;
 
   // Mirrors the React <Row> component exactly:
   // icon(90px) | label(labelW) | :(sep) | value
-  const row = (iconSvg: string, label: string, labelW: number, valueHtml: string, noBorder = false) => `
-    <div style="display:flex;align-items:flex-start;padding:20px 28px;${noBorder ? "" : "border-bottom:2px solid #ccc;"}font-size:58px;">
+  const row = (
+    iconSvg: string,
+    label: string,
+    labelW: number,
+    valueHtml: string,
+    noBorder = false
+  ) => `
+    <div style="display:flex;align-items:flex-start;padding:20px 28px;${
+      noBorder ? "" : "border-bottom:2px solid #ccc;"
+    }font-size:58px;">
       <span style="margin-top:16px;width:90px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">${iconSvg}</span>
       <span style="width:${labelW}px;color:#333;flex-shrink:0;">${label}</span>
       <span style="margin:0 20px;color:#888;flex-shrink:0;">:</span>
@@ -106,17 +182,17 @@ function buildHtml(c: CertData): string {
   // SVG icons matching lucide icons used in frontend (color #1a5c1a, size 64)
   const iconPerson = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
   const iconPeople = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
-  const iconPin    = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
-  const iconId     = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
-  const iconPhone  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
-  const iconEmail  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+  const iconPin = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+  const iconId = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
+  const iconPhone = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+  const iconEmail = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
   const iconCustomerId = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>`;
-  const iconShare  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
-  const iconFace   = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
-  const iconCount  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
-  const iconTotal  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`;
-  const iconClass  = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
-  const iconCal    = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const iconShare = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
+  const iconFace = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+  const iconCount = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+  const iconTotal = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`;
+  const iconClass = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+  const iconCal = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -161,22 +237,37 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
         <!-- Shareholder info table: border 3px #888, border-radius 28, overflow hidden, font-size 38 -->
         <div style="border:3px solid #888;border-radius:28px;overflow:hidden;font-size:38px;">
           ${row(iconPerson, "Name of Shareholder", 540, buyerName)}
-          ${row(iconPeople, "S/O, D/O, W/O",       540, fatherName)}
-          ${row(iconPin,    "Address",              540, address)}
-          ${row(iconId,     "NID / Passport No.",   540, nid)}
-          ${row(iconPhone,  "Mobile No.",           540, mobile)}
-          ${row(iconEmail,  "Email",                540, email)}
-          ${row(iconCustomerId, "Customer ID",      540, customerId, true)}
+          ${row(iconPeople, "S/O, D/O, W/O", 540, fatherName)}
+          ${row(iconPin, "Address", 540, address)}
+          ${row(iconId, "NID / Passport No.", 540, nid)}
+          ${row(iconPhone, "Mobile No.", 540, mobile)}
+          ${row(iconEmail, "Email", 540, email)}
+          ${row(iconCustomerId, "Customer ID", 540, customerId, true)}
         </div>
 
         <!-- Share details table: border 3px #888, border-radius 28, margin-top 40 -->
         <div style="border:3px solid #888;border-radius:28px;overflow:hidden;margin-top:40px;">
-          ${row(iconShare, "Share Number (Distinctive Nos.)", 700, shareNumberHtml)}
-          ${row(iconFace,  "Face Value Per Share",            700, "Tk. 100/- (Taka One Hundred Only)")}
-          ${row(iconCount, "Number of Shares",                700, `<span style="color:#c0392b;">${qty}</span> Shares`)}
-          ${row(iconTotal, "Total Amount",                    700, `Tk. <span style="color:#c0392b;">${fmt(totalAmt)}</span>/-`)}
-          ${row(iconClass, "Share Class",                     700, "Ordinary Share")}
-          ${row(iconCal,   "Issue Date",                      700, issueDate, true)}
+          ${row(iconShare, "Share Numbers", 700, shareNumberHtml)}
+          ${row(
+            iconFace,
+            "Face Value Per Share",
+            700,
+            "Tk. 100/- (Taka One Hundred Only)"
+          )}
+          ${row(
+            iconCount,
+            "Number of Shares",
+            700,
+            `<span style="color:#c0392b;">${qty}</span> Shares`
+          )}
+          ${row(
+            iconTotal,
+            "Total Amount",
+            700,
+            `Tk. <span style="color:#c0392b;">${fmt(totalAmt)}</span>/-`
+          )}
+          ${row(iconClass, "Share Class", 700, "Ordinary Share")}
+          ${row(iconCal, "Issue Date", 700, issueDate, true)}
         </div>
       </div>
 
@@ -291,7 +382,11 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
 export async function generateCertificatePng(c: CertData): Promise<Buffer> {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   });
   try {
     const page = await browser.newPage();
