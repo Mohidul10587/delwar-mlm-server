@@ -112,6 +112,7 @@ function numberToWords(n: number): string {
 
 function buildHtml(c: CertData): string {
   const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
+  const qrUrl = toDataUrl("qr_code.jpeg");
 
   const buyer = c.purchaseId?.buyerInfo; // snapshot (may lack newer fields)
   const userProf = c.userId; // populated User doc (has email, fatherName, nid, address)
@@ -297,11 +298,9 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
             <p>the Memorandum and Articles of Association of the Company.</p>
           </div>
 
-          <!-- QR placeholder: 420x420, border 4px #ccc, bg #f9f9f9, border-radius 8 -->
+          <!-- QR image: 420x420, border-radius 8 -->
           <div style="display:flex;flex-direction:column;align-items:center;gap:20px;">
-            <div style="width:420px;height:420px;border:4px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:52px;color:#999;text-align:center;background:#f9f9f9;border-radius:8px;">
-              QR Code<br/>Verification
-            </div>
+            <img src="${qrUrl}" alt="QR Code" style="width:420px;height:420px;border-radius:8px;object-fit:contain;" />
             <div style="font-size:52px;color:#555;text-align:center;">Scan to verify this certificate</div>
             <div style="font-size:56px;color:#1a5c1a;text-decoration:underline;text-align:center;">www.alaheebd.com/verify</div>
           </div>
