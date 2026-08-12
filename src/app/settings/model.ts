@@ -30,6 +30,7 @@ export interface ISettings extends Document {
   // Rank definitions
   ranks: {
     name: string;
+    rankType: "primary" | "special" | "super";
     minNetworkSalesAmount: number;
     minPersonalPurchaseQtyToAchieve: number;
     reward?: string;
@@ -134,6 +135,11 @@ const SettingsSchema = new Schema<ISettings>(
     ranks: [
       {
         name: { type: String },
+        rankType: {
+          type: String,
+          enum: ["primary", "special", "super"],
+          default: "primary",
+        },
         minNetworkSalesAmount: { type: Number, default: 0 },
         minPersonalPurchaseQtyToAchieve: { type: Number, default: 0 },
         reward: { type: String, default: "" },

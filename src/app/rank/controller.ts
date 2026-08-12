@@ -183,7 +183,11 @@ export const replaceAllRanks = async (
 
     // First 2 ranks are locked — always preserved from DB, never replaced by payload
     const lockedRanks = (s.ranks as any[]).slice(0, 2);
-    const editableRanks = (req.body.ranks ?? []).slice(2);
+    // Payload ranks index 2+ are the editable ones; rankType is preserved as sent
+    const editableRanks = (req.body.ranks ?? []).slice(2).map((r: any) => ({
+      ...r,
+      rankType: r.rankType ?? "primary",
+    }));
 
     s.ranks = [...lockedRanks, ...editableRanks];
     await s.save();
