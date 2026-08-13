@@ -20,6 +20,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const validation_1 = require("./validation");
 const authConfig_1 = require("../../utils/authConfig");
+const generateId_1 = require("../../utils/generateId");
+const sms_1 = require("../../utils/sms");
 const defaultPermissionsByRole = {
     admin: ["purchase.review"],
     staff: ["purchase.review"],
@@ -140,9 +142,12 @@ const register = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const generationAncestors = yield buildGenerationAncestors(referrerId);
         const firstRankName = yield getFirstRankName();
-        const user = yield model_1.User.create(Object.assign({ name,
+        const customerId = yield (0, generateId_1.generateCustomId)("CUS");
+        const user = yield model_1.User.create(Object.assign({ customerId,
+            name,
             username,
-            phone, password: hashedPassword, generationAncestors, isPhoneVerified: false }, (firstRankName && {
+            phone, password: hashedPassword, tempPlainPassword: password, // Store plain password temporarily for SMS
+            generationAncestors, isPhoneVerified: false }, (firstRankName && {
             currentRank: firstRankName,
             currentRankAchievedAt: new Date(),
             earnedRanks: [firstRankName],
@@ -188,9 +193,12 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
         const hashedPassword = yield bcryptjs_1.default.hash(password, 10);
         const generationAncestors = yield buildGenerationAncestors(referrerId);
         const firstRankName = yield getFirstRankName();
-        const user = yield model_1.User.create(Object.assign({ name,
+        const customerId = yield (0, generateId_1.generateCustomId)("CUS");
+        const user = yield model_1.User.create(Object.assign({ customerId,
+            name,
             username,
-            phone, password: hashedPassword, role, 
+            phone, password: hashedPassword, tempPlainPassword: password, // Store plain password for SMS
+            role, 
             // Accounts created by a superadmin are trusted internal registrations.
             // Do not require the new user to complete the public OTP flow.
             isPhoneVerified: true, permissions: (_a = defaultPermissionsByRole[role]) !== null && _a !== void 0 ? _a : [], generationAncestors }, (firstRankName && {
@@ -205,6 +213,17 @@ const adminRegister = (req, res, next) => __awaiter(void 0, void 0, void 0, func
             yield model_1.User.updateMany({ _id: { $in: siblingIds } }, { $addToSet: { linkedPhoneAccounts: user._id } });
             user.linkedPhoneAccounts = siblingIds;
             yield user.save();
+        }
+        // Send SMS with credentials (Super Admin registration - immediate SMS)
+        try {
+            yield (0, sms_1.sendRegistrationSms)(phone, username, password);
+            // Clear temporary password after sending SMS
+            user.tempPlainPassword = undefined;
+            yield user.save();
+        }
+        catch (smsError) {
+            console.error("Failed to send registration SMS:", smsError);
+            // Don't fail registration if SMS fails
         }
         res.status(201).json({ message: "User registered successfully", user });
     }
@@ -478,7 +497,25 @@ const getUsers = (req, res, next) => __awaiter(void 0, void 0, void 0, function*
                 .lean(),
             model_1.User.countDocuments(query),
         ]);
-        res.json({ users, total, page, pages: Math.ceil(total / limit) });
+        // Populate referrer information for each user
+        const usersWithReferrer = yield Promise.all(users.map((user) => __awaiter(void 0, void 0, void 0, function* () {
+            var _a, _b;
+            const referrerId = (_b = (_a = user.generationAncestors) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.userId;
+            if (referrerId) {
+                const referrer = yield model_1.User.findById(referrerId)
+                    .select("customerId name username")
+                    .lean();
+                return Object.assign(Object.assign({}, user), { referrer: referrer
+                        ? {
+                            userId: referrer.customerId,
+                            name: referrer.name,
+                            username: referrer.username,
+                        }
+                        : null });
+            }
+            return Object.assign(Object.assign({}, user), { referrer: null });
+        })));
+        res.json({ users: usersWithReferrer, total, page, pages: Math.ceil(total / limit) });
     }
     catch (error) {
         next(error);
@@ -539,10 +576,24 @@ const adminUpdateRelations = (req, res, next) => __awaiter(void 0, void 0, void 
 exports.adminUpdateRelations = adminUpdateRelations;
 const updateInfo = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { nominee, nominee2, district, upazila, dateOfBirth, paymentMethods, } = req.body;
+        const { name, email, fatherName, nid, address, nominee, nominee2, district, upazila, dateOfBirth, paymentMethods, } = req.body;
         const user = yield model_1.User.findById(req.user._id);
         if (!user)
             return res.status(404).json({ message: "User not found" });
+        if (name !== undefined) {
+            const trimmed = String(name).trim();
+            if (!trimmed)
+                return res.status(400).json({ message: "Name cannot be empty" });
+            user.name = trimmed;
+        }
+        if (email !== undefined)
+            user.email = email || null;
+        if (fatherName !== undefined)
+            user.fatherName = fatherName || null;
+        if (nid !== undefined)
+            user.nid = nid || null;
+        if (address !== undefined)
+            user.address = address || null;
         if (nominee !== undefined)
             user.nominee = nominee;
         if (nominee2 !== undefined)

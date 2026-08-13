@@ -7,10 +7,14 @@ const AncestorEntrySchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
 }, { _id: false });
 const UserSchema = new mongoose_1.Schema({
+    customerId: { type: String, unique: true, sparse: true },
     username: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     phone: { type: String, required: true },
+    email: { type: String, default: null },
+    fatherName: { type: String, default: null },
     password: { type: String, required: true },
+    tempPlainPassword: { type: String, default: null },
     role: {
         type: String,
         enum: ["superadmin", "admin", "staff", "branch_manager", "user"],
@@ -52,6 +56,8 @@ const UserSchema = new mongoose_1.Schema({
     district: { type: String, default: null },
     upazila: { type: String, default: null },
     dateOfBirth: { type: String, default: null },
+    nid: { type: String, default: null },
+    address: { type: String, default: null },
     paymentMethods: {
         type: {
             bank: { type: String, default: null },

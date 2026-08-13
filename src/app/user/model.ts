@@ -47,6 +47,8 @@ export interface IUser extends Document {
   email?: string;
   fatherName?: string;
   password: string;
+  /** Temporary storage for plain password until phone is verified (for SMS) */
+  tempPlainPassword?: string;
   role: "superadmin" | "admin" | "staff" | "branch_manager" | "user";
   isActive: boolean;
   /** ফোন নম্বর OTP দিয়ে যাচাই হয়েছে কিনা */
@@ -89,6 +91,7 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, default: null },
     fatherName: { type: String, default: null },
     password: { type: String, required: true },
+    tempPlainPassword: { type: String, default: null },
     role: {
       type: String,
       enum: ["superadmin", "admin", "staff", "branch_manager", "user"],

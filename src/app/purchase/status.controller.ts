@@ -9,6 +9,7 @@ import { ShareSlot } from "../project/shareSlot.model";
 import { Project } from "../project/model";
 import { recalcUserRank } from "../rank/controller";
 import { Wallet, TransactionLog } from "../wallet/model";
+import { sendPurchaseApprovalSms } from "../../utils/sms";
 
 // ── Share allocation helpers ──────────────────────────────────────────────────
 
@@ -205,6 +206,24 @@ export const updatePurchaseStatus = async (
     res.json({ message: `Purchase ${status}`, purchase });
 
     if (status === "approved" && !wasAlreadyApproved) {
+      // Send SMS notification for purchase approval
+      try {
+        const user = await User.findById(purchase.userId).select("phone").lean();
+        if (user && (user as any).phone) {
+          const totalAmount = purchase.amountPaid;
+          const productName = purchase.snapshot?.shareTitle || "Product";
+          await sendPurchaseApprovalSms(
+            (user as any).phone,
+            purchase._id.toString(),
+            totalAmount,
+            productName
+          );
+        }
+      } catch (smsError) {
+        console.error("Failed to send purchase approval SMS:", smsError);
+        // Don't fail the approval if SMS fails
+      }
+
       // Step 4 — User personal shares count
       await User.findByIdAndUpdate(purchase.userId, {
         $inc: { personalPurchaseCount: purchase.quantity },

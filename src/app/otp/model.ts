@@ -9,6 +9,8 @@ export interface IOtp extends Document {
   code: string;
   purpose: "register" | "forgot-password";
   expiresAt: Date;
+  /** Temporary storage of plain password for SMS after verification */
+  plainPassword?: string;
 }
 
 const OtpSchema = new Schema<IOtp>({
@@ -20,6 +22,7 @@ const OtpSchema = new Schema<IOtp>({
     required: true,
   },
   expiresAt: { type: Date, required: true },
+  plainPassword: { type: String, default: null },
 });
 
 // MongoDB TTL index — expiresAt পার হলে document স্বয়ংক্রিয়ভাবে মুছে যাবে

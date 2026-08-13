@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InstallmentPayment = void 0;
 const mongoose_1 = require("mongoose");
 const InstallmentPaymentSchema = new mongoose_1.Schema({
+    paymentId: { type: String, unique: true, sparse: true },
     purchaseId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Purchase", required: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     // Multi-installment: array of installment numbers covered by this payment

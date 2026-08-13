@@ -61,6 +61,8 @@ export interface ISettings extends Document {
   };
   // Balance transfer fee
   balanceTransferFeePercent: number;
+  // Withdrawal tax percentage
+  withdrawalTaxPercent: number;
 
   /**
    * Reward Config — ভবিষ্যৎ-উপযোগী reward system কনফিগারেশন।
@@ -176,6 +178,7 @@ const SettingsSchema = new Schema<ISettings>(
       }),
     },
     balanceTransferFeePercent: { type: Number, default: 0 },
+    withdrawalTaxPercent: { type: Number, default: 0 },
     rewardConfig: {
       type: {
         enabled: { type: Boolean, default: false },

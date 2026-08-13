@@ -20,8 +20,8 @@ const getMyCertificates = (req, res, next) => __awaiter(void 0, void 0, void 0, 
     try {
         const certificates = yield model_1.Certificate.find({ userId: req.user._id })
             .populate("projectId", "title image cashPrice")
-            .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
-            .populate("userId", "name phone username nominee dateOfBirth district upazila")
+            .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
+            .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
             .sort({ createdAt: -1 })
             .lean();
         // Fetch share slots for all purchases in one query
@@ -96,8 +96,8 @@ const downloadCertificate = (req, res, next) => __awaiter(void 0, void 0, void 0
     try {
         const cert = yield model_1.Certificate.findOne({ _id: req.params.id, userId: req.user._id })
             .populate("projectId", "title image cashPrice")
-            .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot")
-            .populate("userId", "name phone username nominee dateOfBirth district upazila")
+            .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
+            .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
             .lean();
         if (!cert)
             return res.status(404).json({ message: "Certificate not found" });

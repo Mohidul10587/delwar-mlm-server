@@ -14,6 +14,7 @@ const model_1 = require("./model");
 const shareSlot_model_1 = require("./shareSlot.model");
 const model_2 = require("../settings/model");
 const counter_1 = require("../user/counter");
+const generateId_1 = require("../../utils/generateId");
 const BATCH_SIZE = 1000;
 /**
  * Generate a unique, readable share number using project ID and sequential counter
@@ -62,7 +63,8 @@ const createShare = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
         const settings = yield model_2.Settings.findOne();
         const defaults = (_a = settings === null || settings === void 0 ? void 0 : settings.defaultShareConfig) !== null && _a !== void 0 ? _a : {};
         const totalShares = Number((_b = req.body.totalShares) !== null && _b !== void 0 ? _b : 0);
-        const pkg = yield model_1.Project.create(Object.assign(Object.assign(Object.assign({}, defaults), req.body), { totalShares }));
+        const projectId = yield (0, generateId_1.generateCustomId)("PRJ");
+        const pkg = yield model_1.Project.create(Object.assign(Object.assign(Object.assign({}, defaults), req.body), { totalShares, projectId }));
         if (totalShares > 0) {
             // Atomically reserve a range of `totalShares` sequential numbers for this project.
             // reserveShareRange returns the value *before* incrementing, so

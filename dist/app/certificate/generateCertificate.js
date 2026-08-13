@@ -24,9 +24,40 @@ function toDataUrl(filename) {
     return `data:image/${ext};base64,${data}`;
 }
 function numberToWords(n) {
-    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
-        "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    const ones = [
+        "",
+        "One",
+        "Two",
+        "Three",
+        "Four",
+        "Five",
+        "Six",
+        "Seven",
+        "Eight",
+        "Nine",
+        "Ten",
+        "Eleven",
+        "Twelve",
+        "Thirteen",
+        "Fourteen",
+        "Fifteen",
+        "Sixteen",
+        "Seventeen",
+        "Eighteen",
+        "Nineteen",
+    ];
+    const tens = [
+        "",
+        "",
+        "Twenty",
+        "Thirty",
+        "Forty",
+        "Fifty",
+        "Sixty",
+        "Seventy",
+        "Eighty",
+        "Ninety",
+    ];
     if (n === 0)
         return "Zero";
     if (n < 20)
@@ -34,37 +65,59 @@ function numberToWords(n) {
     if (n < 100)
         return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
     if (n < 1000)
-        return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + numberToWords(n % 100) : "");
+        return (ones[Math.floor(n / 100)] +
+            " Hundred" +
+            (n % 100 ? " " + numberToWords(n % 100) : ""));
     if (n < 100000)
-        return numberToWords(Math.floor(n / 1000)) + " Thousand" + (n % 1000 ? " " + numberToWords(n % 1000) : "");
+        return (numberToWords(Math.floor(n / 1000)) +
+            " Thousand" +
+            (n % 1000 ? " " + numberToWords(n % 1000) : ""));
     if (n < 10000000)
-        return numberToWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 ? " " + numberToWords(n % 100000) : "");
-    return numberToWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 ? " " + numberToWords(n % 10000000) : "");
+        return (numberToWords(Math.floor(n / 100000)) +
+            " Lakh" +
+            (n % 100000 ? " " + numberToWords(n % 100000) : ""));
+    return (numberToWords(Math.floor(n / 10000000)) +
+        " Crore" +
+        (n % 10000000 ? " " + numberToWords(n % 10000000) : ""));
 }
 function buildHtml(c) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
     const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
-    const buyer = (_b = (_a = c.purchaseId) === null || _a === void 0 ? void 0 : _a.buyerInfo) !== null && _b !== void 0 ? _b : c.userId;
+    const qrUrl = toDataUrl("qr_code.jpeg");
+    const buyer = (_a = c.purchaseId) === null || _a === void 0 ? void 0 : _a.buyerInfo; // snapshot (may lack newer fields)
+    const userProf = c.userId; // populated User doc (has email, fatherName, nid, address)
     const isIssued = c.status === "issued";
     const fmt = (n) => Number(n).toLocaleString("en-BD");
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
-    const qty = (_d = (_c = c.purchaseId) === null || _c === void 0 ? void 0 : _c.quantity) !== null && _d !== void 0 ? _d : 1;
+    const fmtDate = (d) => d
+        ? new Date(d).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        })
+        : "—";
+    const qty = (_c = (_b = c.purchaseId) === null || _b === void 0 ? void 0 : _b.quantity) !== null && _c !== void 0 ? _c : 1;
     const shareWords = numberToWords(qty);
     const totalAmt = c.totalPayable;
-    const certNo = `C-${c._id.toString().slice(-6).toUpperCase()}/2026`;
-    const fromShare = (_f = (_e = c.shareNumbers) === null || _e === void 0 ? void 0 : _e[0]) !== null && _f !== void 0 ? _f : "—";
-    const toShare = (_h = (_g = c.shareNumbers) === null || _g === void 0 ? void 0 : _g[c.shareNumbers.length - 1]) !== null && _h !== void 0 ? _h : "—";
-    const issueDate = c.issuedAt ? fmtDate(c.issuedAt) : (isIssued ? fmtDate(new Date()) : "Pending");
-    const buyerName = (_j = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _j !== void 0 ? _j : "—";
-    const fatherName = (_k = buyer === null || buyer === void 0 ? void 0 : buyer.fatherName) !== null && _k !== void 0 ? _k : "—";
-    const address = (_l = buyer === null || buyer === void 0 ? void 0 : buyer.address) !== null && _l !== void 0 ? _l : ([buyer === null || buyer === void 0 ? void 0 : buyer.upazila, buyer === null || buyer === void 0 ? void 0 : buyer.district].filter(Boolean).join(", ") || "—");
-    const nid = (_m = buyer === null || buyer === void 0 ? void 0 : buyer.nid) !== null && _m !== void 0 ? _m : "—";
-    const mobile = (_o = buyer === null || buyer === void 0 ? void 0 : buyer.phone) !== null && _o !== void 0 ? _o : "—";
-    const email = (_p = buyer === null || buyer === void 0 ? void 0 : buyer.email) !== null && _p !== void 0 ? _p : "—";
-    const customerId = (_q = buyer === null || buyer === void 0 ? void 0 : buyer.customerId) !== null && _q !== void 0 ? _q : c._id.toString().slice(-12).toUpperCase();
-    const shareNumberHtml = ((_r = c.shareNumbers) === null || _r === void 0 ? void 0 : _r.length) === 1
+    const fromShare = (_e = (_d = c.shareNumbers) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : "—";
+    const toShare = (_g = (_f = c.shareNumbers) === null || _f === void 0 ? void 0 : _f[c.shareNumbers.length - 1]) !== null && _g !== void 0 ? _g : "—";
+    const issueDate = c.issuedAt
+        ? fmtDate(c.issuedAt)
+        : isIssued
+            ? fmtDate(new Date())
+            : "Pending";
+    // Merge: buyerInfo snapshot takes priority for name/phone; fall back to userProfile for newer fields
+    const buyerName = (_j = (_h = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _h !== void 0 ? _h : userProf === null || userProf === void 0 ? void 0 : userProf.name) !== null && _j !== void 0 ? _j : "—";
+    const fatherName = (_l = (_k = buyer === null || buyer === void 0 ? void 0 : buyer.fatherName) !== null && _k !== void 0 ? _k : userProf === null || userProf === void 0 ? void 0 : userProf.fatherName) !== null && _l !== void 0 ? _l : "—";
+    const address = (_o = (_m = buyer === null || buyer === void 0 ? void 0 : buyer.address) !== null && _m !== void 0 ? _m : userProf === null || userProf === void 0 ? void 0 : userProf.address) !== null && _o !== void 0 ? _o : ([userProf === null || userProf === void 0 ? void 0 : userProf.upazila, userProf === null || userProf === void 0 ? void 0 : userProf.district].filter(Boolean).join(", ") || "—");
+    const nid = (_q = (_p = buyer === null || buyer === void 0 ? void 0 : buyer.nid) !== null && _p !== void 0 ? _p : userProf === null || userProf === void 0 ? void 0 : userProf.nid) !== null && _q !== void 0 ? _q : "—";
+    const mobile = (_s = (_r = buyer === null || buyer === void 0 ? void 0 : buyer.phone) !== null && _r !== void 0 ? _r : userProf === null || userProf === void 0 ? void 0 : userProf.phone) !== null && _s !== void 0 ? _s : "—";
+    const email = (_u = (_t = buyer === null || buyer === void 0 ? void 0 : buyer.email) !== null && _t !== void 0 ? _t : userProf === null || userProf === void 0 ? void 0 : userProf.email) !== null && _u !== void 0 ? _u : "—";
+    const customerId = (_w = (_v = buyer === null || buyer === void 0 ? void 0 : buyer.customerId) !== null && _v !== void 0 ? _v : userProf === null || userProf === void 0 ? void 0 : userProf.customerId) !== null && _w !== void 0 ? _w : c._id.toString().slice(-12).toUpperCase();
+    const shareNumberHtml = ((_x = c.shareNumbers) === null || _x === void 0 ? void 0 : _x.length) === 1
         ? `<span style="color:#c0392b;font-weight:600;">${fromShare}</span>`
         : `From <span style="color:#c0392b;font-weight:600;">${fromShare}</span> To <span style="color:#c0392b;font-weight:600;">${toShare}</span>`;
+    // Use actual certificateId if available, otherwise fallback to legacy format
+    const certNo = (_y = c.certificateId) !== null && _y !== void 0 ? _y : `CERT-${c._id.toString().slice(-6).toUpperCase()}`;
     // Mirrors the React <Row> component exactly:
     // icon(90px) | label(labelW) | :(sep) | value
     const row = (iconSvg, label, labelW, valueHtml, noBorder = false) => `
@@ -81,6 +134,7 @@ function buildHtml(c) {
     const iconId = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
     const iconPhone = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.37 2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
     const iconEmail = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+    const iconCustomerId = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>`;
     const iconShare = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
     const iconFace = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
     const iconCount = `<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#1a5c1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
@@ -134,12 +188,13 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
           ${row(iconPin, "Address", 540, address)}
           ${row(iconId, "NID / Passport No.", 540, nid)}
           ${row(iconPhone, "Mobile No.", 540, mobile)}
-          ${row(iconEmail, "Email", 540, email, true)}
+          ${row(iconEmail, "Email", 540, email)}
+          ${row(iconCustomerId, "Customer ID", 540, customerId, true)}
         </div>
 
         <!-- Share details table: border 3px #888, border-radius 28, margin-top 40 -->
         <div style="border:3px solid #888;border-radius:28px;overflow:hidden;margin-top:40px;">
-          ${row(iconShare, "Share Number (Distinctive Nos.)", 700, shareNumberHtml)}
+          ${row(iconShare, "Share Numbers", 700, shareNumberHtml)}
           ${row(iconFace, "Face Value Per Share", 700, "Tk. 100/- (Taka One Hundred Only)")}
           ${row(iconCount, "Number of Shares", 700, `<span style="color:#c0392b;">${qty}</span> Shares`)}
           ${row(iconTotal, "Total Amount", 700, `Tk. <span style="color:#c0392b;">${fmt(totalAmt)}</span>/-`)}
@@ -174,11 +229,9 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
             <p>the Memorandum and Articles of Association of the Company.</p>
           </div>
 
-          <!-- QR placeholder: 420x420, border 4px #ccc, bg #f9f9f9, border-radius 8 -->
+          <!-- QR image: 420x420, border-radius 8 -->
           <div style="display:flex;flex-direction:column;align-items:center;gap:20px;">
-            <div style="width:420px;height:420px;border:4px solid #ccc;display:flex;align-items:center;justify-content:center;font-size:52px;color:#999;text-align:center;background:#f9f9f9;border-radius:8px;">
-              QR Code<br/>Verification
-            </div>
+            <img src="${qrUrl}" alt="QR Code" style="width:420px;height:420px;border-radius:8px;object-fit:contain;" />
             <div style="font-size:52px;color:#555;text-align:center;">Scan to verify this certificate</div>
             <div style="font-size:56px;color:#1a5c1a;text-decoration:underline;text-align:center;">www.alaheebd.com/verify</div>
           </div>
@@ -259,7 +312,11 @@ function generateCertificatePng(c) {
     return __awaiter(this, void 0, void 0, function* () {
         const browser = yield puppeteer_1.default.launch({
             headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+            args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+            ],
         });
         try {
             const page = yield browser.newPage();

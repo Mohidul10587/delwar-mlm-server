@@ -2,6 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import { Withdrawal } from "./model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { Branch } from "../branch/model";
+import { Settings } from "../settings/model";
+import { CompanyLedger } from "../ledger/model";
+import { User } from "../user/model";
+import { sendWithdrawalApprovalSms } from "../../utils/sms";
 
 // All wallet balances except cashback are withdrawable. Loan is subtracted
 // from their total before a withdrawal can be approved.
@@ -260,6 +264,9 @@ export const updateWithdrawalStatus = async (
       }
     }
 
+    // Get user info for SMS
+    const user = await User.findById(withdrawal.userId).select("phone").lean();
+
     if (status === "rejected") {
       const wallet = await Wallet.findOne({ userId: withdrawal.userId });
       if (wallet) {
@@ -311,19 +318,20 @@ export const updateWithdrawalStatus = async (
       }
     }
 
-    withdrawal.status = status;
-    withdrawal.reviewNote = String(reviewNote ?? "").trim();
-    withdrawal.reviewedBy = req.user!._id;
-    withdrawal.reviewedAt = new Date();
-    await withdrawal.save();
-
-    // Ledger: approved withdrawal = outflow
+    // Handle approval with tax calculation
     if (status === "approved") {
-      const wUser = (await Withdrawal.findById(withdrawal._id)
-        .populate("userId", "name username")
-        .lean()) as any;
-      const uName = wUser?.userId?.name ?? "";
-      const uUsername = wUser?.userId?.username ?? "";
+      // Get tax percentage from settings
+      const settings = await Settings.findOne().select("withdrawalTaxPercent").lean();
+      const taxPercent = (settings as any)?.withdrawalTaxPercent ?? 0;
+      
+      // Calculate tax and net amount
+      const taxAmount = Math.round((withdrawal.amount * taxPercent) / 100);
+      const netAmount = withdrawal.amount - taxAmount;
+
+      // Update withdrawal with tax details
+      withdrawal.taxAmount = taxAmount;
+      withdrawal.netAmount = netAmount;
+
       const isCashMethod =
         withdrawal.method === "cash" || withdrawal.method === "branch";
       const dest = isCashMethod
@@ -333,7 +341,60 @@ export const updateWithdrawalStatus = async (
         : withdrawal.bankAccount
         ? `Bank: ${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber}`
         : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
+
+      // Create ledger entries
+      const wUser = (await Withdrawal.findById(withdrawal._id)
+        .populate("userId", "name username")
+        .lean()) as any;
+      const uName = wUser?.userId?.name ?? "";
+      const uUsername = wUser?.userId?.username ?? "";
+
+      // Ledger entry for withdrawal (outflow)
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "withdrawal_paid",
+        amount: netAmount,
+        relatedId: withdrawal._id,
+        relatedModel: "Withdrawal",
+        userId: withdrawal.userId,
+        note: `Withdrawal approved — ৳${netAmount.toLocaleString()} paid to ${uName} (@${uUsername}) via ${dest}`,
+      });
+
+      // Ledger entry for tax (inflow)
+      if (taxAmount > 0) {
+        await CompanyLedger.create({
+          date: new Date(),
+          type: "withdrawal_tax_received",
+          amount: taxAmount,
+          relatedId: withdrawal._id,
+          relatedModel: "Withdrawal",
+          userId: withdrawal.userId,
+          note: `Withdrawal tax — ৳${taxAmount.toLocaleString()} (${taxPercent}%) from ${uName} (@${uUsername})`,
+        });
+      }
+
+      // Send SMS notification
+      if (user && (user as any).phone) {
+        try {
+          await sendWithdrawalApprovalSms(
+            (user as any).phone,
+            withdrawal.amount,
+            taxAmount,
+            netAmount,
+            dest
+          );
+        } catch (smsError) {
+          console.error("Failed to send withdrawal approval SMS:", smsError);
+          // Don't fail the approval if SMS fails
+        }
+      }
     }
+
+    withdrawal.status = status;
+    withdrawal.reviewNote = String(reviewNote ?? "").trim();
+    withdrawal.reviewedBy = req.user!._id;
+    withdrawal.reviewedAt = new Date();
+    await withdrawal.save();
 
     res.json({ message: `Withdrawal ${status}`, withdrawal });
   } catch (err) {

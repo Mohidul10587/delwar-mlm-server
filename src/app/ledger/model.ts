@@ -9,6 +9,7 @@ import { Schema, model, Document, Types } from "mongoose";
  *   investment_received      — investment deposit created
  *   transfer_fee_received    — fee charged on balance transfer between users
  *   capital_received         — capital received from an investor
+ *   withdrawal_tax_received  — tax collected from withdrawal approvals
  *
  * OUTFLOW (company pays out):
  *   commission_paid          — direct or managerial commission to a user's wallet
@@ -27,6 +28,7 @@ export type LedgerType =
   | "investment_received"
   | "transfer_fee_received"
   | "capital_received"
+  | "withdrawal_tax_received"
   | "commission_paid"
   | "salary_paid"
   | "investment_profit_paid"
@@ -44,6 +46,7 @@ export const INFLOW_TYPES: LedgerType[] = [
   "investment_received",
   "transfer_fee_received",
   "capital_received",
+  "withdrawal_tax_received",
 ];
 
 export const OUTFLOW_TYPES: LedgerType[] = [

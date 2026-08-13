@@ -5,6 +5,8 @@ const mongoose_1 = require("mongoose");
 const WithdrawalSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     amount: { type: Number, required: true, min: 1 },
+    taxAmount: { type: Number, default: 0 },
+    netAmount: { type: Number, default: 0 },
     method: {
         type: String,
         enum: ["bank", "mobile", "cash", "bkash", "nagad", "rocket", "branch"],

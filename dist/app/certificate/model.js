@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Certificate = void 0;
 const mongoose_1 = require("mongoose");
 const CertificateSchema = new mongoose_1.Schema({
+    certificateId: { type: String, unique: true, sparse: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     purchaseId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Purchase", required: true, unique: true },
     projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Project", required: true },

@@ -101,12 +101,27 @@ router.post("/verify", (req, res, next) => __awaiter(void 0, void 0, void 0, fun
         yield otp.deleteOne();
         // purpose অনুযায়ী action
         if (purpose === "register") {
-            // User এর phone verify করা
-            const user = yield model_2.User.findOneAndUpdate({ username }, { isPhoneVerified: true }, { new: true });
+            // User এর phone verify করা এবং plain password fetch করা
+            const userBeforeUpdate = yield model_2.User.findOne({ username }).select("tempPlainPassword phone");
+            const plainPassword = userBeforeUpdate === null || userBeforeUpdate === void 0 ? void 0 : userBeforeUpdate.tempPlainPassword;
+            const user = yield model_2.User.findOneAndUpdate({ username }, {
+                isPhoneVerified: true,
+                $unset: { tempPlainPassword: 1 } // Remove tempPlainPassword after verification
+            }, { new: true });
             if (!user) {
                 return res.status(404).json({
                     message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
                 });
+            }
+            // Send SMS with credentials after phone verification
+            try {
+                if (plainPassword) {
+                    yield (0, sms_1.sendRegistrationSms)(user.phone, user.username, plainPassword);
+                }
+            }
+            catch (smsError) {
+                console.error("Failed to send registration SMS:", smsError);
+                // Don't fail verification if SMS fails
             }
             // Auto-login: token generate + cookie set
             const accessToken = jsonwebtoken_1.default.sign({ id: user._id.toString() }, authConfig_1.JWT_SECRET, {

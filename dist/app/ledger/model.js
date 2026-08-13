@@ -8,6 +8,7 @@ exports.INFLOW_TYPES = [
     "investment_received",
     "transfer_fee_received",
     "capital_received",
+    "withdrawal_tax_received",
 ];
 exports.OUTFLOW_TYPES = [
     "commission_paid",

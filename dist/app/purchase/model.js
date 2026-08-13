@@ -62,6 +62,7 @@ const SnapshotSchema = new mongoose_1.Schema({
     ],
 }, { _id: false });
 const PurchaseSchema = new mongoose_1.Schema({
+    paymentId: { type: String, unique: true, sparse: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true },
     projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Project", required: true },
     quantity: { type: Number, required: true, min: 1 },

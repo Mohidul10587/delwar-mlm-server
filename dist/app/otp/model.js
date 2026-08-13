@@ -11,6 +11,7 @@ const OtpSchema = new mongoose_1.Schema({
         required: true,
     },
     expiresAt: { type: Date, required: true },
+    plainPassword: { type: String, default: null },
 });
 // MongoDB TTL index — expiresAt পার হলে document স্বয়ংক্রিয়ভাবে মুছে যাবে
 OtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

@@ -47,6 +47,11 @@ const SettingsSchema = new mongoose_1.Schema({
     ranks: [
         {
             name: { type: String },
+            rankType: {
+                type: String,
+                enum: ["primary", "special", "super"],
+                default: "primary",
+            },
             minNetworkSalesAmount: { type: Number, default: 0 },
             minPersonalPurchaseQtyToAchieve: { type: Number, default: 0 },
             reward: { type: String, default: "" },
@@ -83,6 +88,7 @@ const SettingsSchema = new mongoose_1.Schema({
         }),
     },
     balanceTransferFeePercent: { type: Number, default: 0 },
+    withdrawalTaxPercent: { type: Number, default: 0 },
     rewardConfig: {
         type: {
             enabled: { type: Boolean, default: false },

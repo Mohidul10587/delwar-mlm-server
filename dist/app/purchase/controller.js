@@ -42,7 +42,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMyPurchases = exports.getInstallmentReceipt = exports.getPurchaseReceipt = exports.getPurchaseById = exports.getPurchases = exports.createPurchase = void 0;
+exports.downloadInstallmentReceipt = exports.downloadPurchaseReceipt = exports.getMyPurchases = exports.getInstallmentReceipt = exports.getPurchaseReceipt = exports.getPurchaseById = exports.getPurchases = exports.createPurchase = void 0;
 const model_1 = require("./model");
 const installment_model_1 = require("./installment.model");
 const model_2 = require("../project/model");
@@ -52,6 +52,8 @@ const service_1 = require("./service");
 const model_5 = require("../certificate/model");
 const shareSlot_model_1 = require("../project/shareSlot.model");
 const model_6 = require("../wallet/model");
+const generateId_1 = require("../../utils/generateId");
+const generateReceipt_1 = require("./generateReceipt");
 // Helper — build slotsByPurchase map from a list of purchaseIds
 function fetchSlotsByPurchase(purchaseIds) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -260,6 +262,7 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             })),
         };
         const purchase = yield model_1.Purchase.create({
+            paymentId: yield (0, generateId_1.generateCustomId)("PAY"),
             userId: req.user._id,
             projectId,
             quantity: qty,
@@ -307,6 +310,7 @@ const createPurchase = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
             });
         }
         yield model_5.Certificate.create({
+            certificateId: yield (0, generateId_1.generateCustomId)("CERT"),
             userId: req.user._id,
             purchaseId: purchase._id,
             projectId,
@@ -439,7 +443,7 @@ const getPurchaseReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0,
     var _a, _b, _c, _d, _e, _f;
     try {
         const purchase = yield model_1.Purchase.findById(req.params.id)
-            .populate("userId", "name username phone")
+            .populate("userId", "name username phone customerId")
             .populate("projectId", "title cashPrice image")
             .populate("reviewedBy", "name username") // cashier / receiver
             .lean();
@@ -490,7 +494,7 @@ const getInstallmentReceipt = (req, res, next) => __awaiter(void 0, void 0, void
     try {
         const { purchaseId, installmentId } = req.params;
         const purchase = yield model_1.Purchase.findById(purchaseId)
-            .populate("userId", "name username phone")
+            .populate("userId", "name username phone customerId")
             .populate("projectId", "title cashPrice image")
             .lean();
         if (!purchase)
@@ -557,3 +561,82 @@ const getMyPurchases = (req, res, next) => __awaiter(void 0, void 0, void 0, fun
     }
 });
 exports.getMyPurchases = getMyPurchases;
+// GET /purchase/:id/receipt/download — server-side PNG download for purchase receipt
+const downloadPurchaseReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const purchase = yield model_1.Purchase.findById(req.params.id)
+            .populate("userId", "name username phone customerId")
+            .populate("projectId", "title cashPrice image")
+            .populate("reviewedBy", "name username")
+            .lean();
+        if (!purchase)
+            return res.status(404).json({ message: "Purchase not found" });
+        const isOwner = purchase.userId &&
+            ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
+        const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
+        if (!isOwner && !isStaff)
+            return res.status(403).json({ message: "Forbidden" });
+        if (purchase.status !== "approved")
+            return res.status(400).json({ message: "Receipt only available for approved purchases" });
+        const slots = yield shareSlot_model_1.ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+            .select("shareNumber")
+            .sort({ shareNumber: 1 })
+            .lean();
+        const pngBuffer = yield (0, generateReceipt_1.generateReceiptPng)({
+            purchase: purchase,
+            shareNumbers: slots.map((s) => s.shareNumber),
+        });
+        res.set({
+            "Content-Type": "image/png",
+            "Content-Disposition": `attachment; filename="receipt-${purchase._id}.png"`,
+            "Content-Length": pngBuffer.length,
+            "Cache-Control": "no-store",
+        });
+        res.send(pngBuffer);
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.downloadPurchaseReceipt = downloadPurchaseReceipt;
+// GET /purchase/:purchaseId/installments/:installmentId/receipt/download
+const downloadInstallmentReceipt = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { purchaseId, installmentId } = req.params;
+        const purchase = yield model_1.Purchase.findById(purchaseId)
+            .populate("userId", "name username phone customerId")
+            .populate("projectId", "title cashPrice image")
+            .lean();
+        if (!purchase)
+            return res.status(404).json({ message: "Purchase not found" });
+        const isOwner = purchase.userId &&
+            ((_a = purchase.userId._id) === null || _a === void 0 ? void 0 : _a.toString()) === req.user._id.toString();
+        const isStaff = ["superadmin", "admin", "staff"].includes(req.user.role);
+        if (!isOwner && !isStaff)
+            return res.status(403).json({ message: "Forbidden" });
+        const installment = yield installment_model_1.InstallmentPayment.findById(installmentId)
+            .populate("reviewedBy", "name username")
+            .lean();
+        if (!installment)
+            return res.status(404).json({ message: "Installment not found" });
+        if (installment.status !== "approved")
+            return res.status(400).json({ message: "Receipt only available for approved installments" });
+        const pngBuffer = yield (0, generateReceipt_1.generateReceiptPng)({
+            purchase: purchase,
+            installment: installment,
+        });
+        res.set({
+            "Content-Type": "image/png",
+            "Content-Disposition": `attachment; filename="receipt-inst-${installment._id}.png"`,
+            "Content-Length": pngBuffer.length,
+            "Cache-Control": "no-store",
+        });
+        res.send(pngBuffer);
+    }
+    catch (err) {
+        next(err);
+    }
+});
+exports.downloadInstallmentReceipt = downloadInstallmentReceipt;

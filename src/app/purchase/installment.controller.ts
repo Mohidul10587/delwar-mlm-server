@@ -10,6 +10,7 @@ import { CompanyLedger } from "../ledger/model";
 import { isTransactionIdUsed } from "../../utils/isTransactionIdUsed";
 import { processRewardAfterPayment } from "../reward-tracker/service";
 import { generateCustomId } from "../../utils/generateId";
+import { sendInstallmentApprovalSms } from "../../utils/sms";
 
 // Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
 const getWallet = async (userId: string) => {
@@ -347,6 +348,21 @@ export const updateInstallmentStatus = async (
           );
         } catch (e) {
           console.error("[COMMISSION ERROR] Installment commission error:", e);
+        }
+
+        // Send SMS notification for installment approval
+        try {
+          const user = await User.findById(purchase.userId).select("phone").lean();
+          if (user && (user as any).phone) {
+            await sendInstallmentApprovalSms(
+              (user as any).phone,
+              payment.amount,
+              purchase._id.toString()
+            );
+          }
+        } catch (smsError) {
+          console.error("Failed to send installment approval SMS:", smsError);
+          // Don't fail the approval if SMS fails
         }
 
         // Fix E-02: Ledger — inflow for this installment payment (log failure, don't swallow)

@@ -20,6 +20,8 @@ const commissions_1 = require("./commissions");
 const model_5 = require("../ledger/model");
 const isTransactionIdUsed_1 = require("../../utils/isTransactionIdUsed");
 const service_2 = require("../reward-tracker/service");
+const generateId_1 = require("../../utils/generateId");
+const sms_1 = require("../../utils/sms");
 // Fix D-06: findOrCreateWallet replaced by inline findOne (wallet must exist by this point)
 const getWallet = (userId) => __awaiter(void 0, void 0, void 0, function* () {
     return yield model_3.Wallet.findOne({ userId });
@@ -130,6 +132,7 @@ const createInstallmentPayment = (req, res, next) => __awaiter(void 0, void 0, v
             });
         }
         const payment = yield installment_model_1.InstallmentPayment.create({
+            paymentId: yield (0, generateId_1.generateCustomId)("PAY"),
             purchaseId: purchase._id,
             userId: req.user._id,
             installmentNumbers: uniqueNumbers,
@@ -278,6 +281,17 @@ const updateInstallmentStatus = (req, res, next) => __awaiter(void 0, void 0, vo
                 }
                 catch (e) {
                     console.error("[COMMISSION ERROR] Installment commission error:", e);
+                }
+                // Send SMS notification for installment approval
+                try {
+                    const user = yield model_4.User.findById(purchase.userId).select("phone").lean();
+                    if (user && user.phone) {
+                        yield (0, sms_1.sendInstallmentApprovalSms)(user.phone, payment.amount, purchase._id.toString());
+                    }
+                }
+                catch (smsError) {
+                    console.error("Failed to send installment approval SMS:", smsError);
+                    // Don't fail the approval if SMS fails
                 }
                 // Fix E-02: Ledger — inflow for this installment payment (log failure, don't swallow)
                 const buyer = yield model_4.User.findById(purchase.userId)

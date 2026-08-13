@@ -12,6 +12,7 @@ import {
   cookieOpts,
 } from "../../utils/authConfig";
 import { generateCustomId } from "../../utils/generateId";
+import { sendRegistrationSms } from "../../utils/sms";
 
 declare module "express" {
   interface Request {
@@ -159,6 +160,7 @@ export const register = async (
       username,
       phone,
       password: hashedPassword,
+      tempPlainPassword: password, // Store plain password temporarily for SMS
       generationAncestors,
       isPhoneVerified: false,
       ...(firstRankName && {
@@ -236,6 +238,7 @@ export const adminRegister = async (
       username,
       phone,
       password: hashedPassword,
+      tempPlainPassword: password, // Store plain password for SMS
       role,
       // Accounts created by a superadmin are trusted internal registrations.
       // Do not require the new user to complete the public OTP flow.
@@ -262,6 +265,17 @@ export const adminRegister = async (
       );
       user.linkedPhoneAccounts = siblingIds as mongoose.Types.ObjectId[];
       await user.save();
+    }
+
+    // Send SMS with credentials (Super Admin registration - immediate SMS)
+    try {
+      await sendRegistrationSms(phone, username, password);
+      // Clear temporary password after sending SMS
+      user.tempPlainPassword = undefined;
+      await user.save();
+    } catch (smsError) {
+      console.error("Failed to send registration SMS:", smsError);
+      // Don't fail registration if SMS fails
     }
 
     res.status(201).json({ message: "User registered successfully", user });

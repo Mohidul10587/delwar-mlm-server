@@ -147,7 +147,11 @@ const replaceAllRanks = (req, res, next) => __awaiter(void 0, void 0, void 0, fu
             return res.status(404).json({ message: "Settings not found" });
         // First 2 ranks are locked — always preserved from DB, never replaced by payload
         const lockedRanks = s.ranks.slice(0, 2);
-        const editableRanks = ((_a = req.body.ranks) !== null && _a !== void 0 ? _a : []).slice(2);
+        // Payload ranks index 2+ are the editable ones; rankType is preserved as sent
+        const editableRanks = ((_a = req.body.ranks) !== null && _a !== void 0 ? _a : []).slice(2).map((r) => {
+            var _a;
+            return (Object.assign(Object.assign({}, r), { rankType: (_a = r.rankType) !== null && _a !== void 0 ? _a : "primary" }));
+        });
         s.ranks = [...lockedRanks, ...editableRanks];
         yield s.save();
         res.json({ message: "Ranks replaced successfully", ranks: s.ranks });

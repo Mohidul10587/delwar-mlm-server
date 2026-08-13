@@ -3,6 +3,8 @@ import { Schema, model, Document, Types } from "mongoose";
 export interface IWithdrawal extends Document {
   userId: Types.ObjectId;
   amount: number;
+  taxAmount: number;
+  netAmount: number;
   method: "bank" | "mobile" | "cash" | "bkash" | "nagad" | "rocket" | "branch";
   /** For bank withdrawals */
   bankAccount?: {
@@ -31,6 +33,8 @@ const WithdrawalSchema = new Schema<IWithdrawal>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     amount: { type: Number, required: true, min: 1 },
+    taxAmount: { type: Number, default: 0 },
+    netAmount: { type: Number, default: 0 },
     method: {
       type: String,
       enum: ["bank", "mobile", "cash", "bkash", "nagad", "rocket", "branch"],

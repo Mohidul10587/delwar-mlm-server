@@ -13,6 +13,10 @@ exports.updateWithdrawalStatus = exports.getMyWithdrawals = exports.getWithdrawa
 const model_1 = require("./model");
 const model_2 = require("../wallet/model");
 const model_3 = require("../branch/model");
+const model_4 = require("../settings/model");
+const model_5 = require("../ledger/model");
+const model_6 = require("../user/model");
+const sms_1 = require("../../utils/sms");
 // All wallet balances except cashback are withdrawable. Loan is subtracted
 // from their total before a withdrawal can be approved.
 const WITHDRAWABLE_FIELDS = [
@@ -204,7 +208,7 @@ const getMyWithdrawals = (req, res, next) => __awaiter(void 0, void 0, void 0, f
 });
 exports.getMyWithdrawals = getMyWithdrawals;
 const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
@@ -229,6 +233,8 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
                 });
             }
         }
+        // Get user info for SMS
+        const user = yield model_6.User.findById(withdrawal.userId).select("phone").lean();
         if (status === "rejected") {
             const wallet = yield model_2.Wallet.findOne({ userId: withdrawal.userId });
             if (wallet) {
@@ -270,27 +276,69 @@ const updateWithdrawalStatus = (req, res, next) => __awaiter(void 0, void 0, voi
                 });
             }
         }
+        // Handle approval with tax calculation
+        if (status === "approved") {
+            // Get tax percentage from settings
+            const settings = yield model_4.Settings.findOne().select("withdrawalTaxPercent").lean();
+            const taxPercent = (_e = settings === null || settings === void 0 ? void 0 : settings.withdrawalTaxPercent) !== null && _e !== void 0 ? _e : 0;
+            // Calculate tax and net amount
+            const taxAmount = Math.round((withdrawal.amount * taxPercent) / 100);
+            const netAmount = withdrawal.amount - taxAmount;
+            // Update withdrawal with tax details
+            withdrawal.taxAmount = taxAmount;
+            withdrawal.netAmount = netAmount;
+            const isCashMethod = withdrawal.method === "cash" || withdrawal.method === "branch";
+            const dest = isCashMethod
+                ? `Branch: ${withdrawal.branch}`
+                : withdrawal.method === "mobile"
+                    ? `${(_f = withdrawal.mobileType) === null || _f === void 0 ? void 0 : _f.toUpperCase()}: ${withdrawal.mobileNumber}`
+                    : withdrawal.bankAccount
+                        ? `Bank: ${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber}`
+                        : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
+            // Create ledger entries
+            const wUser = (yield model_1.Withdrawal.findById(withdrawal._id)
+                .populate("userId", "name username")
+                .lean());
+            const uName = (_h = (_g = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _g === void 0 ? void 0 : _g.name) !== null && _h !== void 0 ? _h : "";
+            const uUsername = (_k = (_j = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _j === void 0 ? void 0 : _j.username) !== null && _k !== void 0 ? _k : "";
+            // Ledger entry for withdrawal (outflow)
+            yield model_5.CompanyLedger.create({
+                date: new Date(),
+                type: "withdrawal_paid",
+                amount: netAmount,
+                relatedId: withdrawal._id,
+                relatedModel: "Withdrawal",
+                userId: withdrawal.userId,
+                note: `Withdrawal approved — ৳${netAmount.toLocaleString()} paid to ${uName} (@${uUsername}) via ${dest}`,
+            });
+            // Ledger entry for tax (inflow)
+            if (taxAmount > 0) {
+                yield model_5.CompanyLedger.create({
+                    date: new Date(),
+                    type: "withdrawal_tax_received",
+                    amount: taxAmount,
+                    relatedId: withdrawal._id,
+                    relatedModel: "Withdrawal",
+                    userId: withdrawal.userId,
+                    note: `Withdrawal tax — ৳${taxAmount.toLocaleString()} (${taxPercent}%) from ${uName} (@${uUsername})`,
+                });
+            }
+            // Send SMS notification
+            if (user && user.phone) {
+                try {
+                    yield (0, sms_1.sendWithdrawalApprovalSms)(user.phone, withdrawal.amount, taxAmount, netAmount, dest);
+                }
+                catch (smsError) {
+                    console.error("Failed to send withdrawal approval SMS:", smsError);
+                    // Don't fail the approval if SMS fails
+                }
+            }
+        }
         withdrawal.status = status;
         withdrawal.reviewNote = String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim();
         withdrawal.reviewedBy = req.user._id;
         withdrawal.reviewedAt = new Date();
         yield withdrawal.save();
-        // Ledger: approved withdrawal = outflow
-        if (status === "approved") {
-            const wUser = (yield model_1.Withdrawal.findById(withdrawal._id)
-                .populate("userId", "name username")
-                .lean());
-            const uName = (_f = (_e = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _e === void 0 ? void 0 : _e.name) !== null && _f !== void 0 ? _f : "";
-            const uUsername = (_h = (_g = wUser === null || wUser === void 0 ? void 0 : wUser.userId) === null || _g === void 0 ? void 0 : _g.username) !== null && _h !== void 0 ? _h : "";
-            const isCashMethod = withdrawal.method === "cash" || withdrawal.method === "branch";
-            const dest = isCashMethod
-                ? `Branch: ${withdrawal.branch}`
-                : withdrawal.method === "mobile"
-                    ? `${(_j = withdrawal.mobileType) === null || _j === void 0 ? void 0 : _j.toUpperCase()}: ${withdrawal.mobileNumber}`
-                    : withdrawal.bankAccount
-                        ? `Bank: ${withdrawal.bankAccount.bankName} — ${withdrawal.bankAccount.accountNumber}`
-                        : `${withdrawal.method.toUpperCase()}: ${withdrawal.accountDetails}`;
-        }
         res.json({ message: `Withdrawal ${status}`, withdrawal });
     }
     catch (err) {

@@ -20,6 +20,7 @@ const shareSlot_model_1 = require("../project/shareSlot.model");
 const model_5 = require("../project/model");
 const controller_1 = require("../rank/controller");
 const model_6 = require("../wallet/model");
+const sms_1 = require("../../utils/sms");
 // ── Share allocation helpers ──────────────────────────────────────────────────
 /**
  * Fix F-01: Allocates share slots atomically to prevent race conditions.
@@ -122,7 +123,7 @@ function checkAndCompleteShare(projectId) {
 }
 // ── Update Purchase Status (Approve / Reject) ─────────────────────────────────
 const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     try {
         const { status, reviewNote } = req.body;
         if (!["approved", "rejected"].includes(status))
@@ -182,6 +183,19 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
         // Respond immediately
         res.json({ message: `Purchase ${status}`, purchase });
         if (status === "approved" && !wasAlreadyApproved) {
+            // Send SMS notification for purchase approval
+            try {
+                const user = yield model_3.User.findById(purchase.userId).select("phone").lean();
+                if (user && user.phone) {
+                    const totalAmount = purchase.amountPaid;
+                    const productName = ((_a = purchase.snapshot) === null || _a === void 0 ? void 0 : _a.shareTitle) || "Product";
+                    yield (0, sms_1.sendPurchaseApprovalSms)(user.phone, purchase._id.toString(), totalAmount, productName);
+                }
+            }
+            catch (smsError) {
+                console.error("Failed to send purchase approval SMS:", smsError);
+                // Don't fail the approval if SMS fails
+            }
             // Step 4 — User personal shares count
             yield model_3.User.findByIdAndUpdate(purchase.userId, {
                 $inc: { personalPurchaseCount: purchase.quantity },
@@ -195,7 +209,7 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             // Step 5c — Auto cashback for cash purchases
             // Only triggers when paymentType === "cash" and cashbackPercent > 0
             if (purchase.paymentType === "cash" &&
-                ((_b = (_a = purchase.snapshot) === null || _a === void 0 ? void 0 : _a.cashbackPercent) !== null && _b !== void 0 ? _b : 0) > 0) {
+                ((_c = (_b = purchase.snapshot) === null || _b === void 0 ? void 0 : _b.cashbackPercent) !== null && _c !== void 0 ? _c : 0) > 0) {
                 try {
                     const cashbackPct = purchase.snapshot.cashbackPercent;
                     const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
@@ -234,8 +248,8 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             const buyer = yield model_3.User.findById(purchase.userId)
                 .select("name username")
                 .lean();
-            const buyerName = (_c = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _c !== void 0 ? _c : "";
-            const buyerUsername = (_d = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _d !== void 0 ? _d : "";
+            const buyerName = (_d = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _d !== void 0 ? _d : "";
+            const buyerUsername = (_e = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _e !== void 0 ? _e : "";
             try {
                 yield model_4.CompanyLedger.create({
                     date: new Date(),
@@ -244,7 +258,7 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
                     relatedId: purchase._id,
                     relatedModel: "Purchase",
                     userId: purchase.userId,
-                    note: `Purchase approved — ${(_f = (_e = purchase.snapshot) === null || _e === void 0 ? void 0 : _e.shareTitle) !== null && _f !== void 0 ? _f : ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+                    note: `Purchase approved — ${(_g = (_f = purchase.snapshot) === null || _f === void 0 ? void 0 : _f.shareTitle) !== null && _g !== void 0 ? _g : ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
                 });
             }
             catch (ledgerErr) {
@@ -259,7 +273,7 @@ const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 
             .populate("projectId", "cashPrice")
             .lean();
         if (purchaseWithShare) {
-            const projectPrice = Number((_h = (_g = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.projectId) === null || _g === void 0 ? void 0 : _g.cashPrice) !== null && _h !== void 0 ? _h : 0);
+            const projectPrice = Number((_j = (_h = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.projectId) === null || _h === void 0 ? void 0 : _h.cashPrice) !== null && _j !== void 0 ? _j : 0);
             const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchaseWithShare.quantity);
             const certificateStatus = (0, service_1.calculateCertificateStatus)({
                 status: purchaseWithShare.status,

@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { Otp } from "./model";
 import { User } from "../user/model";
-import { sendOtpSms } from "../../utils/sms";
+import { sendOtpSms, sendRegistrationSms } from "../../utils/sms";
 import {
   JWT_SECRET,
   JWT_REFRESH_SECRET,
@@ -117,10 +117,16 @@ router.post(
 
       // purpose অনুযায়ী action
       if (purpose === "register") {
-        // User এর phone verify করা
+        // User এর phone verify করা এবং plain password fetch করা
+        const userBeforeUpdate = await User.findOne({ username }).select("tempPlainPassword phone");
+        const plainPassword = userBeforeUpdate?.tempPlainPassword;
+
         const user = await User.findOneAndUpdate(
           { username },
-          { isPhoneVerified: true },
+          { 
+            isPhoneVerified: true,
+            $unset: { tempPlainPassword: 1 } // Remove tempPlainPassword after verification
+          },
           { new: true }
         );
 
@@ -128,6 +134,16 @@ router.post(
           return res.status(404).json({
             message: { en: "User not found", bn: "ইউজার পাওয়া যায়নি" },
           });
+        }
+
+        // Send SMS with credentials after phone verification
+        try {
+          if (plainPassword) {
+            await sendRegistrationSms(user.phone, user.username, plainPassword);
+          }
+        } catch (smsError) {
+          console.error("Failed to send registration SMS:", smsError);
+          // Don't fail verification if SMS fails
         }
 
         // Auto-login: token generate + cookie set
