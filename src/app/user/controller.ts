@@ -598,7 +598,30 @@ export const getUsers = async (
       Model.countDocuments(query),
     ]);
 
-    res.json({ users, total, page, pages: Math.ceil(total / limit) });
+    // Populate referrer information for each user
+    const usersWithReferrer = await Promise.all(
+      users.map(async (user: any) => {
+        const referrerId = user.generationAncestors?.[0]?.userId;
+        if (referrerId) {
+          const referrer = await Model.findById(referrerId)
+            .select("customerId name username")
+            .lean();
+          return {
+            ...user,
+            referrer: referrer
+              ? {
+                  userId: referrer.customerId,
+                  name: referrer.name,
+                  username: referrer.username,
+                }
+              : null,
+          };
+        }
+        return { ...user, referrer: null };
+      })
+    );
+
+    res.json({ users: usersWithReferrer, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     next(error);
   }
