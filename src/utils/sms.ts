@@ -12,7 +12,7 @@ export async function sendOtpSms(phone: string, otp: string): Promise<void> {
     CampaignId: "null",
     SenderName: SENDER,
     TransactionType: "T",
-    Message: `Your OTP is: ${otp}. Valid for 5 minutes.`,
+    Message: `Your OTP is: ${otp}. Valid for 5 minutes. Alahee Group.`,
   };
 
   const res = await fetch(`${MIMSMS_BASE}/api/SmsSending/SMS`, {
