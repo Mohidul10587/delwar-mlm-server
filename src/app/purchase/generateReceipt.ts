@@ -73,14 +73,8 @@ function fmtDate(d: string | undefined): string {
   });
 }
 
-function receiptNo(id: string, prefix = "RCP"): string {
-  return prefix + "-" + id.slice(-8).toUpperCase();
-}
-
-function staffName(rb: any): string {
-  if (!rb) return "—";
-  if (typeof rb === "string") return rb;
-  return rb.name ?? rb.username ?? "—";
+function receiptNo(id: string | object, prefix = "RCP"): string {
+  return prefix + "-" + String(id).slice(-8).toUpperCase();
 }
 
 function takaInWords(amount: number): string {
