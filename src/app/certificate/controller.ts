@@ -37,8 +37,6 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
         ? calculateTotalPayable(Number(share.cashPrice), purchase?.quantity ?? 1)
         : 0;
       const amountPaid = purchase?.amountPaid ?? 0;
-      // If slots found by purchaseId use them; otherwise fall back to checking
-      // slots by userId+projectId (covers legacy records where purchaseId was not set).
       const shareNumbers = slotsByPurchase[purchaseKey ?? ""] ?? [];
       return {
         ...c,
@@ -65,7 +63,6 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
         .sort({ shareNumber: 1 })
         .lean();
 
-      // Group fallback slots by "userId|projectId"
       const fallbackMap: Record<string, string[]> = {};
       for (const s of fallbackSlots) {
         const key = `${s.userId?.toString()}|${s.projectId?.toString()}`;
@@ -89,29 +86,50 @@ export const getMyCertificates = async (req: Request, res: Response, next: NextF
 
 // GET /certificate/:id/download — server-side PNG generation
 export const downloadCertificate = async (req: Request, res: Response, next: NextFunction) => {
+  const ts = new Date().toISOString();
+  const certId = req.params.id;
+  const userId = req.user!._id;
+
+  console.log(`[CERT-CTRL][${ts}] ── downloadCertificate called ──`);
+  console.log(`[CERT-CTRL][${ts}] certId=${certId}  userId=${userId}`);
+  console.log(`[CERT-CTRL][${ts}] NODE_ENV=${process.env.NODE_ENV ?? "(not set)"}`);
+
   try {
-    const cert = await Certificate.findOne({ _id: req.params.id, userId: req.user!._id })
+    // ── Step A: Find certificate ──────────────────────────────────────────
+    console.log(`[CERT-CTRL][${ts}] STEP A: Looking up certificate in DB`);
+    const cert = await Certificate.findOne({ _id: certId, userId })
       .populate("projectId", "title image cashPrice")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
       .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
       .lean();
 
-    if (!cert)
+    if (!cert) {
+      console.log(`[CERT-CTRL][${ts}] STEP A: Certificate NOT found (id=${certId}, userId=${userId})`);
       return res.status(404).json({ message: "Certificate not found" });
-    if (cert.status !== "issued")
-      return res.status(403).json({ message: "Certificate not yet issued" });
+    }
+    console.log(`[CERT-CTRL][${ts}] STEP A: Certificate found  status=${cert.status}`);
 
+    if (cert.status !== "issued") {
+      console.log(`[CERT-CTRL][${ts}] STEP A: Certificate not issued yet  status=${cert.status}`);
+      return res.status(403).json({ message: "Certificate not yet issued" });
+    }
+
+    // ── Step B: Compute totals ─────────────────────────────────────────────
     const share    = cert.projectId as any;
     const purchase = cert.purchaseId as any;
     const totalPayable = share?.cashPrice
       ? calculateTotalPayable(Number(share.cashPrice), purchase?.quantity ?? 1)
       : 0;
     const amountPaid = purchase?.amountPaid ?? 0;
+    console.log(`[CERT-CTRL][${ts}] STEP B: totalPayable=${totalPayable}  amountPaid=${amountPaid}  qty=${purchase?.quantity}`);
 
+    // ── Step C: Fetch share slots ──────────────────────────────────────────
+    console.log(`[CERT-CTRL][${ts}] STEP C: Fetching share slots for purchaseId=${purchase?._id}`);
     const slots = await ShareSlot.find({ purchaseId: purchase?._id, status: "sold" })
       .select("shareNumber")
       .sort({ shareNumber: 1 })
       .lean();
+    console.log(`[CERT-CTRL][${ts}] STEP C: Found ${slots.length} share slot(s)`);
 
     const certData = {
       ...cert,
@@ -120,8 +138,30 @@ export const downloadCertificate = async (req: Request, res: Response, next: Nex
       shareNumbers: slots.map((s) => s.shareNumber),
     } as any;
 
-    const pngBuffer = await generateCertificatePng(certData);
+    // ── Step D: Generate PNG ───────────────────────────────────────────────
+    console.log(`[CERT-CTRL][${ts}] STEP D: Calling generateCertificatePng`);
+    let pngBuffer: Buffer;
+    try {
+      pngBuffer = await generateCertificatePng(certData);
+      console.log(`[CERT-CTRL][${ts}] STEP D: PNG generated  bytes=${pngBuffer.length}`);
+    } catch (genErr: any) {
+      console.error(`[CERT-CTRL][${ts}] STEP D FAILED: generateCertificatePng threw:`, genErr);
+      // Return a JSON error so the client/frontend can show a meaningful message
+      // instead of a silent "Download failed" toast
+      return res.status(500).json({
+        message: "Certificate generation failed on server",
+        error: genErr?.message ?? String(genErr),
+        stack: process.env.NODE_ENV === "development" ? genErr?.stack : undefined,
+      });
+    }
 
+    if (!pngBuffer || pngBuffer.length === 0) {
+      console.error(`[CERT-CTRL][${ts}] STEP D: PNG buffer is empty — generation silently failed`);
+      return res.status(500).json({ message: "Certificate generation produced an empty file" });
+    }
+
+    // ── Step E: Send response ──────────────────────────────────────────────
+    console.log(`[CERT-CTRL][${ts}] STEP E: Sending PNG response  bytes=${pngBuffer.length}`);
     res.set({
       "Content-Type": "image/png",
       "Content-Disposition": `attachment; filename="certificate-${cert._id}.png"`,
@@ -129,5 +169,9 @@ export const downloadCertificate = async (req: Request, res: Response, next: Nex
       "Cache-Control": "no-store",
     });
     res.send(pngBuffer);
-  } catch (err) { next(err); }
+    console.log(`[CERT-CTRL][${ts}] STEP E: Response sent successfully`);
+  } catch (err) {
+    console.error(`[CERT-CTRL][${ts}] UNHANDLED ERROR in downloadCertificate:`, err);
+    next(err);
+  }
 };

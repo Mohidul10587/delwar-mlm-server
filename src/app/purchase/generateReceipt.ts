@@ -95,7 +95,7 @@ function takaInWords(amount: number): string {
 }
 
 // ── HTML Builder ───────────────────────────────────────────────────────────────
-// Mirrors ReceiptBody component in PaymentReceipt.tsx exactly (914×613 canvas)
+// Mirrors ReceiptBody component in PaymentReceipt.tsx exactly (914×440 canvas)
 
 export function buildReceiptHtml(data: ReceiptData): string {
   const bgUrl = toDataUrl("money-recive-bg.jpeg");
@@ -151,9 +151,9 @@ export function buildReceiptHtml(data: ReceiptData): string {
   const dark = "#1a1a2e";
   const blue = "#1a3a8f";
 
-  // Canvas: 914×613 (same as React component)
+  // Canvas: 914×440 (same as React component)
   const W = 914;
-  const H = 613;
+  const H = 440;
 
   const metaRows = [
     { label: "Receipt No.",            value: rNo },
@@ -179,7 +179,7 @@ export function buildReceiptHtml(data: ReceiptData): string {
 <meta charset="UTF-8">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { width:${W}px; height:${H}px; overflow:hidden; }
+body { width:${W}px; height:${H}px; overflow:hidden; } /* 914×440 */
 </style>
 </head>
 <body>
@@ -280,11 +280,11 @@ export async function generateReceiptPng(data: ReceiptData): Promise<Buffer> {
   });
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 914, height: 613, deviceScaleFactor: 1 });
+    await page.setViewport({ width: 914, height: 440, deviceScaleFactor: 1 });
     await page.setContent(buildReceiptHtml(data), { waitUntil: "networkidle0" });
     const screenshot = await page.screenshot({
       type: "png",
-      clip: { x: 0, y: 0, width: 914, height: 613 },
+      clip: { x: 0, y: 0, width: 914, height: 440 },
     });
     return Buffer.from(screenshot);
   } finally {
