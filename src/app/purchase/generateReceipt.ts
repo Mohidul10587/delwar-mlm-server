@@ -29,7 +29,12 @@ export interface ReceiptData {
     createdAt: string;
     snapshot?: { shareTitle?: string; cashPrice?: number };
     projectId?: { title?: string; cashPrice?: number };
-    userId?: { name?: string; username?: string; phone?: string; customerId?: string };
+    userId?: {
+      name?: string;
+      username?: string;
+      phone?: string;
+      customerId?: string;
+    };
     buyerInfo?: {
       name?: string;
       phone?: string;
@@ -80,16 +85,67 @@ function staffName(rb: any): string {
 
 function takaInWords(amount: number): string {
   if (amount === 0) return "Zero Taka Only";
-  const ones = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine",
-    "Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
-  const tens = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const ones = [
+    "",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+  ];
+  const tens = [
+    "",
+    "",
+    "Twenty",
+    "Thirty",
+    "Forty",
+    "Fifty",
+    "Sixty",
+    "Seventy",
+    "Eighty",
+    "Ninety",
+  ];
   function convert(n: number): string {
     if (n < 20) return ones[n];
-    if (n < 100) return tens[Math.floor(n/10)] + (n % 10 ? " " + ones[n % 10] : "");
-    if (n < 1000) return ones[Math.floor(n/100)] + " Hundred" + (n % 100 ? " " + convert(n % 100) : "");
-    if (n < 100000) return convert(Math.floor(n/1000)) + " Thousand" + (n % 1000 ? " " + convert(n % 1000) : "");
-    if (n < 10000000) return convert(Math.floor(n/100000)) + " Lakh" + (n % 100000 ? " " + convert(n % 100000) : "");
-    return convert(Math.floor(n/10000000)) + " Crore" + (n % 10000000 ? " " + convert(n % 10000000) : "");
+    if (n < 100)
+      return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+    if (n < 1000)
+      return (
+        ones[Math.floor(n / 100)] +
+        " Hundred" +
+        (n % 100 ? " " + convert(n % 100) : "")
+      );
+    if (n < 100000)
+      return (
+        convert(Math.floor(n / 1000)) +
+        " Thousand" +
+        (n % 1000 ? " " + convert(n % 1000) : "")
+      );
+    if (n < 10000000)
+      return (
+        convert(Math.floor(n / 100000)) +
+        " Lakh" +
+        (n % 100000 ? " " + convert(n % 100000) : "")
+      );
+    return (
+      convert(Math.floor(n / 10000000)) +
+      " Crore" +
+      (n % 10000000 ? " " + convert(n % 10000000) : "")
+    );
   }
   return convert(Math.floor(amount)) + " Taka Only";
 }
@@ -98,38 +154,57 @@ function takaInWords(amount: number): string {
 // Mirrors ReceiptBody component in PaymentReceipt.tsx exactly (914×440 canvas)
 
 export function buildReceiptHtml(data: ReceiptData): string {
-  const bgUrl = toDataUrl("money-recive-bg.jpeg");
+  const bgUrl = toDataUrl("money-recive-bg-v2.jpeg");
 
   const { purchase, installment, shareNumbers } = data;
 
-  const shareTitle = purchase.snapshot?.shareTitle ?? (purchase.projectId as any)?.title ?? "—";
-  const cashPrice  = purchase.snapshot?.cashPrice  ?? (purchase.projectId as any)?.cashPrice ?? 0;
+  const shareTitle =
+    purchase.snapshot?.shareTitle ?? (purchase.projectId as any)?.title ?? "—";
+  const cashPrice =
+    purchase.snapshot?.cashPrice ?? (purchase.projectId as any)?.cashPrice ?? 0;
   const totalPayable = cashPrice * purchase.quantity;
 
-  const buyerName        = purchase.buyerInfo?.name  ?? (purchase.userId as any)?.name  ?? "—";
-  const buyerPhone       = purchase.buyerInfo?.phone ?? (purchase.userId as any)?.phone ?? "—";
-  const buyerCustomerId  = (purchase.userId as any)?.customerId ?? "—";
+  const buyerName =
+    purchase.buyerInfo?.name ?? (purchase.userId as any)?.name ?? "—";
+  const buyerPhone =
+    purchase.buyerInfo?.phone ?? (purchase.userId as any)?.phone ?? "—";
+  const buyerCustomerId = (purchase.userId as any)?.customerId ?? "—";
 
   const nominees: Array<{ name: string; relation?: string }> = (() => {
-    if (purchase.buyerInfo?.nominees?.length) return purchase.buyerInfo.nominees;
+    if (purchase.buyerInfo?.nominees?.length)
+      return purchase.buyerInfo.nominees;
     const list: Array<{ name: string; relation?: string }> = [];
-    if (purchase.buyerInfo?.nominee?.name)  list.push(purchase.buyerInfo.nominee);
-    if (purchase.buyerInfo?.nominee2?.name) list.push(purchase.buyerInfo.nominee2!);
+    if (purchase.buyerInfo?.nominee?.name)
+      list.push(purchase.buyerInfo.nominee);
+    if (purchase.buyerInfo?.nominee2?.name)
+      list.push(purchase.buyerInfo.nominee2!);
     return list;
   })();
 
   const isInstallmentReceipt = !!installment;
   const isCash = purchase.paymentType === "cash";
 
-  const thisPaidAmount = isInstallmentReceipt ? installment!.amount : purchase.downPayment;
-  const txId       = isInstallmentReceipt ? installment!.transactionId : purchase.transactionId;
-  const senderAcc  = isInstallmentReceipt ? installment!.senderAccount  : purchase.senderAccount;
+  const thisPaidAmount = isInstallmentReceipt
+    ? installment!.amount
+    : purchase.downPayment;
+  const txId = isInstallmentReceipt
+    ? installment!.transactionId
+    : purchase.transactionId;
+  const senderAcc = isInstallmentReceipt
+    ? installment!.senderAccount
+    : purchase.senderAccount;
   const paymentDate = isInstallmentReceipt
-    ? (installment!.reviewedAt ?? installment!.createdAt)
-    : (purchase.reviewedAt ?? purchase.createdAt);
+    ? installment!.reviewedAt ?? installment!.createdAt
+    : purchase.reviewedAt ?? purchase.createdAt;
 
-  const paymentId    = isInstallmentReceipt ? installment!.paymentId : purchase.paymentId;
-  const installmentNo = isInstallmentReceipt ? installment!.installmentNo : isCash ? "—" : "Down Payment";
+  const paymentId = isInstallmentReceipt
+    ? installment!.paymentId
+    : purchase.paymentId;
+  const installmentNo = isInstallmentReceipt
+    ? installment!.installmentNo
+    : isCash
+    ? "—"
+    : "Down Payment";
 
   const rNo = isInstallmentReceipt
     ? receiptNo(installment!._id, "INST")
@@ -144,9 +219,12 @@ export function buildReceiptHtml(data: ReceiptData): string {
     ? `Full Cash Payment for ${shareTitle}`
     : `Down Payment for ${shareTitle}`;
 
-  const soDo = nominees.length > 0
-    ? nominees.map((n) => `${n.name}${n.relation ? ` (${n.relation})` : ""}`).join(", ")
-    : "—";
+  const soDo =
+    nominees.length > 0
+      ? nominees
+          .map((n) => `${n.name}${n.relation ? ` (${n.relation})` : ""}`)
+          .join(", ")
+      : "—";
 
   const dark = "#1a1a2e";
   const blue = "#1a3a8f";
@@ -156,22 +234,28 @@ export function buildReceiptHtml(data: ReceiptData): string {
   const H = 440;
 
   const metaRows = [
-    { label: "Receipt No.",            value: rNo },
-    { label: "Date",                   value: fmtDate(paymentDate) },
-    { label: "Customer ID",            value: buyerCustomerId },
+    { label: "Receipt No.", value: rNo },
+    { label: "Date", value: fmtDate(paymentDate) },
+    { label: "Customer ID", value: buyerCustomerId },
     { label: "Share No. / Product Code", value: shareNoDisplay },
-    { label: "Installment No.",        value: String(installmentNo) },
+    { label: "Installment No.", value: String(installmentNo) },
   ];
 
-  const metaHtml = metaRows.map(({ label, value }) => `
+  const metaHtml = metaRows
+    .map(
+      ({ label, value }) => `
     <div style="display:flex;align-items:baseline;gap:4px;font-size:12px;font-weight:700;color:${dark};">
       <span style="min-width:148px;font-weight:600;">${label}</span>
       <span>:</span>
       <span style="font-family:monospace;">${value}</span>
-    </div>`).join("");
+    </div>`
+    )
+    .join("");
 
   const checkBox = (checked: boolean) =>
-    `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1.5px solid #333;font-size:10px;color:${blue};font-weight:900;background:rgba(255,255,255,0.6);">${checked ? "✓" : ""}</span>`;
+    `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1.5px solid #333;font-size:10px;color:${blue};font-weight:900;background:rgba(255,255,255,0.6);">${
+      checked ? "✓" : ""
+    }</span>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -242,9 +326,12 @@ body { width:${W}px; height:${H}px; overflow:hidden; } /* 914×440 */
         <div style="display:flex;align-items:center;gap:6px;">
           ${checkBox(isMobileBanking)}
           <span>MOBILE BANKING</span>
-          ${isMobileBanking
-            ? `<span style="margin-left:8px;font-family:monospace;font-weight:700;">${txId}${senderAcc && senderAcc !== "—" ? ` (${senderAcc})` : ""}</span>`
-            : `<span style="margin-left:8px;color:#555;font-weight:400;">Transaction ID / Reference No. ………………………………………………</span>`
+          ${
+            isMobileBanking
+              ? `<span style="margin-left:8px;font-family:monospace;font-weight:700;">${txId}${
+                  senderAcc && senderAcc !== "—" ? ` (${senderAcc})` : ""
+                }</span>`
+              : `<span style="margin-left:8px;color:#555;font-weight:400;">Transaction ID / Reference No. ………………………………………………</span>`
           }
         </div>
       </div>
@@ -261,7 +348,9 @@ body { width:${W}px; height:${H}px; overflow:hidden; } /* 914×440 */
     <div style="display:flex;align-items:baseline;gap:6px;font-size:12px;font-weight:700;color:${dark};margin-top:8px;">
       <span style="white-space:nowrap;">Amount in words</span>
       <span>:</span>
-      <span style="flex:1;border-bottom:1px dotted #555;padding-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${takaInWords(thisPaidAmount)}</span>
+      <span style="flex:1;border-bottom:1px dotted #555;padding-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${takaInWords(
+        thisPaidAmount
+      )}</span>
     </div>
 
   </div>
@@ -276,12 +365,18 @@ body { width:${W}px; height:${H}px; overflow:hidden; } /* 914×440 */
 export async function generateReceiptPng(data: ReceiptData): Promise<Buffer> {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   });
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 914, height: 440, deviceScaleFactor: 1 });
-    await page.setContent(buildReceiptHtml(data), { waitUntil: "networkidle0" });
+    await page.setContent(buildReceiptHtml(data), {
+      waitUntil: "networkidle0",
+    });
     const screenshot = await page.screenshot({
       type: "png",
       clip: { x: 0, y: 0, width: 914, height: 440 },
