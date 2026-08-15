@@ -11,11 +11,13 @@ export interface IProject extends Document {
   description?: string;
   images: string[];
   cashPrice: number;
-  regularPrice?: number;
+  regularPrice: number;
+  cashDiscount: number; // discount % applied to regularPrice → cashPrice
 
   // Installment price — used for installment purchases
   installmentPrice: number;
-  regularInstallmentPrice?: number;
+  regularInstallmentPrice: number;
+  installmentDiscount: number; // discount % applied to regularInstallmentPrice → installmentPrice
 
   // Down payment config
   minDownPayment: number;
@@ -66,9 +68,11 @@ const ProjectSchema = new Schema<IProject>(
     description: { type: String, default: "" },
     images: [{ type: String }],
     cashPrice: { type: Number, required: true },
-    regularPrice: { type: Number },
+    regularPrice: { type: Number, required: true },
+    cashDiscount: { type: Number, required: true, default: 0 },
     installmentPrice: { type: Number, required: true },
-    regularInstallmentPrice: { type: Number },
+    regularInstallmentPrice: { type: Number, required: true },
+    installmentDiscount: { type: Number, required: true, default: 0 },
 
     minDownPayment: { type: Number, default: 15000 },
     maxDownPayment: { type: Number, default: 50000 },
