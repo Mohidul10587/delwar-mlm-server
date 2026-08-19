@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { createPurchase, getPurchases, getPurchaseById, getMyPurchases, getPurchaseReceipt, getInstallmentReceipt, downloadPurchaseReceipt, downloadInstallmentReceipt } from "./controller";
+import { createPurchase, getPurchases, getPurchaseById, getBranchPurchaseById, getMyPurchases, getPurchaseReceipt, getInstallmentReceipt, downloadPurchaseReceipt, downloadInstallmentReceipt, getBranchPurchases } from "./controller";
 import { updatePurchaseStatus, reclaimShares } from "./status.controller";
-import { verifyUser, verifyAdmin, verifyStaff, requirePermission } from "../../middleware/auth";
+import { verifyUser, verifyAdmin, verifyStaff, verifyBranchManager, requirePermission } from "../../middleware/auth";
 import {
   createInstallmentPayment,
   getInstallmentsByPurchase,
@@ -14,9 +14,12 @@ const router = Router();
 
 router.post("/",           verifyUser,        createPurchase);
 router.get("/my",          verifyUser,        getMyPurchases);
+router.get("/branch",      verifyBranchManager, getBranchPurchases);
+router.get("/branch/:id",  verifyBranchManager, getBranchPurchaseById);
 router.get("/",            verifyStaff,       requirePermission("purchase.review"), getPurchases);
 router.get("/installments/pending", verifyStaff, requirePermission("purchase.review"), getPendingInstallments);
-router.patch("/:id/status",         verifyStaff, requirePermission("purchase.review"), updatePurchaseStatus);
+// Both staff (super-admin) and branch managers can approve/reject
+router.patch("/:id/status", verifyBranchManager, updatePurchaseStatus);
 router.post("/:purchaseId/reclaim", verifyStaff, requirePermission("purchase.review"), reclaimShares);
 router.get("/:id/receipt/download", verifyUser,  downloadPurchaseReceipt);
 router.get("/:id/receipt",          verifyUser,  getPurchaseReceipt);

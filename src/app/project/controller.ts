@@ -4,6 +4,7 @@ import { ShareSlot } from "./shareSlot.model";
 import { Settings } from "../settings/model";
 import { Counter } from "../user/counter";
 import { generateCustomId } from "../../utils/generateId";
+import { Category } from "../category/model";
 
 const BATCH_SIZE = 1000;
 
@@ -125,7 +126,17 @@ export const getShares = async (
       isActiveOffer: isOfferActive(s),
     }));
 
-    res.json({ shares: enriched });
+    // Fetch all categories and attach them to each share as `category`
+    const categories = await Category.find().sort({ order: 1, createdAt: 1 }).lean();
+    const categoryMap = new Map(categories.map((c) => [c._id.toString(), c]));
+
+    const withCategory = enriched.map((s) => ({
+      ...s,
+      category: s.categoryId ? (categoryMap.get(s.categoryId) ?? null) : null,
+    }));
+
+    // Also include the sorted categories list so the frontend can render sections in order
+    res.json({ shares: withCategory, categories });
   } catch (err) {
     next(err);
   }

@@ -169,6 +169,7 @@ export const updatePurchaseStatus = async (
     purchase.status = status as any;
     purchase.reviewNote = String(reviewNote ?? "").trim();
     purchase.reviewedBy = req.user!._id as any;
+    purchase.reviewedByInfo = { name: req.user!.name, role: req.user!.role };
     purchase.reviewedAt = new Date();
     await purchase.save();
 

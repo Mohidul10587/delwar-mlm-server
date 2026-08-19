@@ -11,6 +11,7 @@ export interface INominee {
   phone: string;
   nid?: string;
   image?: string;
+  dateOfBirth?: string;
 }
 
 export interface IBankAccount {
@@ -118,6 +119,7 @@ const UserSchema = new Schema<IUser>(
         phone: String,
         nid: String,
         image: String,
+        dateOfBirth: String,
       },
       default: null,
     },
@@ -128,6 +130,7 @@ const UserSchema = new Schema<IUser>(
         phone: String,
         nid: String,
         image: String,
+        dateOfBirth: String,
       },
       default: null,
     },

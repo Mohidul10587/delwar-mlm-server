@@ -50,6 +50,7 @@ export const createPurchase = async (
       paymentMethod,
       receiptImage,
       cashbackAmount,
+      branchId,
     } = req.body;
 
     // Fix V-01: validate quantity
@@ -279,6 +280,7 @@ export const createPurchase = async (
         : String(transactionId).trim(),
       buyerInfo: resolvedBuyerInfo,
       snapshot,
+      branchId: isCashPayment && branchId ? branchId : null,
     });
 
     // Reserve cashback immediately so it cannot be used by another pending
@@ -346,8 +348,9 @@ export const getPurchases = async (
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
-        .populate("userId", "name username phone")
+        .populate("userId", "name username phone customerId")
         .populate("projectId", "title cashPrice installment")
+        .populate("branchId", "name")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -420,6 +423,144 @@ export const getPurchases = async (
       total,
       page,
       pages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /purchase/branch — branch manager gets purchases attached to their branch
+export const getBranchPurchases = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const managerId = req.user!._id;
+
+    // Find the branch managed by this user
+    const { Branch } = await import("../branch/model");
+    const branch = await Branch.findOne({ managerId }).lean();
+    if (!branch)
+      return res.status(404).json({ message: "No branch assigned to this manager" });
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 30;
+    const skip = (page - 1) * limit;
+
+    const filter: any = { branchId: branch._id };
+    if (req.query.status) filter.status = req.query.status;
+
+    const [purchases, total] = await Promise.all([
+      Purchase.find(filter)
+        .populate("userId", "name username phone customerId")
+        .populate("projectId", "title cashPrice installment")
+        .populate("branchId", "name")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Purchase.countDocuments(filter),
+    ]);
+
+    const installmentPurchaseIds = purchases
+      .filter((p) => p.paymentType === "installment" && p.status !== "pending")
+      .map((p) => p._id);
+    const allPayments = installmentPurchaseIds.length
+      ? await InstallmentPayment.find({ purchaseId: { $in: installmentPurchaseIds } }).lean()
+      : [];
+    const paymentsByPurchase: Record<string, typeof allPayments> = {};
+    for (const pay of allPayments) {
+      const key = pay.purchaseId.toString();
+      (paymentsByPurchase[key] ??= []).push(pay);
+    }
+
+    const approvedIds = purchases.filter((p) => p.status === "approved").map((p) => p._id);
+    const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
+
+    const enriched = purchases.map((purchase) => {
+      const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
+      const totalPayable = calculateTotalPayable(projectPrice, purchase.quantity);
+      const base = {
+        ...purchase,
+        totalPayable,
+        shareNumbers: slotsByPurchase[purchase._id.toString()] ?? [],
+        certificateStatus: calculateCertificateStatus({
+          status: purchase.status,
+          paymentType: purchase.paymentType,
+          amountPaid: purchase.amountPaid,
+          totalPayable,
+        }),
+      };
+      if (purchase.paymentType !== "installment" || purchase.status === "pending") return base;
+      const payments = paymentsByPurchase[purchase._id.toString()] ?? [];
+      const perInstallment = purchase.installmentAmount ?? 0;
+      const totalInstallments = purchase.installmentCount ?? 0;
+      const completed = payments.filter((p) => p.status === "approved").length;
+      const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
+      return {
+        ...base,
+        installmentSummary: {
+          totalInstallments,
+          completed,
+          remaining: Math.max(0, totalInstallments - completed),
+          perInstallment,
+          amountPaid: purchase.amountPaid,
+          amountRemaining,
+          payments,
+        },
+      };
+    });
+
+    res.json({ purchases: enriched, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /purchase/branch/:id  — branch manager gets a single purchase from their branch
+export const getBranchPurchaseById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { Branch } = await import("../branch/model");
+    const branch = await Branch.findOne({ managerId: req.user!._id }).lean();
+    if (!branch)
+      return res.status(404).json({ message: "No branch assigned to this manager" });
+
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      branchId: branch._id,
+    })
+      .populate("userId", "name username phone customerId")
+      .populate("projectId", "title cashPrice installment")
+      .lean();
+
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
+
+    const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
+    const totalPayable = calculateTotalPayable(projectPrice, purchase.quantity);
+
+    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+      .select("shareNumber")
+      .sort({ shareNumber: 1 })
+      .lean();
+
+    res.json({
+      purchase: {
+        ...purchase,
+        totalPayable,
+        shareNumbers: slots.map((s) => s.shareNumber),
+        certificateStatus: calculateCertificateStatus({
+          status: purchase.status,
+          paymentType: purchase.paymentType,
+          amountPaid: purchase.amountPaid,
+          totalPayable,
+        }),
+      },
     });
   } catch (err) {
     next(err);

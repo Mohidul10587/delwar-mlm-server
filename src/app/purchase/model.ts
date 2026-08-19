@@ -79,10 +79,13 @@ export interface IPurchase extends Document {
   status: PurchaseStatus;
   reviewNote: string;
   reviewedBy?: Types.ObjectId;
+  reviewedByInfo?: { name: string; role: string };
   reviewedAt?: Date;
   commissionProcessed: boolean;
   buyerInfo?: IBuyerInfo;
   snapshot: IPurchaseSnapshot;
+  /** Branch this purchase is attached to (cash payments only) */
+  branchId?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -191,10 +194,16 @@ const PurchaseSchema = new Schema<IPurchase>(
     },
     reviewNote: { type: String, default: "" },
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    reviewedByInfo: {
+      name: { type: String },
+      role: { type: String },
+      _id: false,
+    },
     reviewedAt: { type: Date },
     commissionProcessed: { type: Boolean, default: false },
     buyerInfo: { type: BuyerInfoSchema, default: null },
     snapshot: { type: SnapshotSchema },
+    branchId: { type: Schema.Types.ObjectId, ref: "Branch", default: null },
   },
   { timestamps: true }
 );
