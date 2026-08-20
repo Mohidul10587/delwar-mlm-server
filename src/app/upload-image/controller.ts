@@ -30,6 +30,30 @@ const upload = multer({
 
 export const uploadImage = [
   upload.single("file"),
+  // Handle Multer errors
+  (req: Request, res: Response, next: NextFunction) => {
+    upload.single("file")(req, res, (error: any) => {
+      if (error instanceof multer.MulterError) {
+        if (error.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({
+            message: "File size must not exceed 5 MB",
+          });
+        }
+
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      if (error) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      next();
+    });
+  },
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.file) {
