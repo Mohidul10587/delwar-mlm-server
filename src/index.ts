@@ -106,8 +106,8 @@ app.use(
   })
 );
 
-app.use(bodyParser.json({ limit: "10mb" }));
-app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
+app.use(bodyParser.json({ limit: "13mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "13mb" }));
 app.use(cookieParser());
 app.use(
   cors({
@@ -116,45 +116,6 @@ app.use(
     credentials: true,
   })
 );
-
-// Fix S-06: Rate limiting
-const isDev = process.env.NODE_ENV !== "production";
-
-// General API rate limit — relaxed in dev to avoid hitting limits during hot reload
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: isDev ? 2000 : 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later" },
-});
-
-// Strict limit for auth endpoints — 10 attempts per 15 minutes per IP
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many login attempts, please try again later" },
-});
-
-// Financial action limit — 30 requests per 15 minutes per IP
-const financialLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many financial requests, please try again later" },
-});
-
-// app.use(generalLimiter);
-// app.use("/user/login", authLimiter);
-// app.use("/user/register", authLimiter);
-// app.use("/user/refresh", authLimiter);
-// app.use("/purchase", financialLimiter);
-// app.use("/withdrawal", financialLimiter);
-// app.use("/transfer", financialLimiter);
-// app.use("/investment", financialLimiter);
 
 app.get("/", (_req: Request, res: Response) => res.send("MLM Server"));
 
