@@ -40,10 +40,8 @@ router.post("/forgot-password", forgotPassword);
 router.get("/verify", verify);
 router.post("/refresh", refresh);
 router.post("/logout", verifyUser, logout);
-
 router.post("/switch/:targetUserId", verifyUser, switchAccount);
 router.get("/linked-accounts", verifyUser, getLinkedAccounts);
-
 router.get("/stats", verifySuperAdmin, getSuperAdminStats);
 router.get("/details/:id", verifyAdmin, getUserDetails);
 router.get("/list", verifyAdmin, getUsers);

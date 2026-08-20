@@ -29,7 +29,7 @@ const defaultPermissionsByRole: Record<string, string[]> = {
 export const ALL_PERMISSIONS = ["purchase.review", "expense.submit"] as const;
 
 const generateTokens = (id: string) => {
-  const accessToken = jwt.sign({ id }, JWT_SECRET, { expiresIn: "30m" });
+  const accessToken = jwt.sign({ id }, JWT_SECRET, { expiresIn: "2m" });
   const refreshToken = jwt.sign({ id }, JWT_REFRESH_SECRET, {
     expiresIn: "1d",
   });
@@ -86,7 +86,10 @@ async function cascadeGenerationAncestors(
       .select("_id generationAncestors")
       .lean();
     const ancestorsByParent = new Map(
-      parents.map((parent: any) => [String(parent._id), parent.generationAncestors ?? []])
+      parents.map((parent: any) => [
+        String(parent._id),
+        parent.generationAncestors ?? [],
+      ])
     );
 
     // A bulk write replaces the previous find-by-id + update-one pair for
@@ -340,7 +343,7 @@ export const refresh = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid refresh token" });
 
     const newAccessToken = jwt.sign({ id: user._id.toString() }, JWT_SECRET, {
-      expiresIn: "30m",
+      expiresIn: "2m",
     });
     res.cookie("accessToken", newAccessToken, cookieOpts());
 
@@ -635,7 +638,12 @@ export const getUsers = async (
       })
     );
 
-    res.json({ users: usersWithReferrer, total, page, pages: Math.ceil(total / limit) });
+    res.json({
+      users: usersWithReferrer,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
   } catch (error) {
     next(error);
   }
@@ -729,7 +737,8 @@ export const updateInfo = async (
     if (!user) return res.status(404).json({ message: "User not found" });
     if (name !== undefined) {
       const trimmed = String(name).trim();
-      if (!trimmed) return res.status(400).json({ message: "Name cannot be empty" });
+      if (!trimmed)
+        return res.status(400).json({ message: "Name cannot be empty" });
       user.name = trimmed;
     }
     if (email !== undefined) user.email = email || null;
@@ -785,11 +794,9 @@ export const changeUserRole = async (
     const { role } = req.body as { role?: string };
 
     if (!role || !["user", "admin", "staff", "branch_manager"].includes(role)) {
-      return res
-        .status(400)
-        .json({
-          message: "role must be 'user', 'admin', 'staff', or 'branch_manager'",
-        });
+      return res.status(400).json({
+        message: "role must be 'user', 'admin', 'staff', or 'branch_manager'",
+      });
     }
 
     const target = await Model.findById(req.params.id).select("-password");
