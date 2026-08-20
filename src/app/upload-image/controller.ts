@@ -30,7 +30,9 @@ const upload = multer({
 export const uploadImage = [
   // Parse multipart form and handle multer errors in one middleware
   (req: Request, res: Response, next: NextFunction) => {
+    console.log("[upload-image] request received, content-length:", req.headers["content-length"]);
     upload.single("file")(req, res, (error: any) => {
+      console.log("[upload-image] multer done, error:", error ?? "none", "file:", req.file ? `${req.file.originalname} (${req.file.size} bytes)` : "none");
       if (error instanceof multer.MulterError) {
         if (error.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({
@@ -57,7 +59,9 @@ export const uploadImage = [
         return res.status(400).json({ message: "No file uploaded" });
       }
 
+      console.log("[upload-image] file size check:", req.file.size, "bytes");
       if (req.file.size > 5 * 1024 * 1024) {
+        console.log("[upload-image] rejected: file too large");
         return res.status(400).json({ message: "File size must not exceed 5 MB" });
       }
 
