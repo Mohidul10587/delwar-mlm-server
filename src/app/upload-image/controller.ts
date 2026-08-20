@@ -12,7 +12,6 @@ cloudinary.config({
 // Fix S-09: file size limit + mime type filter
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
   fileFilter: (_req, file, cb) => {
     const allowed = [
       "image/jpeg",
@@ -56,6 +55,10 @@ export const uploadImage = [
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      if (req.file.size > 5 * 1024 * 1024) {
+        return res.status(400).json({ message: "File size must not exceed 5 MB" });
       }
 
       const result = await new Promise((resolve, reject) => {
