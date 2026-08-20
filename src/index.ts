@@ -48,7 +48,6 @@ const app: Express = express();
 const httpServer = createServer(app);
 const origins = [
   "http://localhost:3000",
-  "https://delwar-mlm-client.vercel.app",
   "https://alaheebd.com",
   "https://www.alaheebd.com",
 ];
@@ -106,8 +105,8 @@ app.use(
   })
 );
 
-app.use(bodyParser.json({ limit: "13mb" }));
-app.use(bodyParser.urlencoded({ extended: true, limit: "13mb" }));
+app.use(bodyParser.json({ limit: "15mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "15mb" }));
 app.use(cookieParser());
 app.use(
   cors({
