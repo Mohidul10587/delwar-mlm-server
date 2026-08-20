@@ -29,8 +29,7 @@ const upload = multer({
 });
 
 export const uploadImage = [
-  upload.single("file"),
-  // Handle Multer errors
+  // Parse multipart form and handle multer errors in one middleware
   (req: Request, res: Response, next: NextFunction) => {
     upload.single("file")(req, res, (error: any) => {
       if (error instanceof multer.MulterError) {
@@ -39,7 +38,6 @@ export const uploadImage = [
             message: "File size must not exceed 5 MB",
           });
         }
-
         return res.status(400).json({
           message: error.message,
         });
