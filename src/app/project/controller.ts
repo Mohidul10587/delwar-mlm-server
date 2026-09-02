@@ -9,18 +9,16 @@ import { Category } from "../category/model";
 const BATCH_SIZE = 1000;
 
 /**
- * Generate a unique, readable share number using project ID and sequential counter
- * Format: ADPBL-{projectPrefix}-{sequentialNumber}
- * Example: ADPBL-A1B2-00001, ADPBL-C3D4-00002
+ * Generate a unique, readable share number using project prefix and sequential counter
+ * Format: {sharePrefix}-{sequentialNumber}
+ * Example: ABC-00001, XYZ-00002
  */
 function generateShareNumber(
-  projectId: string,
+  sharePrefix: string,
   sequentialNumber: number
 ): string {
-  // Take first 2 and last 2 characters from project ID to create a unique prefix
-  const projectPrefix = projectId.slice(-4).toUpperCase();
   const paddedNumber = String(sequentialNumber).padStart(4, "0");
-  return `ADPBL-${projectPrefix}-${paddedNumber}`;
+  return `${sharePrefix.toUpperCase()}-${paddedNumber}`;
 }
 
 /**
@@ -68,12 +66,25 @@ export const createShare = async (
     const totalShares: number = Number(req.body.totalShares ?? 0);
     const projectId = await generateCustomId("PRJ");
 
-    const pkg = await Project.create({ ...defaults, ...req.body, totalShares, projectId });
+    // Validate sharePrefix
+    const sharePrefix: string = (req.body.sharePrefix ?? "").trim().toUpperCase();
+    if (!sharePrefix) {
+      return res.status(400).json({ message: "sharePrefix is required" });
+    }
+
+    // Check prefix uniqueness across all projects
+    const existing = await Project.findOne({ sharePrefix });
+    if (existing) {
+      return res.status(400).json({
+        message: `প্রিফিক্স "${sharePrefix}" অলরেডি ব্যবহার করা হয়েছে। অনুগ্রহ করে ভিন্ন একটি প্রিফিক্স ব্যবহার করুন।`,
+        code: "PREFIX_ALREADY_USED",
+      });
+    }
+
+    const pkg = await Project.create({ ...defaults, ...req.body, totalShares, projectId, sharePrefix });
 
     if (totalShares > 0) {
       // Atomically reserve a range of `totalShares` sequential numbers for this project.
-      // reserveShareRange returns the value *before* incrementing, so
-      // slot numbers are: start+1 … start+totalShares (1-based).
       const start = await reserveShareRange(pkg._id.toString(), totalShares);
 
       for (let batch = 0; batch < totalShares; batch += BATCH_SIZE) {
@@ -81,7 +92,7 @@ export const createShare = async (
         const end = Math.min(batch + BATCH_SIZE, totalShares);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: generateShareNumber(pkg._id.toString(), start + 1 + i),
+            shareNumber: generateShareNumber(pkg.sharePrefix, start + 1 + i),
             projectId: pkg._id,
             status: "available",
             userId: null,
@@ -207,7 +218,7 @@ export const updateShare = async (
         const end = Math.min(batch + BATCH_SIZE, diff);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: generateShareNumber(old._id.toString(), start + 1 + i),
+            shareNumber: generateShareNumber(old.sharePrefix, start + 1 + i),
             projectId: old._id,
             status: "available",
             userId: null,
@@ -445,7 +456,7 @@ export const backfillSlots = async (
       const end = Math.min(batch + BATCH_SIZE, diff);
       for (let i = batch; i < end; i++) {
         docs.push({
-          shareNumber: generateShareNumber(share._id.toString(), start + 1 + i),
+          shareNumber: generateShareNumber(share.sharePrefix, start + 1 + i),
           projectId: share._id,
           status: "available",
           userId: null,
@@ -563,6 +574,42 @@ export const getSharesWithStats = async (
       shares: shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
       stats,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /share/check-prefix/:prefix — check if a sharePrefix is already in use
+export const checkSharePrefix = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const prefix = (req.params.prefix ?? "").trim().toUpperCase();
+    if (!prefix) {
+      return res.status(400).json({ message: "Prefix is required" });
+    }
+
+    // If editing an existing project, allow excluding it from the check
+    const excludeId = req.query.excludeId as string | undefined;
+
+    const query: any = { sharePrefix: prefix };
+    if (excludeId) {
+      const mongoose = await import("mongoose");
+      query._id = { $ne: new mongoose.Types.ObjectId(excludeId) };
+    }
+
+    const existing = await Project.findOne(query).select("title sharePrefix").lean();
+
+    if (existing) {
+      return res.json({
+        available: false,
+        message: `প্রিফিক্স "${prefix}" অলরেডি ব্যবহার করা হয়েছে ("${existing.title}" প্রজেক্টে)। অনুগ্রহ করে ভিন্ন একটি প্রিফিক্স ব্যবহার করুন।`,
+      });
+    }
+
+    res.json({ available: true, message: "Prefix is available" });
   } catch (err) {
     next(err);
   }

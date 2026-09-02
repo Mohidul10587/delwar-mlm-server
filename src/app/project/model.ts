@@ -7,6 +7,7 @@ export interface IGenerationCommissionRate {
 
 export interface IProject extends Document {
   projectId: string;
+  sharePrefix: string; // Unique prefix for all share slots of this project
   title: string;
   description?: string;
   images: string[];
@@ -64,6 +65,7 @@ export interface IProject extends Document {
 const ProjectSchema = new Schema<IProject>(
   {
     projectId: { type: String, unique: true, sparse: true },
+    sharePrefix: { type: String, required: true, unique: true, uppercase: true, trim: true },
     title: { type: String, required: true },
     description: { type: String, default: "" },
     images: [{ type: String }],

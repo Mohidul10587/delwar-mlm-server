@@ -12,6 +12,7 @@ import {
   setCoverSlider,
   unsetCoverSlider,
   backfillSlots,
+  checkSharePrefix,
 } from "./controller";
 import { verifySuperAdmin, verifyStaff } from "../../middleware/auth";
 
@@ -22,6 +23,7 @@ router.get("/cover-slider", getCoverSlider);
 router.get("/stats", verifyStaff, getShareStats);
 router.get("/with-stats", verifyStaff, getSharesWithStats);
 router.get("/admin/all", verifyStaff, getSharesAdmin);
+router.get("/check-prefix/:prefix", verifyStaff, checkSharePrefix);
 
 // Public routes (user-facing) — only active shares
 router.get("/", getShares);
