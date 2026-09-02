@@ -124,6 +124,37 @@ function toDataUrl(filename: string): string {
 }
 
 // ─────────────────────────────────────────────────────────
+// fetchLogoAsDataUrl — remote URL → base64 data URL (for project logo)
+// Returns empty string if URL is empty or fetch fails.
+// ─────────────────────────────────────────────────────────
+async function fetchLogoAsDataUrl(url: string): Promise<string> {
+  if (!url) return "";
+  try {
+    dbg("fetchLogoAsDataUrl: fetching", url);
+    const https = await import("https");
+    const http = await import("http");
+    const urlMod = await import("url");
+    const parsed = new urlMod.URL(url);
+    const lib = parsed.protocol === "https:" ? https : http;
+    return await new Promise<string>((resolve, reject) => {
+      lib.get(url, (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const contentType = res.headers["content-type"] ?? "image/png";
+          resolve(`data:${contentType};base64,${buf.toString("base64")}`);
+        });
+        res.on("error", reject);
+      }).on("error", reject);
+    });
+  } catch (e) {
+    dbgErr("fetchLogoAsDataUrl: failed, skipping logo", e);
+    return "";
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // CertData interface (unchanged)
 // ─────────────────────────────────────────────────────────
 export interface CertData {
@@ -134,7 +165,7 @@ export interface CertData {
   totalPayable: number;
   amountRemaining: number;
   shareNumbers: string[];
-  projectId: { title: string; cashPrice: number };
+  projectId: { title: string; cashPrice: number; logo?: string };
   purchaseId: {
     paymentType: string;
     amountPaid: number;
@@ -184,9 +215,9 @@ function numberToWords(n: number): string {
 }
 
 // ─────────────────────────────────────────────────────────
-// buildHtml (unchanged logic, just wrapped with debug calls)
+// buildHtml (async — loads project logo from URL if present)
 // ─────────────────────────────────────────────────────────
-function buildHtml(c: CertData): string {
+async function buildHtml(c: CertData): Promise<string> {
   dbg("buildHtml: loading background image");
   const bgUrl = toDataUrl("Gemini_Generated_Image_28ruh128ruh128ru.png");
   dbg("buildHtml: background image loaded, size (chars)", bgUrl.length);
@@ -194,6 +225,17 @@ function buildHtml(c: CertData): string {
   dbg("buildHtml: loading QR code image");
   const qrUrl = toDataUrl("qr_code.jpeg");
   dbg("buildHtml: QR code image loaded, size (chars)", qrUrl.length);
+
+  // Load project logo (Cloudinary URL → base64 data URL)
+  const projectLogoUrl = (c.projectId as any)?.logo ?? "";
+  let logoDataUrl = "";
+  if (projectLogoUrl) {
+    dbg("buildHtml: loading project logo from URL", projectLogoUrl);
+    logoDataUrl = await fetchLogoAsDataUrl(projectLogoUrl);
+    dbg("buildHtml: project logo loaded, size (chars)", logoDataUrl.length);
+  } else {
+    dbg("buildHtml: no project logo configured, skipping");
+  }
 
   const buyer = c.purchaseId?.buyerInfo;
   const userProf = c.userId;
@@ -291,6 +333,7 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
   <div style="position:absolute;inset:0;padding:160px 220px 140px 220px;display:flex;flex-direction:column;gap:50px;">
     <div style="display:flex;align-items:center;justify-content:space-between;font-size:68px;color:#1a1a1a;margin-top:150px;padding:0 60px;">
       <div>Certificate No. :&nbsp;<span style="border:3px solid #666;padding:10px 30px;font-size:64px;color:#c0392b;font-weight:bold;border-radius:28px;">${certNo}</span></div>
+      ${logoDataUrl ? `<div style="display:flex;align-items:center;justify-content:center;"><img src="${logoDataUrl}" alt="Project Logo" style="height:220px;max-width:600px;object-fit:contain;border-radius:16px;" /></div>` : `<div></div>`}
       <div>Folio No. :&nbsp;<span style="border:3px solid #666;padding:10px 30px;font-size:64px;color:#c0392b;font-weight:bold;border-radius:28px;">${customerId}</span></div>
     </div>
     <div style="text-align:center;">
@@ -416,7 +459,7 @@ export async function generateCertificatePng(c: CertData): Promise<Buffer> {
   dbg("STEP 3: Building HTML");
   let html: string;
   try {
-    html = buildHtml(c);
+    html = await buildHtml(c);
     dbg("STEP 3: HTML built successfully, length (chars)", html.length);
   } catch (err) {
     dbgErr("STEP 3 FAILED: buildHtml threw an error", err);

@@ -13,6 +13,7 @@ import {
   unsetCoverSlider,
   backfillSlots,
   checkSharePrefix,
+  uploadProjectLogo,
 } from "./controller";
 import { verifySuperAdmin, verifyStaff } from "../../middleware/auth";
 
@@ -37,6 +38,9 @@ router.delete("/:id", verifySuperAdmin, deleteShare);
 // Cover slider management
 router.patch("/:id/set-cover-slider", verifyStaff, setCoverSlider);
 router.patch("/:id/unset-cover-slider", verifyStaff, unsetCoverSlider);
+
+// Project logo upload — used on certificates
+router.patch("/:id/logo", verifySuperAdmin, uploadProjectLogo);
 
 // Slot backfill — for shares that existed before slot system was introduced
 router.post("/:id/backfill-slots", verifySuperAdmin, backfillSlots);

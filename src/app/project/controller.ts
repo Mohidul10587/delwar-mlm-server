@@ -5,6 +5,28 @@ import { Settings } from "../settings/model";
 import { Counter } from "../user/counter";
 import { generateCustomId } from "../../utils/generateId";
 import { Category } from "../category/model";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
+import dotenv from "dotenv";
+dotenv.config();
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Multer instance for logo upload (memory storage, image only, 5 MB max)
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error("Only JPEG, PNG, WebP and GIF images are allowed"));
+    }
+    cb(null, true);
+  },
+});
 
 const BATCH_SIZE = 1000;
 
@@ -614,3 +636,50 @@ export const checkSharePrefix = async (
     next(err);
   }
 };
+
+// PATCH /share/:id/logo — upload or replace the project logo (used on certificates)
+// Accepts multipart/form-data with a single field named "logo".
+// Uploads to Cloudinary and saves the secure URL on the project document.
+export const uploadProjectLogo = [
+  // Step 1 — parse multipart file
+  (req: Request, res: Response, next: NextFunction) => {
+    logoUpload.single("logo")(req, res, (err: any) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ message: "Logo file must not exceed 5 MB" });
+        }
+        return res.status(400).json({ message: err.message });
+      }
+      if (err) return res.status(400).json({ message: err.message });
+      next();
+    });
+  },
+  // Step 2 — upload to Cloudinary and persist URL
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const project = await Project.findById(req.params.id);
+      if (!project) return res.status(404).json({ message: "Project not found" });
+
+      if (!req.file) return res.status(400).json({ message: "No logo file uploaded" });
+
+      // Upload buffer to Cloudinary under a dedicated folder
+      const result = await new Promise<any>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { resource_type: "image", folder: "project-logos" },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        stream.end(req.file!.buffer);
+      });
+
+      project.logo = result.secure_url;
+      await project.save();
+
+      res.json({ message: "Logo uploaded successfully", logo: project.logo });
+    } catch (err) {
+      next(err);
+    }
+  },
+];

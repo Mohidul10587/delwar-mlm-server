@@ -8,7 +8,7 @@ import { generateCertificatePng } from "./generateCertificate";
 export const getMyCertificates = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const certificates = await Certificate.find({ userId: req.user!._id })
-      .populate("projectId", "title image cashPrice")
+      .populate("projectId", "title image cashPrice logo")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
       .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
       .sort({ createdAt: -1 })
@@ -98,7 +98,7 @@ export const downloadCertificate = async (req: Request, res: Response, next: Nex
     // ── Step A: Find certificate ──────────────────────────────────────────
     console.log(`[CERT-CTRL][${ts}] STEP A: Looking up certificate in DB`);
     const cert = await Certificate.findOne({ _id: certId, userId })
-      .populate("projectId", "title image cashPrice")
+      .populate("projectId", "title image cashPrice logo")
       .populate("purchaseId", "paymentType amountPaid quantity status transactionId createdAt buyerInfo downPayment installmentCount installmentAmount snapshot paymentId")
       .populate("userId", "name phone email fatherName nid address username nominee dateOfBirth district upazila customerId")
       .lean();
