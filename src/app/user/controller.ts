@@ -571,11 +571,14 @@ export const getUserDetails = async (
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const referrerId = (user as any).generationAncestors?.[0]?.userId;
-    const referrer = referrerId
-      ? await Model.findById(referrerId).select("name username phone").lean()
-      : null;
 
-    const wallet = await Wallet.findOne({ userId: user._id }).lean();
+    // Run referrer + wallet lookups in parallel — they are independent
+    const [referrer, wallet] = await Promise.all([
+      referrerId
+        ? Model.findById(referrerId).select("name username phone").lean()
+        : Promise.resolve(null),
+      Wallet.findOne({ userId: user._id }).lean(),
+    ]);
 
     res.json({ user: { ...user, referrer }, wallet });
   } catch (err) {
@@ -615,28 +618,37 @@ export const getUsers = async (
       Model.countDocuments(query),
     ]);
 
-    // Populate referrer information for each user
-    const usersWithReferrer = await Promise.all(
-      users.map(async (user: any) => {
-        const referrerId = user.generationAncestors?.[0]?.userId;
-        if (referrerId) {
-          const referrer = await Model.findById(referrerId)
-            .select("customerId name username")
-            .lean();
-          return {
-            ...user,
-            referrer: referrer
-              ? {
-                  userId: referrer.customerId,
-                  name: referrer.name,
-                  username: referrer.username,
-                }
-              : null,
-          };
-        }
-        return { ...user, referrer: null };
-      })
+    // Batch-load all referrers in one query — avoids N+1
+    const referrerIds = users
+      .map((u: any) => u.generationAncestors?.[0]?.userId)
+      .filter(Boolean);
+
+    const referrerDocs = referrerIds.length
+      ? await Model.find({ _id: { $in: referrerIds } })
+          .select("_id customerId name username")
+          .lean()
+      : [];
+
+    const referrerMap = new Map(
+      referrerDocs.map((r: any) => [String(r._id), r])
     );
+
+    const usersWithReferrer = users.map((user: any) => {
+      const referrerId = user.generationAncestors?.[0]?.userId;
+      const referrer = referrerId
+        ? (referrerMap.get(String(referrerId)) ?? null)
+        : null;
+      return {
+        ...user,
+        referrer: referrer
+          ? {
+              userId: (referrer as any).customerId,
+              name: (referrer as any).name,
+              username: (referrer as any).username,
+            }
+          : null,
+      };
+    });
 
     res.json({
       users: usersWithReferrer,

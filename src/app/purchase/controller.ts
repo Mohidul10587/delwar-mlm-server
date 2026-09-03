@@ -108,7 +108,12 @@ export const createPurchase = async (
       return res.status(400).json({ message: "Invalid payment type" });
     }
 
-    const share = await Project.findById(projectId);
+    // Fetch share and buyer in parallel — both are needed and independent
+    const [share, buyer] = await Promise.all([
+      Project.findById(projectId),
+      User.findById(req.user!._id).select("name phone nominee nominee2"),
+    ]);
+
     if (!share) return res.status(404).json({ message: "Share not found" });
 
     if (!share.isActive)
@@ -136,10 +141,6 @@ export const createPurchase = async (
         });
       }
     }
-
-    const buyer = await User.findById(req.user!._id).select(
-      "name phone nominee nominee2"
-    );
 
     // Build resolvedBuyerInfo:
     // - If frontend sends buyerInfo.nominees array → use it (new behaviour)

@@ -182,8 +182,12 @@ export const distributeCommissions = async (purchaseId: string) => {
       await User.findByIdAndUpdate(referrerId, {
         $inc: { directSalesCount: qty },
       });
-      await recalcUserRank(referrerId.toString(), preloadedRanks); // C-04 fix
     }
+
+    // Collect all user IDs that need rank recalc after commission processing.
+    // Recalc is deferred out of the loops to avoid one DB hit per generation.
+    const rankRecalcIds = new Set<string>();
+    if (referrerId) rankRecalcIds.add(referrerId.toString());
 
     // ── 2. Down Payment Managerial Commission ─────────────────────────────────
     // এই কমিশন এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
@@ -217,7 +221,7 @@ export const distributeCommissions = async (purchaseId: string) => {
         await User.findByIdAndUpdate(currentId, {
           $inc: { teamSalesCount: qty },
         });
-        await recalcUserRank(currentId, preloadedRanks); // C-04 fix
+        rankRecalcIds.add(currentId);
       }
     }
 
@@ -269,8 +273,14 @@ export const distributeCommissions = async (purchaseId: string) => {
               note
             );
           }
+          rankRecalcIds.add(currentId);
         }
       }
+    }
+
+    // Batch rank recalc — one call per unique user, all after the loops complete
+    for (const uid of rankRecalcIds) {
+      await recalcUserRank(uid, preloadedRanks);
     }
   } catch (err) {
     console.error(
