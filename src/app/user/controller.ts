@@ -13,6 +13,7 @@ import {
 } from "../../utils/authConfig";
 import { generateCustomId } from "../../utils/generateId";
 import { sendRegistrationSms } from "../../utils/sms";
+import { recalcUserRank } from "../rank/controller";
 
 declare module "express" {
   interface Request {
@@ -694,6 +695,11 @@ export const adminUpdateRelations = async (
     const user = await Model.findById(req.params.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // Capture the old referrer chain BEFORE any change — needed for post-change recalc
+    const oldReferrerChainIds: string[] = (user.generationAncestors ?? []).map(
+      (a: any) => a.userId.toString()
+    );
+
     let newReferrerId: mongoose.Types.ObjectId | null =
       user.generationAncestors[0]?.userId ?? null;
 
@@ -714,11 +720,32 @@ export const adminUpdateRelations = async (
     user.generationAncestors = generationAncestors as any;
     await user.save();
 
-    await Promise.all([
-      referrerUsername !== undefined
-        ? cascadeGenerationAncestors(user._id)
-        : Promise.resolve(),
+    // New referrer chain IDs after the change
+    const newReferrerChainIds: string[] = (generationAncestors ?? []).map(
+      (a: any) => a.userId.toString()
+    );
+
+    // cascade must complete before rank recalc so descendant ancestors are up to date
+    if (referrerUsername !== undefined) {
+      await cascadeGenerationAncestors(user._id);
+    }
+
+    // Recalc ranks for all affected ancestors:
+    // - old chain: they lost a downstream member, teamSalesCount may drop
+    // - new chain: they gained a downstream member, teamSalesCount may rise
+    // Use a Set to deduplicate (overlap between old and new chains)
+    const rankRecalcIds = new Set<string>([
+      ...oldReferrerChainIds,
+      ...newReferrerChainIds,
     ]);
+
+    // Load settings once and reuse across all recalc calls
+    const settingsDoc = await Settings.findOne().lean();
+    const preloadedRanks = ((settingsDoc as any)?.ranks ?? []) as any[];
+
+    for (const uid of rankRecalcIds) {
+      await recalcUserRank(uid, preloadedRanks);
+    }
 
     res.json({ message: "Updated successfully", user });
   } catch (err) {
