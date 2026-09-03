@@ -115,7 +115,6 @@ const recomputeTotalBalance = function (doc: any) {
 };
 
 WalletSchema.post("findOneAndUpdate", recomputeTotalBalance);
-WalletSchema.post("findByIdAndUpdate", recomputeTotalBalance);
 
 // userId already has unique: true constraint, no need for separate index
 
