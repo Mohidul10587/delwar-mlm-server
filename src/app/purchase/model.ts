@@ -10,6 +10,8 @@ export interface IBuyerNominee {
   phone: string;
   nid?: string;
   image?: string;
+  /** Percentage share of this nominee (0–100). All nominees should sum to 100. */
+  percentage?: number;
 }
 
 export interface IBuyerInfo {
@@ -97,6 +99,7 @@ const NomineeSchema = new Schema(
     phone: { type: String },
     nid: { type: String },
     image: { type: String },
+    percentage: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -108,7 +111,6 @@ const BuyerInfoSchema = new Schema(
     nid: { type: String },
     // Legacy fixed fields – kept for backward compatibility with existing records
     nominee: { type: NomineeSchema },
-    nominee2: { type: NomineeSchema },
     // New dynamic nominees array
     nominees: { type: [NomineeSchema], default: undefined },
   },
