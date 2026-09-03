@@ -67,35 +67,32 @@ mongoose.connection.once("open", async () => {
   await seedAdmin();
 
   // ── Admin monthly salary auto-release cron ────────────────────────────────
-  // Runs at 23:59 on the last day of every month.
-  // "59 23 28-31 * *" + day-of-month check ensures last day only.
-  cron.schedule("59 23 28-31 * *", async () => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    // Only execute on the actual last day of the month
-    if (tomorrow.getDate() === 1) {
-      await autoReleaseMonthlySalaries();
-    }
-  });
-  console.log("[CRON] Monthly salary scheduler registered");
+  // DISABLED: Admin now releases salaries manually from the admin panel.
+  // cron.schedule("59 23 28-31 * *", async () => {
+  //   const now = new Date();
+  //   const tomorrow = new Date(now);
+  //   tomorrow.setDate(now.getDate() + 1);
+  //   if (tomorrow.getDate() === 1) {
+  //     await autoReleaseMonthlySalaries();
+  //   }
+  // });
+  // console.log("[CRON] Monthly salary scheduler registered");
 
   // ── Rank salary auto-release cron ─────────────────────────────────────────
-  // Runs at 23:59 on the last day of every month (same schedule).
-  // Only fires for users who haven't already been paid manually by admin.
-  cron.schedule("59 23 28-31 * *", async () => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    if (tomorrow.getDate() === 1) {
-      console.log("[CRON] Running rank salary auto-release...");
-      const released = await processMonthlySalaries();
-      console.log(
-        `[CRON] Rank salary auto-release done: ${released} users paid`
-      );
-    }
-  });
-  console.log("[CRON] Rank salary scheduler registered");
+  // DISABLED: Admin now releases rank salaries manually from /super-admin/salary-eligible.
+  // cron.schedule("59 23 28-31 * *", async () => {
+  //   const now = new Date();
+  //   const tomorrow = new Date(now);
+  //   tomorrow.setDate(now.getDate() + 1);
+  //   if (tomorrow.getDate() === 1) {
+  //     console.log("[CRON] Running rank salary auto-release...");
+  //     const released = await processMonthlySalaries();
+  //     console.log(
+  //       `[CRON] Rank salary auto-release done: ${released} users paid`
+  //     );
+  //   }
+  // });
+  // console.log("[CRON] Rank salary scheduler registered");
 });
 
 // Fix S-11: Security headers
