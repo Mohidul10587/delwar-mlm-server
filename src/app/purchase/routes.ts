@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createPurchase, getPurchases, getPurchaseById, getBranchPurchaseById, getMyPurchases, getPurchaseReceipt, getInstallmentReceipt, downloadPurchaseReceipt, downloadInstallmentReceipt, getBranchPurchases } from "./controller";
-import { updatePurchaseStatus, reclaimShares } from "./status.controller";
+import { updatePurchaseStatus, reclaimShares, retryCommission } from "./status.controller";
 import { verifyUser, verifyAdmin, verifyStaff, verifyBranchManager, requirePermission } from "../../middleware/auth";
 import {
   createInstallmentPayment,
@@ -21,6 +21,7 @@ router.get("/installments/pending", verifyStaff, requirePermission("purchase.rev
 // Both staff (super-admin) and branch managers can approve/reject
 router.patch("/:id/status", verifyBranchManager, updatePurchaseStatus);
 router.post("/:purchaseId/reclaim", verifyStaff, requirePermission("purchase.review"), reclaimShares);
+router.post("/:id/retry-commission", verifyStaff, requirePermission("purchase.review"), retryCommission);
 router.get("/:id/receipt/download", verifyUser,  downloadPurchaseReceipt);
 router.get("/:id/receipt",          verifyUser,  getPurchaseReceipt);
 router.get("/:id",                  verifyStaff, requirePermission("purchase.review"), getPurchaseById);

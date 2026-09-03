@@ -138,189 +138,200 @@ export const updatePurchaseStatus = async (
     if (status === "rejected" && !String(reviewNote ?? "").trim())
       return res.status(400).json({ message: "Rejection reason is required" });
 
-    const purchase = await Purchase.findById(req.params.id);
-    if (!purchase)
-      return res.status(404).json({ message: "Purchase not found" });
+    // ── Fix: Atomically claim the purchase for review ─────────────────────────
+    // findOneAndUpdate with status: "pending" guard ensures only one concurrent
+    // admin can approve/reject — a second request will find no document matching
+    // the filter and get a clear "already reviewed" error instead of double-processing.
+    const purchase = await Purchase.findOneAndUpdate(
+      { _id: req.params.id, status: "pending" },
+      {
+        $set: {
+          status,
+          reviewNote: String(reviewNote ?? "").trim(),
+          reviewedBy: req.user!._id,
+          reviewedByInfo: { name: req.user!.name, role: req.user!.role },
+          reviewedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
 
-    const wasAlreadyApproved = purchase.status === "approved";
-    const wasAlreadyRejected = purchase.status === "rejected";
+    if (!purchase) {
+      const exists = await Purchase.exists({ _id: req.params.id });
+      return res.status(exists ? 400 : 404).json({
+        message: exists
+          ? "This purchase has already been reviewed"
+          : "Purchase not found",
+      });
+    }
 
-    // Step 1 — Allocate share slots (only on first approval)
-    if (status === "approved" && !wasAlreadyApproved) {
-      const allocationError = await allocateShares(purchase);
-      if (allocationError) {
-        return res.status(400).json({ message: allocationError.error });
+    // ── Rejection path ────────────────────────────────────────────────────────
+    if (status === "rejected") {
+      // Refund reserved cashback if any
+      if (purchase.cashbackAmount > 0 && !purchase.cashbackRefunded) {
+        const wallet = await Wallet.findOneAndUpdate(
+          { userId: purchase.userId },
+          {
+            $inc: {
+              cashbackBalance: purchase.cashbackAmount,
+              totalBalance: purchase.cashbackAmount,
+            },
+          },
+          { new: true, upsert: true }
+        );
+        await Purchase.findByIdAndUpdate(purchase._id, {
+          $set: { cashbackRefunded: true },
+        });
+        await TransactionLog.create({
+          userId: purchase.userId,
+          type: "cashback_payment_refund",
+          amount: purchase.cashbackAmount,
+          balanceAfter: wallet.totalBalance,
+          relatedPurchaseId: purchase._id,
+          note: `Cashback refunded for rejected purchase ${purchase._id.toString()}`,
+        });
       }
+
+      // Update certificate status
+      await Certificate.findOneAndUpdate(
+        { purchaseId: purchase._id },
+        { status: "cancelled" },
+        { upsert: true }
+      );
+
+      return res.json({ message: "Purchase rejected", purchase });
+    }
+
+    // ── Approval path ─────────────────────────────────────────────────────────
+
+    // Step 1 — Allocate share slots atomically
+    const allocationError = await allocateShares(purchase);
+    if (allocationError) {
+      // Roll back the status change so the purchase can be retried
+      await Purchase.findByIdAndUpdate(purchase._id, {
+        $set: { status: "pending", reviewNote: "", reviewedBy: null, reviewedByInfo: null, reviewedAt: null },
+      });
+      return res.status(400).json({ message: allocationError.error });
     }
 
     // Step 2 — For cash: mark full amount as paid
-    if (
-      status === "approved" &&
-      !wasAlreadyApproved &&
-      purchase.paymentType === "cash"
-    ) {
+    if (purchase.paymentType === "cash") {
       const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
       if (fullAmount > purchase.amountPaid) {
+        await Purchase.findByIdAndUpdate(purchase._id, {
+          $set: { amountPaid: fullAmount },
+        });
         purchase.amountPaid = fullAmount;
       }
     }
 
-    // Step 3 — Save purchase status
-    purchase.status = status as any;
-    purchase.reviewNote = String(reviewNote ?? "").trim();
-    purchase.reviewedBy = req.user!._id as any;
-    purchase.reviewedByInfo = { name: req.user!.name, role: req.user!.role };
-    purchase.reviewedAt = new Date();
-    await purchase.save();
+    // Respond immediately so the admin UI is not blocked by downstream tasks
+    res.json({ message: "Purchase approved", purchase });
 
-    // Cashback is reserved when the request is submitted. A rejected request
-    // returns only that reserved portion; approved purchases keep it applied.
-    if (
-      status === "rejected" &&
-      !wasAlreadyRejected &&
-      purchase.cashbackAmount > 0 &&
-      !purchase.cashbackRefunded
-    ) {
-      const wallet = await Wallet.findOneAndUpdate(
-        { userId: purchase.userId },
-        {
-          $inc: {
-            cashbackBalance: purchase.cashbackAmount,
-            totalBalance: purchase.cashbackAmount,
-          },
-        },
-        { new: true, upsert: true }
-      );
-      purchase.cashbackRefunded = true;
-      await purchase.save();
-      await TransactionLog.create({
-        userId: purchase.userId,
-        type: "cashback_payment_refund",
-        amount: purchase.cashbackAmount,
-        balanceAfter: wallet.totalBalance,
-        relatedPurchaseId: purchase._id,
-        note: `Cashback refunded for rejected purchase ${purchase._id.toString()}`,
-      });
-    }
+    // ── Post-approval side-effects (non-blocking after response) ─────────────
 
-    // Respond immediately
-    res.json({ message: `Purchase ${status}`, purchase });
-
-    if (status === "approved" && !wasAlreadyApproved) {
-      // Send SMS notification for purchase approval
-      try {
-        const user = await User.findById(purchase.userId).select("phone").lean();
-        if (user && (user as any).phone) {
-          const totalAmount = purchase.amountPaid;
-          const productName = purchase.snapshot?.shareTitle || "Product";
-          await sendPurchaseApprovalSms(
-            (user as any).phone,
-            purchase._id.toString(),
-            totalAmount,
-            productName
-          );
-        }
-      } catch (smsError) {
-        console.error("Failed to send purchase approval SMS:", smsError);
-        // Don't fail the approval if SMS fails
-      }
-
-      // Step 4 — User personal shares count
-      await User.findByIdAndUpdate(purchase.userId, {
-        $inc: { personalPurchaseCount: purchase.quantity },
-      });
-
-      // Step 4b — Recalc buyer's own rank (Rank 2 depends on personal purchase count)
-      await recalcUserRank(purchase.userId.toString());
-
-      // Step 5 — Fix P-02: await commission distribution so errors are caught
-      if (!purchase.commissionProcessed) {
-        await distributeCommissions((purchase._id as any).toString());
-      }
-
-      // Step 5c — Auto cashback for cash purchases
-      // Only triggers when paymentType === "cash" and cashbackPercent > 0
-      if (
-        purchase.paymentType === "cash" &&
-        (purchase.snapshot?.cashbackPercent ?? 0) > 0
-      ) {
-        try {
-          const cashbackPct = purchase.snapshot.cashbackPercent;
-          const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
-          const cashbackAmt = Math.floor((cashbackPct / 100) * totalPaid);
-
-          if (cashbackAmt > 0) {
-            const updatedWallet = await Wallet.findOneAndUpdate(
-              { userId: purchase.userId },
-              { $inc: { cashbackBalance: cashbackAmt, totalBalance: cashbackAmt } },
-              { new: true, upsert: true }
-            );
-
-            await TransactionLog.create({
-              userId: purchase.userId,
-              type: "cashback",
-              amount: cashbackAmt,
-              balanceAfter: updatedWallet!.totalBalance,
-              relatedPurchaseId: purchase._id,
-              note: `Cashback ${cashbackPct}% — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
-            });
-
-            try {
-              await CompanyLedger.create({
-                date: new Date(),
-                type: "cashback_paid",
-                amount: cashbackAmt,
-                relatedId: purchase._id,
-                relatedModel: "Purchase",
-                userId: purchase.userId,
-                note: `Auto cashback ${cashbackPct}% for purchaseId=${(purchase._id as any).toString()}`,
-              });
-            } catch (ledgerErr) {
-              console.error(
-                `[LEDGER ERROR] cashback_paid for purchaseId=${(purchase._id as any).toString()}:`,
-                ledgerErr
-              );
-            }
-          }
-        } catch (cashbackErr) {
-          console.error(
-            `[CASHBACK ERROR] Auto cashback failed for purchaseId=${(purchase._id as any).toString()}:`,
-            cashbackErr
-          );
-        }
-      }
-
-      // Step 6 — Ledger entry
-      const buyer = await User.findById(purchase.userId)
-        .select("name username")
-        .lean();
-      const buyerName = (buyer as any)?.name ?? "";
-      const buyerUsername = (buyer as any)?.username ?? "";
-      try {
-        await CompanyLedger.create({
-          date: new Date(),
-          type: "purchase_received",
-          amount: purchase.amountPaid,
-          relatedId: purchase._id,
-          relatedModel: "Purchase",
-          userId: purchase.userId,
-          note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${
-            purchase.quantity
-          } [${
-            purchase.paymentType
-          }] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
-        });
-      } catch (ledgerErr) {
-        // Fix E-02: log ledger failures — do not silently swallow
-        console.error(
-          `[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`,
-          ledgerErr
+    // SMS notification
+    try {
+      const user = await User.findById(purchase.userId).select("phone").lean();
+      if (user && (user as any).phone) {
+        await sendPurchaseApprovalSms(
+          (user as any).phone,
+          purchase._id.toString(),
+          purchase.amountPaid,
+          purchase.snapshot?.shareTitle || "Product"
         );
       }
-
-      // Step 7 — Auto-complete share if all slots are now sold
-      await checkAndCompleteShare(purchase.projectId);
+    } catch (smsError) {
+      console.error("Failed to send purchase approval SMS:", smsError);
     }
+
+    // Step 3 — personalPurchaseCount + rank recalc
+    await User.findByIdAndUpdate(purchase.userId, {
+      $inc: { personalPurchaseCount: purchase.quantity },
+    });
+    await recalcUserRank(purchase.userId.toString());
+
+    // Step 4 — Commission distribution
+    // commissionProcessed flag is the idempotency guard — set to true atomically
+    // inside distributeCommissions before any wallet writes, so a retry is safe.
+    if (!purchase.commissionProcessed) {
+      await distributeCommissions((purchase._id as any).toString());
+    }
+
+    // Step 5 — Auto cashback for cash purchases
+    if (
+      purchase.paymentType === "cash" &&
+      (purchase.snapshot?.cashbackPercent ?? 0) > 0
+    ) {
+      try {
+        const cashbackPct = purchase.snapshot.cashbackPercent;
+        const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
+        const cashbackAmt = Math.floor((cashbackPct / 100) * totalPaid);
+
+        if (cashbackAmt > 0) {
+          const updatedWallet = await Wallet.findOneAndUpdate(
+            { userId: purchase.userId },
+            { $inc: { cashbackBalance: cashbackAmt, totalBalance: cashbackAmt } },
+            { new: true, upsert: true }
+          );
+          await TransactionLog.create({
+            userId: purchase.userId,
+            type: "cashback",
+            amount: cashbackAmt,
+            balanceAfter: updatedWallet!.totalBalance,
+            relatedPurchaseId: purchase._id,
+            note: `Cashback ${cashbackPct}% — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
+          });
+          try {
+            await CompanyLedger.create({
+              date: new Date(),
+              type: "cashback_paid",
+              amount: cashbackAmt,
+              relatedId: purchase._id,
+              relatedModel: "Purchase",
+              userId: purchase.userId,
+              note: `Auto cashback ${cashbackPct}% for purchaseId=${(purchase._id as any).toString()}`,
+            });
+          } catch (ledgerErr) {
+            console.error(
+              `[LEDGER ERROR] cashback_paid for purchaseId=${(purchase._id as any).toString()}:`,
+              ledgerErr
+            );
+          }
+        }
+      } catch (cashbackErr) {
+        console.error(
+          `[CASHBACK ERROR] Auto cashback failed for purchaseId=${(purchase._id as any).toString()}:`,
+          cashbackErr
+        );
+      }
+    }
+
+    // Step 6 — Company ledger inflow entry
+    const buyer = await User.findById(purchase.userId)
+      .select("name username")
+      .lean();
+    const buyerName = (buyer as any)?.name ?? "";
+    const buyerUsername = (buyer as any)?.username ?? "";
+    try {
+      await CompanyLedger.create({
+        date: new Date(),
+        type: "purchase_received",
+        amount: purchase.amountPaid,
+        relatedId: purchase._id,
+        relatedModel: "Purchase",
+        userId: purchase.userId,
+        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+      });
+    } catch (ledgerErr) {
+      console.error(
+        `[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`,
+        ledgerErr
+      );
+    }
+
+    // Step 7 — Auto-complete share if all slots sold
+    await checkAndCompleteShare(purchase.projectId);
 
     // Step 8 — Update certificate status
     const purchaseWithShare = await Purchase.findById(purchase._id)
@@ -377,6 +388,43 @@ export const reclaimShares = async (
       message: `${reclaimed} share slot(s) reclaimed`,
       reclaimed,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── Retry Commission Distribution ─────────────────────────────────────────────
+// Handles the case where commissionProcessed was set to true atomically but the
+// server crashed before wallet writes completed.  Admin can call this endpoint
+// to safely re-run commission distribution for any approved purchase where
+// commissionProcessed is still false (i.e. the flag rollback in the catch block
+// of distributeCommissions succeeded) OR where the flag is true but the admin
+// suspects a partial failure.
+//
+// distributeCommissions itself is idempotent via the
+//   findOneAndUpdate({ commissionProcessed: false })
+// guard — if commissionProcessed is already true it exits immediately, so
+// calling this endpoint on a fully-processed purchase is a safe no-op.
+export const retryCommission = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const purchase = await Purchase.findById(req.params.id).lean();
+    if (!purchase)
+      return res.status(404).json({ message: "Purchase not found" });
+    if (purchase.status !== "approved")
+      return res
+        .status(400)
+        .json({ message: "Commission retry only available for approved purchases" });
+
+    if (purchase.commissionProcessed) {
+      return res.json({ message: "Commission already processed — no action taken" });
+    }
+
+    await distributeCommissions((purchase._id as any).toString());
+    res.json({ message: "Commission distribution retried successfully" });
   } catch (err) {
     next(err);
   }

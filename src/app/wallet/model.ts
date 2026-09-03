@@ -86,6 +86,37 @@ WalletSchema.pre("save", function () {
   // Note: loanAmount is NOT included in totalBalance (tracked separately)
 });
 
+// Recompute totalBalance after any findOneAndUpdate / findByIdAndUpdate that
+// modifies the wallet so $inc callers do not need to manually maintain it.
+// This runs only when { new: true } is passed (i.e. the updated doc is returned).
+const recomputeTotalBalance = function (doc: any) {
+  if (!doc) return;
+  const computed =
+    (doc.directCommissionBalance ?? 0) +
+    (doc.manCommFromDownPayment ?? 0) +
+    (doc.manCommFromInstallment ?? 0) +
+    (doc.salaryBalanceFromRanks ?? 0) +
+    (doc.cashbackBalance ?? 0) +
+    (doc.transferBalance ?? 0) +
+    (doc.fixedMonthlySalaryForAdminOnly ?? 0) +
+    (doc.expenseReimbursementBalance ?? 0) +
+    (doc.rewardBalanceFromInstallment ?? 0);
+  if (doc.totalBalance !== computed) {
+    // Persist the corrected total without triggering hooks again
+    Wallet.updateOne({ _id: doc._id }, { $set: { totalBalance: computed } }).catch(
+      (err: any) =>
+        console.error(
+          `[WALLET] totalBalance recompute failed for walletId=${doc._id}:`,
+          err
+        )
+    );
+    doc.totalBalance = computed;
+  }
+};
+
+WalletSchema.post("findOneAndUpdate", recomputeTotalBalance);
+WalletSchema.post("findByIdAndUpdate", recomputeTotalBalance);
+
 // userId already has unique: true constraint, no need for separate index
 
 const TransactionLogSchema = new Schema<ITransactionLog>(

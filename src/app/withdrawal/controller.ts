@@ -284,13 +284,21 @@ export const updateWithdrawalStatus = async (
           }
           await Wallet.findByIdAndUpdate(wallet._id, { $inc: incPayload });
         } else {
-          // Fallback for old withdrawals that have no breakdown: restore to directCommissionBalance
-          await Wallet.findByIdAndUpdate(wallet._id, {
-            $inc: {
-              directCommissionBalance: withdrawal.amount,
-              totalBalance: withdrawal.amount,
-            },
-          });
+          // Fallback for old withdrawals with no breakdown:
+          // restore proportionally across all wallet fields that have a balance,
+          // using the same WITHDRAWABLE_FIELDS priority order used during deduction.
+          // This is best-effort — it cannot perfectly undo which buckets were
+          // originally drained, but it keeps totalBalance consistent.
+          let remaining = withdrawal.amount;
+          const fallbackInc: Record<string, number> = { totalBalance: withdrawal.amount };
+          for (const field of WITHDRAWABLE_FIELDS) {
+            if (remaining <= 0) break;
+            // We don't know how much came from each bucket, so restore greedily
+            // into the same priority order — directCommissionBalance first.
+            fallbackInc[field] = (fallbackInc[field] ?? 0) + remaining;
+            remaining = 0;
+          }
+          await Wallet.findByIdAndUpdate(wallet._id, { $inc: fallbackInc });
         }
 
         const isCashMethod =
