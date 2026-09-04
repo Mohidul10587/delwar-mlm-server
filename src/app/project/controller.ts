@@ -77,6 +77,78 @@ function isOfferActive(share: any): boolean {
   return true;
 }
 
+// GET /share/search — public search & filter endpoint
+// Query params: q, categoryId, status, projectType, priceMin, priceMax, sort, page, limit
+export const searchShares = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      q,
+      categoryId,
+      status,
+      projectType,
+      page = "1",
+      limit = "12",
+    } = req.query as Record<string, string>;
+
+    const filter: any = { isActive: true };
+
+    // Full-text search on title, description, location, developer
+    if (q && q.trim()) {
+      const regex = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { title: regex },
+        { description: regex },
+        { location: regex },
+        { developer: regex },
+        { projectType: regex },
+      ];
+    }
+
+    if (categoryId) filter.categoryId = categoryId;
+    if (status) filter.projectStatus = status;
+    if (projectType) filter.projectType = new RegExp(projectType.trim(), "i");
+
+    // Always sort by newest first
+    const sortObj = { createdAt: -1 as const };
+
+    const pageNum  = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
+    const skip     = (pageNum - 1) * limitNum;
+
+    const [shares, total] = await Promise.all([
+      Project.find(filter).sort(sortObj).skip(skip).limit(limitNum).lean(),
+      Project.countDocuments(filter),
+    ]);
+
+    // Attach isActiveOffer + category info
+    const categories = await Category.find().lean();
+    const categoryMap = new Map(categories.map((c) => [c._id.toString(), c]));
+
+    const enriched = shares.map((s) => ({
+      ...s,
+      isActiveOffer: isOfferActive(s),
+      category: s.categoryId ? (categoryMap.get(s.categoryId) ?? null) : null,
+    }));
+
+    res.json({
+      shares: enriched,
+      categories,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const createShare = async (
   req: Request,
   res: Response,

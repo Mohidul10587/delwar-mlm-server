@@ -14,6 +14,7 @@ import {
   backfillSlots,
   checkSharePrefix,
   uploadProjectLogo,
+  searchShares,
 } from "./controller";
 import { verifySuperAdmin, verifyStaff } from "../../middleware/auth";
 
@@ -25,6 +26,9 @@ router.get("/stats", verifyStaff, getShareStats);
 router.get("/with-stats", verifyStaff, getSharesWithStats);
 router.get("/admin/all", verifyStaff, getSharesAdmin);
 router.get("/check-prefix/:prefix", verifyStaff, checkSharePrefix);
+
+// Public search & filter — must be before /:id
+router.get("/search", searchShares);
 
 // Public routes (user-facing) — only active shares
 router.get("/", getShares);
