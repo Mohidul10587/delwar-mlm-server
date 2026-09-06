@@ -234,8 +234,10 @@ export const createPurchase = async (
     } else {
       const installmentDiscountPct = share.installmentDiscount ?? 0;
       const discountedDPPerUnit = round2(rawDPPerUnit * (1 - installmentDiscountPct / 100));
+      const discountAmountPerUnit = round2(rawDPPerUnit - discountedDPPerUnit);
       resolvedDP = round2(discountedDPPerUnit * qty);
-      totalPayable = round2((share.installmentPrice ?? share.cashPrice) * qty);
+      // totalPayable = installmentPrice × qty minus the discount applied to down payment
+      totalPayable = round2((share.installmentPrice ?? share.cashPrice) * qty - discountAmountPerUnit * qty);
       // EDP: user's chosen raw DP with discount applied once
       effectiveDownPayment = resolvedDP;
     }
