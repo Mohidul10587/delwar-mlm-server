@@ -251,15 +251,17 @@ export const updatePurchaseStatus = async (
       await distributeCommissions((purchase._id as any).toString());
     }
 
-    // Step 5 — Auto cashback for cash purchases
+    // Step 5 — Auto cashback (Incentive Bonus) for cash purchases
+    // Base = snap.effectiveDownPayment — discount was applied once at purchase creation.
+    // No discount is re-applied here.
     if (
       purchase.paymentType === "cash" &&
       (purchase.snapshot?.cashbackPercent ?? 0) > 0
     ) {
       try {
         const cashbackPct = purchase.snapshot.cashbackPercent;
-        const totalPaid = round2(purchase.amountPaid); // use actual amountPaid, not cashPrice × qty
-        const cashbackAmt = round2((cashbackPct / 100) * totalPaid);
+        const effectiveDP = round2(purchase.snapshot.effectiveDownPayment ?? 0);
+        const cashbackAmt = round2((cashbackPct / 100) * effectiveDP);
 
         if (cashbackAmt > 0) {
           const updatedWallet = await Wallet.findOneAndUpdate(
@@ -273,7 +275,7 @@ export const updatePurchaseStatus = async (
             amount: cashbackAmt,
             balanceAfter: updatedWallet!.totalBalance,
             relatedPurchaseId: purchase._id,
-            note: `Cashback ${cashbackPct}% — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
+            note: `Incentive bonus ${cashbackPct}% on effective down payment ৳${effectiveDP.toLocaleString()} — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
           });
           try {
             await CompanyLedger.create({

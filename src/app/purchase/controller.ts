@@ -123,18 +123,15 @@ export const createPurchase = async (
         .json({ message: "This share is not available for purchase" });
 
     // Fix F-11: validate down payment range for installment.
-    // Frontend sends the raw (pre-discount) per-unit down payment for validation;
-    // the discounted amount is also sent as the actual downPayment field.
-    // We validate against per-unit min/max here.
+    // Frontend sends the raw (pre-discount) per-unit down payment.
+    // Backend applies the discount itself — no reverse-calculation needed.
     if (paymentType === "installment") {
-      const dp = Number(downPayment);
-      // downPayment from frontend is the discounted per-unit amount.
-      // Reconstruct the raw per-unit amount to validate against share limits.
-      const installmentDiscountPct = share.installmentDiscount ?? 0;
-      const rawDpPerUnit = installmentDiscountPct > 0
-        ? Math.round(dp / (1 - installmentDiscountPct / 100))
-        : dp;
-      if (isNaN(rawDpPerUnit) || rawDpPerUnit < share.minDownPayment || rawDpPerUnit > share.maxDownPayment) {
+      const rawDpPerUnit = Number(downPayment);
+      if (
+        isNaN(rawDpPerUnit) ||
+        rawDpPerUnit < share.minDownPayment ||
+        rawDpPerUnit > share.maxDownPayment
+      ) {
         return res.status(400).json({
           message: `Down payment per unit must be between ৳${share.minDownPayment.toLocaleString()} and ৳${share.maxDownPayment.toLocaleString()}`,
         });
@@ -203,31 +200,44 @@ export const createPurchase = async (
 
     // ── Payment calculations ──────────────────────────────────────────────────
     //
+    // Frontend sends the raw (pre-discount) per-unit down payment.
+    // Backend applies the discount here so all money math lives in one place.
+    //
     // Cash purchase example:
     //   cashPrice=100, maxDownPayment=20, cashDiscount=10%
-    //   discountedDownPayment = floor(20 × 0.90) = 18  (sent by frontend as `downPayment`)
-    //   remainingAfterDown    = cashPrice - maxDownPayment = 100 - 20 = 80
-    //   totalPayable per unit = 18 + 80 = 98
-    //   amountPaid            = 98 × qty  (cash = full payment, remaining = 0)
+    //   discountedDPPerUnit = round2(20 × 0.90) = 18
+    //   remainingPerUnit    = cashPrice - maxDownPayment = 100 - 20 = 80
+    //   totalPayable        = (18 + 80) × qty = 98 × qty
+    //   amountPaid          = totalPayable  (cash = full payment upfront)
     //
     // Installment purchase example:
-    //   installmentPrice=120, downPayment chosen by user (discounted), rest in kisti
-    //   totalPayable = installmentPrice × qty
+    //   installmentPrice=120, rawDPPerUnit chosen by user=30, installmentDiscount=5%
+    //   discountedDPPerUnit = round2(30 × 0.95) = 28.50
+    //   totalPayable        = installmentPrice × qty = 120 × qty
+    //   amountPaid          = discountedDPPerUnit × qty (only down payment now)
 
-    const resolvedDPPerUnit = round2(Number(downPayment)); // discounted down payment per unit from frontend
+    const rawDPPerUnit = round2(Number(downPayment)); // raw per-unit, validated above
 
     let totalPayable: number;
-    let resolvedDP: number;
+    let resolvedDP: number; // total down payment for all qty (discounted)
+    let effectiveDownPayment: number; // discount applied once — used for all commission/bonus calc
 
     if (paymentType === "cash") {
-      // remaining per unit = cashPrice - maxDownPayment (discount does NOT apply to remaining)
+      const cashDiscountPct = share.cashDiscount ?? 0;
+      const discountedDPPerUnit = round2(share.maxDownPayment * (1 - cashDiscountPct / 100));
       const remainingPerUnit = round2(Math.max(0, share.cashPrice - share.maxDownPayment));
-      const totalPerUnit = round2(resolvedDPPerUnit + remainingPerUnit);
-      resolvedDP = round2(totalPerUnit * qty);
-      totalPayable = resolvedDP; // cash = paid in full upfront
+      const totalPerUnit = round2(discountedDPPerUnit + remainingPerUnit);
+      totalPayable = round2(totalPerUnit * qty);
+      resolvedDP = totalPayable; // cash = paid in full upfront
+      // EDP: maxDownPayment with discount applied once
+      effectiveDownPayment = round2(discountedDPPerUnit * qty);
     } else {
-      resolvedDP = round2(resolvedDPPerUnit * qty);
+      const installmentDiscountPct = share.installmentDiscount ?? 0;
+      const discountedDPPerUnit = round2(rawDPPerUnit * (1 - installmentDiscountPct / 100));
+      resolvedDP = round2(discountedDPPerUnit * qty);
       totalPayable = round2((share.installmentPrice ?? share.cashPrice) * qty);
+      // EDP: user's chosen raw DP with discount applied once
+      effectiveDownPayment = resolvedDP;
     }
 
     const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
@@ -265,6 +275,9 @@ export const createPurchase = async (
       installmentPrice: share.installmentPrice ?? share.cashPrice,
       minDownPayment: share.minDownPayment,
       maxDownPayment: share.maxDownPayment,
+      cashDiscount: share.cashDiscount ?? 0,
+      installmentDiscount: share.installmentDiscount ?? 0,
+      effectiveDownPayment,
       directSaleCommissionValue: share.directSaleCommissionValue,
       downPaymentGenerationRates: share.downPaymentGenerationRates,
       installmentCommissionRate: share.installmentCommissionRate,

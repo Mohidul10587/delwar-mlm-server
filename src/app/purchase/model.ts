@@ -33,6 +33,21 @@ export interface IPurchaseSnapshot {
   installmentPrice: number;
   minDownPayment: number;
   maxDownPayment: number;
+  /** Discount % applied to the down payment for cash purchases (captured at purchase time) */
+  cashDiscount: number;
+  /** Discount % applied to the down payment for installment purchases (captured at purchase time) */
+  installmentDiscount: number;
+  /**
+   * Effective Down Payment (total for all qty, after discount applied once).
+   * This is the single source of truth for all commission/bonus calculations.
+   *
+   *   Cash:        effectiveDownPayment = maxDownPayment × (1 − cashDiscount%) × qty
+   *   Installment: effectiveDownPayment = userRawDPPerUnit × (1 − installmentDiscount%) × qty
+   *
+   * Discount is applied exactly once here at purchase creation. No downstream
+   * code should apply the discount again.
+   */
+  effectiveDownPayment: number;
   directSaleCommissionValue: number;
   downPaymentGenerationRates: { generation: number; rate: number }[];
   /** @deprecated use installmentGenerationRates — kept for backward compat with old records */
@@ -125,6 +140,9 @@ const SnapshotSchema = new Schema(
     installmentPrice: { type: Number },
     minDownPayment: { type: Number },
     maxDownPayment: { type: Number },
+    cashDiscount: { type: Number, default: 0 },
+    installmentDiscount: { type: Number, default: 0 },
+    effectiveDownPayment: { type: Number, default: 0 },
     directSaleCommissionValue: { type: Number },
     downPaymentGenerationRates: [
       { generation: { type: Number }, rate: { type: Number }, _id: false },

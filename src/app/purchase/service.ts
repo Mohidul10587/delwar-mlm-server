@@ -9,13 +9,14 @@ export function calculateTotalPayable(cashPrice: number, quantity: number): numb
 /**
  * Calculates totalPayable from a purchase record, correctly using
  * installmentPrice (from snapshot) for installment purchases and
- * cashPrice for cash purchases.
+ * the discounted cash total for cash purchases.
  *
- * For cash purchases: the buyer paid the discounted full price upfront.
- * amountPaid already reflects that discounted total, so we use it directly
- * as totalPayable — remaining will always be 0 for approved cash purchases.
+ * For cash purchases: totalPayable = (discountedDP + remaining) × qty.
+ * Since amountPaid is set to exactly this value at purchase creation,
+ * we use amountPaid directly — it is always the authoritative figure.
  *
  * For installment purchases: installmentPrice × qty is the correct total.
+ * The down payment is a partial payment; remaining is paid in kisti.
  */
 export function calculateTotalPayableFromPurchase(purchase: {
   paymentType: PaymentType;
@@ -26,15 +27,15 @@ export function calculateTotalPayableFromPurchase(purchase: {
 }): number {
   const qty = purchase.quantity;
   if (purchase.paymentType === "cash") {
-    // Cash purchase: buyer paid the discounted full price at submission time.
-    // amountPaid is that exact amount, so use it as the total to ensure remaining = 0.
+    // amountPaid is the discounted full price set by the backend at purchase
+    // creation time — it is the only correct source for cash totalPayable.
     if (purchase.amountPaid != null && purchase.amountPaid > 0) {
       return purchase.amountPaid;
     }
-    // Fallback (e.g. legacy records before this fix)
+    // Fallback for legacy records created before amountPaid was set reliably
     return (purchase.snapshot?.cashPrice ?? Number((purchase.projectId as any)?.cashPrice ?? 0)) * qty;
   }
-  // Installment purchase: use installmentPrice from snapshot
+  // Installment: total is always installmentPrice × qty regardless of down payment
   const installmentPrice =
     purchase.snapshot?.installmentPrice ??
     purchase.snapshot?.cashPrice ??

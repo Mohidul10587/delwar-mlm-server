@@ -15,6 +15,29 @@ const getTodayBatchId = (): string => {
   return new Date().toISOString().slice(0, 10);
 };
 
+/**
+ * Resolves the per-generation installment commission rates from a snapshot.
+ * Falls back to the legacy flat rate (applied uniformly across all DP generations)
+ * so that old purchase records without installmentGenerationRates still work.
+ */
+function resolveInstallmentGenRates(snap: {
+  installmentGenerationRates?: { generation: number; rate: number }[];
+  installmentCommissionRate?: number;
+  downPaymentGenerationRates: { generation: number; rate: number }[];
+}): { generation: number; rate: number }[] {
+  if (snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0) {
+    return snap.installmentGenerationRates;
+  }
+  if ((snap.installmentCommissionRate ?? 0) > 0) {
+    // Legacy: apply the single flat rate across all DP generations
+    return snap.downPaymentGenerationRates.map((g) => ({
+      generation: g.generation,
+      rate: snap.installmentCommissionRate!,
+    }));
+  }
+  return [];
+}
+
 // M-10 fix: removed conflicting $setOnInsert + $inc on same fields.
 // Use a two-step upsert: ensure wallet exists first, then $inc atomically.
 const atomicCreditWallet = async (
@@ -147,13 +170,14 @@ export const distributeCommissions = async (purchaseId: string) => {
     let downPaymentPortion: number;
     let installmentPortion: number;
 
-    if (purchase.paymentType === "cash") {
-      downPaymentPortion = round2(Math.min(snap.maxDownPayment, snap.cashPrice) * qty);
-      installmentPortion = round2(Math.max(0, snap.cashPrice - snap.maxDownPayment) * qty);
-    } else {
-      downPaymentPortion = purchase.amountPaid;
-      installmentPortion = 0;
-    }
+    // Use the pre-calculated effectiveDownPayment from the snapshot.
+    // Discount was applied exactly once at purchase creation time (in controller.ts).
+    // No discount is applied here — doing so would cause a double deduction.
+    //
+    //   Cash:        snap.effectiveDownPayment = maxDownPayment × (1 − cashDiscount%) × qty
+    //   Installment: snap.effectiveDownPayment = userRawDP × (1 − installmentDiscount%) × qty
+    downPaymentPortion = round2(snap.effectiveDownPayment ?? purchase.amountPaid);
+    installmentPortion = 0;
 
     // ── 1. Direct Sale / Referral Commission ─────────────────────────────────
     // এই কমিশন আগের মতোই Instant ক্রেডিট হবে
@@ -227,24 +251,8 @@ export const distributeCommissions = async (purchaseId: string) => {
 
     // ── 3. Installment Portion Managerial Commission ──────────────────────────
     // এই কমিশনও এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
-    // Uses per-generation rates from snap.installmentGenerationRates.
-    // Falls back to the legacy flat snap.installmentCommissionRate for old records
     if (installmentPortion > 0) {
-      const instGenRates: { generation: number; rate: number }[] =
-        snap.installmentGenerationRates &&
-        snap.installmentGenerationRates.length > 0
-          ? snap.installmentGenerationRates
-          : [];
-
-      const effectiveRates =
-        instGenRates.length > 0
-          ? instGenRates
-          : snap.installmentCommissionRate > 0
-          ? snap.downPaymentGenerationRates.map((g) => ({
-              generation: g.generation,
-              rate: snap.installmentCommissionRate,
-            }))
-          : [];
+      const effectiveRates = resolveInstallmentGenRates(snap);
 
       if (effectiveRates.length > 0) {
         const maxGen = effectiveRates.length;
@@ -263,7 +271,6 @@ export const distributeCommissions = async (purchaseId: string) => {
             const note = `Gen ${gen} managerial commission — Installment portion (${
               genConfig.rate
             }% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
-            // Pending collection-এ সংরক্ষণ
             await savePendingCommission(
               currentId,
               purchase._id,
@@ -326,22 +333,7 @@ export const distributeInstallmentPaymentCommission = async (
       ? `Installment #${installmentNo}`
       : "Installment payment";
 
-    const instGenRates: { generation: number; rate: number }[] =
-      snap.installmentGenerationRates &&
-      snap.installmentGenerationRates.length > 0
-        ? snap.installmentGenerationRates
-        : [];
-
-    const effectiveRates =
-      instGenRates.length > 0
-        ? instGenRates
-        : snap.installmentCommissionRate > 0
-        ? snap.downPaymentGenerationRates.map((g) => ({
-            generation: g.generation,
-            rate: snap.installmentCommissionRate,
-          }))
-        : [];
-
+    const effectiveRates = resolveInstallmentGenRates(snap);
     if (effectiveRates.length === 0) return;
 
     const maxGen = effectiveRates.length;
