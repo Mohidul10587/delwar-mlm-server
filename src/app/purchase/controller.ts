@@ -4,12 +4,13 @@ import { InstallmentPayment } from "./installment.model";
 import { Project } from "../project/model";
 import { User } from "../user/model";
 import { Settings } from "../settings/model";
-import { calculateCertificateStatus, calculateTotalPayable } from "./service";
+import { calculateCertificateStatus, calculateTotalPayable, calculateTotalPayableFromPurchase } from "./service";
 import { Certificate } from "../certificate/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { generateCustomId } from "../../utils/generateId";
 import { generateReceiptPng } from "./generateReceipt";
+import { round2 } from "../../utils/walletUtils";
 
 // Helper — build slotsByPurchase map from a list of purchaseIds
 async function fetchSlotsByPurchase(
@@ -121,10 +122,19 @@ export const createPurchase = async (
         .status(400)
         .json({ message: "This share is not available for purchase" });
 
-    // Fix F-11: validate down payment range for installment
+    // Fix F-11: validate down payment range for installment.
+    // Frontend sends the raw (pre-discount) per-unit down payment for validation;
+    // the discounted amount is also sent as the actual downPayment field.
+    // We validate against per-unit min/max here.
     if (paymentType === "installment") {
       const dp = Number(downPayment);
-      if (isNaN(dp) || dp < share.minDownPayment || dp > share.maxDownPayment) {
+      // downPayment from frontend is the discounted per-unit amount.
+      // Reconstruct the raw per-unit amount to validate against share limits.
+      const installmentDiscountPct = share.installmentDiscount ?? 0;
+      const rawDpPerUnit = installmentDiscountPct > 0
+        ? Math.round(dp / (1 - installmentDiscountPct / 100))
+        : dp;
+      if (isNaN(rawDpPerUnit) || rawDpPerUnit < share.minDownPayment || rawDpPerUnit > share.maxDownPayment) {
         return res.status(400).json({
           message: `Down payment per unit must be between ৳${share.minDownPayment.toLocaleString()} and ৳${share.maxDownPayment.toLocaleString()}`,
         });
@@ -191,27 +201,45 @@ export const createPurchase = async (
       };
     }
 
-    const totalPayable = (paymentType === "installment" && share.installmentPrice)
-      ? share.installmentPrice * qty
-      : share.cashPrice * qty;
+    // ── Payment calculations ──────────────────────────────────────────────────
+    //
+    // Cash purchase example:
+    //   cashPrice=100, maxDownPayment=20, cashDiscount=10%
+    //   discountedDownPayment = floor(20 × 0.90) = 18  (sent by frontend as `downPayment`)
+    //   remainingAfterDown    = cashPrice - maxDownPayment = 100 - 20 = 80
+    //   totalPayable per unit = 18 + 80 = 98
+    //   amountPaid            = 98 × qty  (cash = full payment, remaining = 0)
+    //
+    // Installment purchase example:
+    //   installmentPrice=120, downPayment chosen by user (discounted), rest in kisti
+    //   totalPayable = installmentPrice × qty
 
-    const resolvedDP =
-      paymentType === "cash"
-        ? share.maxDownPayment * qty
-        : Number(downPayment) * qty;
+    const resolvedDPPerUnit = round2(Number(downPayment)); // discounted down payment per unit from frontend
+
+    let totalPayable: number;
+    let resolvedDP: number;
+
+    if (paymentType === "cash") {
+      // remaining per unit = cashPrice - maxDownPayment (discount does NOT apply to remaining)
+      const remainingPerUnit = round2(Math.max(0, share.cashPrice - share.maxDownPayment));
+      const totalPerUnit = round2(resolvedDPPerUnit + remainingPerUnit);
+      resolvedDP = round2(totalPerUnit * qty);
+      totalPayable = resolvedDP; // cash = paid in full upfront
+    } else {
+      resolvedDP = round2(resolvedDPPerUnit * qty);
+      totalPayable = round2((share.installmentPrice ?? share.cashPrice) * qty);
+    }
+
     const resolvedCount = paymentType === "cash" ? 1 : Number(installmentCount);
-    const resolvedInstallmentAmount = Math.ceil(
-      (totalPayable - resolvedDP) / resolvedCount
-    );
+    const resolvedInstallmentAmount =
+      paymentType === "cash"
+        ? 0
+        : round2(Math.ceil((totalPayable - resolvedDP) / resolvedCount));
     const amountPaid = resolvedDP;
 
-    // Cashback is an additional payment source, not a replacement for the
-    // selected external payment method. It can cover at most 10% of the total
-    // project price and no more than the payment currently due.
-    const requestedCashbackAmount = Number(cashbackAmount ?? 0);
-    const currentPaymentAmount =
-      paymentType === "cash" ? totalPayable : amountPaid;
-    const maxCashbackAmount = Math.min(totalPayable * 0.1, currentPaymentAmount);
+    const requestedCashbackAmount = round2(Number(cashbackAmount ?? 0));
+    const currentPaymentAmount = amountPaid;
+    const maxCashbackAmount = round2(Math.min(totalPayable * 0.1, currentPaymentAmount));
     if (
       !Number.isFinite(requestedCashbackAmount) ||
       requestedCashbackAmount < 0 ||
@@ -380,11 +408,10 @@ export const getPurchases = async (
     const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
 
     const enriched = purchases.map((purchase) => {
-      const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(
-        projectPrice,
-        purchase.quantity
-      );
+      // Use snapshot-aware calculation: installment purchases use installmentPrice,
+      // cash purchases use cashPrice. Previously cashPrice was used for both,
+      // causing wrong totalPayable and amountRemaining for installment purchases.
+      const totalPayable = calculateTotalPayableFromPurchase(purchase);
       const base = {
         ...purchase,
         totalPayable,
@@ -480,8 +507,7 @@ export const getBranchPurchases = async (
     const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
 
     const enriched = purchases.map((purchase) => {
-      const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(projectPrice, purchase.quantity);
+      const totalPayable = calculateTotalPayableFromPurchase(purchase);
       const base = {
         ...purchase,
         totalPayable,
@@ -542,8 +568,7 @@ export const getBranchPurchaseById = async (
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
 
-    const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
-    const totalPayable = calculateTotalPayable(projectPrice, purchase.quantity);
+    const totalPayable = calculateTotalPayableFromPurchase(purchase);
 
     const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
       .select("shareNumber")
@@ -582,8 +607,7 @@ export const getPurchaseById = async (
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
 
-    const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
-    const totalPayable = calculateTotalPayable(projectPrice, purchase.quantity);
+    const totalPayable = calculateTotalPayableFromPurchase(purchase);
 
     const slots = await ShareSlot.find({
       purchaseId: purchase._id,
@@ -741,11 +765,7 @@ export const getMyPurchases = async (
     const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
 
     const enriched = purchases.map((purchase) => {
-      const projectPrice = Number((purchase as any)?.projectId?.cashPrice ?? 0);
-      const totalPayable = calculateTotalPayable(
-        projectPrice,
-        purchase.quantity
-      );
+      const totalPayable = calculateTotalPayableFromPurchase(purchase);
       return {
         ...purchase,
         totalPayable,

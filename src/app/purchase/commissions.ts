@@ -4,6 +4,7 @@ import { User } from "../user/model";
 import { recalcUserRank } from "../rank/controller";
 import { CompanyLedger } from "../ledger/model";
 import { PendingCommission } from "../pending-commission/model";
+import { round2 } from "../../utils/walletUtils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -147,9 +148,8 @@ export const distributeCommissions = async (purchaseId: string) => {
     let installmentPortion: number;
 
     if (purchase.paymentType === "cash") {
-      downPaymentPortion = Math.min(snap.maxDownPayment, snap.cashPrice) * qty;
-      installmentPortion =
-        Math.max(0, snap.cashPrice - snap.maxDownPayment) * qty;
+      downPaymentPortion = round2(Math.min(snap.maxDownPayment, snap.cashPrice) * qty);
+      installmentPortion = round2(Math.max(0, snap.cashPrice - snap.maxDownPayment) * qty);
     } else {
       downPaymentPortion = purchase.amountPaid;
       installmentPortion = 0;
@@ -159,7 +159,7 @@ export const distributeCommissions = async (purchaseId: string) => {
     // এই কমিশন আগের মতোই Instant ক্রেডিট হবে
     if (referrerId) {
       const commission =
-        (snap.directSaleCommissionValue / 100) * downPaymentPortion;
+        round2((snap.directSaleCommissionValue / 100) * downPaymentPortion);
       if (commission > 0) {
         const wallet = await atomicCreditWallet(
           referrerId.toString(),
@@ -204,7 +204,7 @@ export const distributeCommissions = async (purchaseId: string) => {
           (g) => g.generation === gen
         );
         if (genConfig && genConfig.rate > 0) {
-          const commission = (genConfig.rate / 100) * downPaymentPortion;
+          const commission = round2((genConfig.rate / 100) * downPaymentPortion);
           const note = `Gen ${gen} managerial commission — DP (${
             genConfig.rate
           }% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
@@ -258,7 +258,7 @@ export const distributeCommissions = async (purchaseId: string) => {
           const genConfig = effectiveRates.find((g) => g.generation === gen);
           if (!genConfig || genConfig.rate <= 0) continue;
 
-          const commission = (genConfig.rate / 100) * installmentPortion;
+          const commission = round2((genConfig.rate / 100) * installmentPortion);
           if (commission > 0) {
             const note = `Gen ${gen} managerial commission — Installment portion (${
               genConfig.rate
@@ -355,7 +355,7 @@ export const distributeInstallmentPaymentCommission = async (
       const genConfig = effectiveRates.find((g) => g.generation === gen);
       if (!genConfig || genConfig.rate <= 0) continue;
 
-      const commission = (genConfig.rate / 100) * installmentAmount;
+      const commission = round2((genConfig.rate / 100) * installmentAmount);
       if (commission > 0) {
         const note = `Gen ${gen} managerial commission — ${instLabel} (${
           genConfig.rate

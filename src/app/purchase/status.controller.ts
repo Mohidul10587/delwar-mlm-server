@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
-import { calculateCertificateStatus, calculateTotalPayable } from "./service";
+import { calculateCertificateStatus, calculateTotalPayable, calculateTotalPayableFromPurchase } from "./service";
+import { round2 } from "../../utils/walletUtils";
 import { Certificate } from "../certificate/model";
 import { distributeCommissions } from "./commissions";
 import { User } from "../user/model";
@@ -214,16 +215,8 @@ export const updatePurchaseStatus = async (
       return res.status(400).json({ message: allocationError.error });
     }
 
-    // Step 2 — For cash: mark full amount as paid
-    if (purchase.paymentType === "cash") {
-      const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
-      if (fullAmount > purchase.amountPaid) {
-        await Purchase.findByIdAndUpdate(purchase._id, {
-          $set: { amountPaid: fullAmount },
-        });
-        purchase.amountPaid = fullAmount;
-      }
-    }
+    // Step 2 — For cash: amountPaid is already set correctly at purchase creation
+    // (discounted full price × qty). No update needed.
 
     // Respond immediately so the admin UI is not blocked by downstream tasks
     res.json({ message: "Purchase approved", purchase });
@@ -265,8 +258,8 @@ export const updatePurchaseStatus = async (
     ) {
       try {
         const cashbackPct = purchase.snapshot.cashbackPercent;
-        const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
-        const cashbackAmt = Math.floor((cashbackPct / 100) * totalPaid);
+        const totalPaid = round2(purchase.amountPaid); // use actual amountPaid, not cashPrice × qty
+        const cashbackAmt = round2((cashbackPct / 100) * totalPaid);
 
         if (cashbackAmt > 0) {
           const updatedWallet = await Wallet.findOneAndUpdate(
@@ -335,16 +328,10 @@ export const updatePurchaseStatus = async (
 
     // Step 8 — Update certificate status
     const purchaseWithShare = await Purchase.findById(purchase._id)
-      .populate("projectId", "cashPrice")
+      .populate("projectId", "cashPrice installmentPrice")
       .lean();
     if (purchaseWithShare) {
-      const projectPrice = Number(
-        (purchaseWithShare as any)?.projectId?.cashPrice ?? 0
-      );
-      const totalPayable = calculateTotalPayable(
-        projectPrice,
-        purchaseWithShare.quantity
-      );
+      const totalPayable = calculateTotalPayableFromPurchase(purchaseWithShare);
       const certificateStatus = calculateCertificateStatus({
         status: purchaseWithShare.status,
         paymentType: purchaseWithShare.paymentType,

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
 import { InstallmentPayment } from "./installment.model";
 import { calculateCertificateStatus, calculateTotalPayable } from "./service";
+import { round2 } from "../../utils/walletUtils";
 import { Certificate } from "../certificate/model";
 import { Wallet, TransactionLog } from "../wallet/model";
 import { User } from "../user/model";
@@ -196,17 +197,16 @@ export const getInstallmentSummary = async (
       .sort({ installmentNo: 1, createdAt: 1 })
       .lean();
 
-    // A grouped payment may cover several installment slots, so count slots,
-    // not payment documents.
     const approvedCount = allPayments
       .filter((p) => p.status === "approved")
       .reduce(
         (count, p) => count + (p.installmentNumbers?.length || 1),
         0
       );
-    const totalPayable =
-      (purchase.downPayment ?? 0) + totalInstallments * perInstallment;
-    const amountRemaining = Math.max(0, totalPayable - purchase.amountPaid);
+    const totalPayable = round2(
+      (purchase.downPayment ?? 0) + totalInstallments * perInstallment
+    );
+    const amountRemaining = round2(Math.max(0, totalPayable - purchase.amountPaid));
 
     res.json({
       totalInstallments,
