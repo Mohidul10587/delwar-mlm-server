@@ -458,8 +458,11 @@ export const getCoverSlider = async (
     if (!shares.length)
       return res.json({ images: [], shareIds: [], titles: [] });
 
-    // Merge all images from all selected cover slider shares
-    const images = shares.flatMap((s) => s.images ?? []);
+    // Only the first image of each cover slider share is used.
+    // This keeps the cover section focused and avoids flooding it with all project images.
+    const images = shares
+      .map((s) => (s.images ?? [])[0])
+      .filter(Boolean) as string[];
     const shareIds = shares.map((s) => s._id);
     const titles = shares.map((s) => s.title);
 
