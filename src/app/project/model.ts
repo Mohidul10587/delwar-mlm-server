@@ -41,7 +41,6 @@ export interface IProject extends Document {
 
   totalShares: number;
   isActive: boolean;
-  projectType?: string;
   location?: string;
   developer?: string;
   videoLink?: string;
@@ -107,7 +106,6 @@ const ProjectSchema = new Schema<IProject>(
 
     isActive: { type: Boolean, default: true },
     totalShares: { type: Number, required: true, default: 0 },
-    projectType: { type: String, default: "" },
     location: { type: String, default: "" },
     developer: { type: String, default: "" },
     videoLink: { type: String, default: "" },

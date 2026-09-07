@@ -78,7 +78,7 @@ function isOfferActive(share: any): boolean {
 }
 
 // GET /share/search — public search & filter endpoint
-// Query params: q, categoryId, status, projectType, priceMin, priceMax, sort, page, limit
+// Query params: q, categoryId, status, priceMin, priceMax, sort, page, limit
 export const searchShares = async (
   req: Request,
   res: Response,
@@ -89,7 +89,6 @@ export const searchShares = async (
       q,
       categoryId,
       status,
-      projectType,
       page = "1",
       limit = "12",
     } = req.query as Record<string, string>;
@@ -104,13 +103,11 @@ export const searchShares = async (
         { description: regex },
         { location: regex },
         { developer: regex },
-        { projectType: regex },
       ];
     }
 
     if (categoryId) filter.categoryId = categoryId;
     if (status) filter.projectStatus = status;
-    if (projectType) filter.projectType = new RegExp(projectType.trim(), "i");
 
     // Always sort by newest first
     const sortObj = { createdAt: -1 as const };
