@@ -616,8 +616,8 @@ export const getPurchaseById = async (
 ) => {
   try {
     const purchase = await Purchase.findById(req.params.id)
-      .populate("userId", "name username phone")
-      .populate("projectId", "title cashPrice installment")
+      .populate("userId", "name username phone customerId")
+      .populate("projectId", "title cashPrice installmentPrice sharePrefix")
       .lean();
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
