@@ -4,6 +4,7 @@ import {
   getMyAdminExpenses,
   getAllAdminExpenses,
   reviewAdminExpense,
+  updateAdminExpense,
   deleteAdminExpense,
 } from "./controller";
 import { verifySuperAdmin, verifyAdmin, requirePermission } from "../../middleware/auth";
@@ -14,9 +15,12 @@ const router = Router();
 router.post("/admin/submit", verifyAdmin, requirePermission("expense.submit"), submitAdminExpense);
 router.get("/admin/my", verifyAdmin, requirePermission("expense.submit"), getMyAdminExpenses);
 
+// Admin edits / deletes their own pending expense
+router.patch("/admin/:id", verifyAdmin, requirePermission("expense.submit"), updateAdminExpense);
+router.delete("/admin/:id", verifyAdmin, requirePermission("expense.submit"), deleteAdminExpense);
+
 // Super admin reviews all submitted expenses
 router.get("/admin/all", verifySuperAdmin, getAllAdminExpenses);
 router.patch("/admin/:id/review", verifySuperAdmin, reviewAdminExpense);
-router.delete("/admin/:id", verifySuperAdmin, deleteAdminExpense);
 
 export default router;

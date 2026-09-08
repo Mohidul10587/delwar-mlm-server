@@ -159,6 +159,37 @@ export const reviewAdminExpense = async (req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 };
 
+// PATCH /expense/admin/:id — admin updates a pending expense
+export const updateAdminExpense = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const expense = await AdminExpense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ message: "Expense not found" });
+    if (expense.status !== "pending") {
+      return res.status(400).json({ message: "Only pending expenses can be edited" });
+    }
+    // Only the submitter can edit their own expense
+    if (String(expense.submittedBy) !== String(req.user!._id)) {
+      return res.status(403).json({ message: "You can only edit your own expenses" });
+    }
+
+    const { amount, description, paidBy, voucherNo, paymentInfo, expenseDate, receiptImage } = req.body;
+    if (amount !== undefined) {
+      const amt = Number(amount);
+      if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: "Amount must be greater than 0" });
+      expense.amount = amt;
+    }
+    if (description !== undefined) expense.description = description.trim();
+    if (paidBy !== undefined) expense.paidBy = paidBy.trim();
+    if (voucherNo !== undefined) expense.voucherNo = voucherNo.trim();
+    if (paymentInfo !== undefined) expense.paymentInfo = paymentInfo.trim();
+    if (expenseDate !== undefined) expense.expenseDate = new Date(expenseDate) as any;
+    if (receiptImage !== undefined) expense.receiptImage = receiptImage;
+
+    await expense.save();
+    res.json({ message: "Expense updated", expense });
+  } catch (err) { next(err); }
+};
+
 // DELETE /expense/admin/:id — super admin deletes an admin expense (only pending)
 export const deleteAdminExpense = async (req: Request, res: Response, next: NextFunction) => {
   try {
