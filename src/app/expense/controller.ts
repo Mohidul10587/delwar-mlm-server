@@ -159,13 +159,14 @@ export const reviewAdminExpense = async (req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 };
 
-// PATCH /expense/admin/:id — admin updates a pending expense
+// PATCH /expense/admin/:id — admin updates a pending or rejected expense
+// Editing a rejected expense resets it to pending for re-review.
 export const updateAdminExpense = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const expense = await AdminExpense.findById(req.params.id);
     if (!expense) return res.status(404).json({ message: "Expense not found" });
-    if (expense.status !== "pending") {
-      return res.status(400).json({ message: "Only pending expenses can be edited" });
+    if (!["pending", "rejected"].includes(expense.status)) {
+      return res.status(400).json({ message: "Only pending or rejected expenses can be edited" });
     }
     // Only the submitter can edit their own expense
     if (String(expense.submittedBy) !== String(req.user!._id)) {
@@ -185,8 +186,19 @@ export const updateAdminExpense = async (req: Request, res: Response, next: Next
     if (expenseDate !== undefined) expense.expenseDate = new Date(expenseDate) as any;
     if (receiptImage !== undefined) expense.receiptImage = receiptImage;
 
+    // Reset rejected expense back to pending for re-review
+    if (expense.status === "rejected") {
+      expense.status = "pending";
+      expense.reviewNote = "";
+      expense.reviewedBy = undefined;
+      expense.reviewedAt = undefined;
+    }
+
     await expense.save();
-    res.json({ message: "Expense updated", expense });
+    const message = expense.status === "pending" && req.body.wasRejected
+      ? "Expense resubmitted for approval"
+      : "Expense updated";
+    res.json({ message, expense });
   } catch (err) { next(err); }
 };
 

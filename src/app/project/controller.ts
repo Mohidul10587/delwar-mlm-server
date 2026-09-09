@@ -20,7 +20,13 @@ const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    const allowed = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+    ];
     if (!allowed.includes(file.mimetype)) {
       return cb(new Error("Only JPEG, PNG, WebP and GIF images are allowed"));
     }
@@ -97,7 +103,10 @@ export const searchShares = async (
 
     // Full-text search on title, description, location, developer
     if (q && q.trim()) {
-      const regex = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const regex = new RegExp(
+        q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i"
+      );
       filter.$or = [
         { title: regex },
         { description: regex },
@@ -112,9 +121,9 @@ export const searchShares = async (
     // Always sort by newest first
     const sortObj = { createdAt: -1 as const };
 
-    const pageNum  = Math.max(1, parseInt(page, 10));
+    const pageNum = Math.max(1, parseInt(page, 10));
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10)));
-    const skip     = (pageNum - 1) * limitNum;
+    const skip = (pageNum - 1) * limitNum;
 
     const [shares, total] = await Promise.all([
       Project.find(filter).sort(sortObj).skip(skip).limit(limitNum).lean(),
@@ -128,7 +137,7 @@ export const searchShares = async (
     const enriched = shares.map((s) => ({
       ...s,
       isActiveOffer: isOfferActive(s),
-      category: s.categoryId ? (categoryMap.get(s.categoryId) ?? null) : null,
+      category: s.categoryId ? categoryMap.get(s.categoryId) ?? null : null,
     }));
 
     res.json({
@@ -158,7 +167,9 @@ export const createShare = async (
     const projectId = await generateCustomId("PRJ");
 
     // Validate sharePrefix
-    const sharePrefix: string = (req.body.sharePrefix ?? "").trim().toUpperCase();
+    const sharePrefix: string = (req.body.sharePrefix ?? "")
+      .trim()
+      .toUpperCase();
     if (!sharePrefix) {
       return res.status(400).json({ message: "sharePrefix is required" });
     }
@@ -172,7 +183,13 @@ export const createShare = async (
       });
     }
 
-    const pkg = await Project.create({ ...defaults, ...req.body, totalShares, projectId, sharePrefix });
+    const pkg = await Project.create({
+      ...defaults,
+      ...req.body,
+      totalShares,
+      projectId,
+      sharePrefix,
+    });
 
     if (totalShares > 0) {
       // Atomically reserve a range of `totalShares` sequential numbers for this project.
@@ -229,12 +246,14 @@ export const getShares = async (
     }));
 
     // Fetch all categories and attach them to each share as `category`
-    const categories = await Category.find().sort({ order: 1, createdAt: 1 }).lean();
+    const categories = await Category.find()
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
     const categoryMap = new Map(categories.map((c) => [c._id.toString(), c]));
 
     const withCategory = enriched.map((s) => ({
       ...s,
-      category: s.categoryId ? (categoryMap.get(s.categoryId) ?? null) : null,
+      category: s.categoryId ? categoryMap.get(s.categoryId) ?? null : null,
     }));
 
     // Also include the sorted categories list so the frontend can render sections in order
@@ -621,15 +640,16 @@ export const getShareStats = async (
 };
 
 // GET /share/with-stats — returns active shares + slot stats for all shares (admin panel)
-export const getSharesWithStats = async (
+export const getProjectsWithStats = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const [shares, counts] = await Promise.all([
-      // Admin panel sees ALL shares (including inactive)
-      Project.find().lean(),
+    const [projects, counts] = await Promise.all([
+      // Latest project first
+      Project.find().sort({ createdAt: -1 }).lean(),
+
       ShareSlot.aggregate([
         {
           $group: {
@@ -650,7 +670,7 @@ export const getSharesWithStats = async (
       map[key][_id.status as "available" | "sold" | "reclaimed"] = count;
     }
 
-    const stats = shares.map((s) => {
+    const stats = projects.map((s) => {
       const key = (s._id as any).toString();
       const { available = 0, sold = 0, reclaimed = 0 } = map[key] ?? {};
       return {
@@ -665,7 +685,7 @@ export const getSharesWithStats = async (
 
     res.json({
       // Return all shares to admin (both active and inactive), with isActiveOffer flag
-      shares: shares.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
+      shares: projects.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
       stats,
     });
   } catch (err) {
@@ -694,7 +714,9 @@ export const checkSharePrefix = async (
       query._id = { $ne: new mongoose.Types.ObjectId(excludeId) };
     }
 
-    const existing = await Project.findOne(query).select("title sharePrefix").lean();
+    const existing = await Project.findOne(query)
+      .select("title sharePrefix")
+      .lean();
 
     if (existing) {
       return res.json({
@@ -718,7 +740,9 @@ export const uploadProjectLogo = [
     logoUpload.single("logo")(req, res, (err: any) => {
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ message: "Logo file must not exceed 5 MB" });
+          return res
+            .status(400)
+            .json({ message: "Logo file must not exceed 5 MB" });
         }
         return res.status(400).json({ message: err.message });
       }
@@ -730,9 +754,11 @@ export const uploadProjectLogo = [
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const project = await Project.findById(req.params.id);
-      if (!project) return res.status(404).json({ message: "Project not found" });
+      if (!project)
+        return res.status(404).json({ message: "Project not found" });
 
-      if (!req.file) return res.status(400).json({ message: "No logo file uploaded" });
+      if (!req.file)
+        return res.status(400).json({ message: "No logo file uploaded" });
 
       // Upload buffer to Cloudinary under a dedicated folder
       const result = await new Promise<any>((resolve, reject) => {

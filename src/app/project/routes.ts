@@ -7,7 +7,7 @@ import {
   updateShare,
   deleteShare,
   getShareStats,
-  getSharesWithStats,
+  getProjectsWithStats,
   getCoverSlider,
   setCoverSlider,
   unsetCoverSlider,
@@ -23,7 +23,7 @@ const router = Router();
 // Static/named routes must come before /:id to avoid being swallowed by the param
 router.get("/cover-slider", getCoverSlider);
 router.get("/stats", verifyStaff, getShareStats);
-router.get("/with-stats", verifyStaff, getSharesWithStats);
+router.get("/with-stats", verifyStaff, getProjectsWithStats);
 router.get("/admin/all", verifyStaff, getSharesAdmin);
 router.get("/check-prefix/:prefix", verifyStaff, checkSharePrefix);
 

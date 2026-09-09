@@ -3,9 +3,19 @@ import { CompanyLedger, INFLOW_TYPES, OUTFLOW_TYPES } from "./model";
 import { TransactionLog } from "../wallet/model";
 
 // H-08 fix: use next(err) instead of manual res.status(500)
-export const getLedger = async (req: Request, res: Response, next: NextFunction) => {
+export const getLedger = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { type, from, to, page = "1", limit = "50" } = req.query as Record<string, string>;
+    const {
+      type,
+      from,
+      to,
+      page = "1",
+      limit = "50",
+    } = req.query as Record<string, string>;
 
     const filter: Record<string, unknown> = {};
     if (type) filter.type = type;
@@ -24,7 +34,7 @@ export const getLedger = async (req: Request, res: Response, next: NextFunction)
     const [entries, total, summary] = await Promise.all([
       CompanyLedger.find(filter)
         .populate("userId", "name username phone")
-        .sort({ date: -1 })
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
         .lean(),
@@ -34,8 +44,14 @@ export const getLedger = async (req: Request, res: Response, next: NextFunction)
         {
           $group: {
             _id: null,
-            totalInflow:  { $sum: { $cond: [{ $in: ["$type", INFLOW_TYPES] },  "$amount", 0] } },
-            totalOutflow: { $sum: { $cond: [{ $in: ["$type", OUTFLOW_TYPES] }, "$amount", 0] } },
+            totalInflow: {
+              $sum: { $cond: [{ $in: ["$type", INFLOW_TYPES] }, "$amount", 0] },
+            },
+            totalOutflow: {
+              $sum: {
+                $cond: [{ $in: ["$type", OUTFLOW_TYPES] }, "$amount", 0],
+              },
+            },
           },
         },
       ]),
@@ -44,7 +60,7 @@ export const getLedger = async (req: Request, res: Response, next: NextFunction)
     res.json({
       entries,
       total,
-      totalInflow:  summary[0]?.totalInflow  ?? 0,
+      totalInflow: summary[0]?.totalInflow ?? 0,
       totalOutflow: summary[0]?.totalOutflow ?? 0,
       net: (summary[0]?.totalInflow ?? 0) - (summary[0]?.totalOutflow ?? 0),
       page: parseInt(page),
@@ -55,16 +71,28 @@ export const getLedger = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
-export const getAllTransactions = async (req: Request, res: Response, next: NextFunction) => {
+export const getAllTransactions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { userId, type, from, to, page = "1", limit = "50" } = req.query as Record<string, string>;
+    const {
+      userId,
+      type,
+      from,
+      to,
+      page = "1",
+      limit = "50",
+    } = req.query as Record<string, string>;
 
     const filter: Record<string, unknown> = {};
     if (userId) filter.userId = userId;
     if (type) filter.type = type;
     if (from || to) {
       filter.createdAt = {} as Record<string, unknown>;
-      if (from) (filter.createdAt as Record<string, unknown>).$gte = new Date(from);
+      if (from)
+        (filter.createdAt as Record<string, unknown>).$gte = new Date(from);
       if (to) {
         const toDate = new Date(to);
         toDate.setHours(23, 59, 59, 999);
@@ -84,7 +112,12 @@ export const getAllTransactions = async (req: Request, res: Response, next: Next
       TransactionLog.countDocuments(filter),
     ]);
 
-    res.json({ transactions, total, page: parseInt(page), limit: parseInt(limit) });
+    res.json({
+      transactions,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
   } catch (err) {
     next(err); // H-08 fix
   }
