@@ -24,7 +24,7 @@ import {
   changeUserRole,
   forgotPassword,
 } from "./controller";
-import { getSuperAdminStats } from "./stats.controller";
+import { getSuperAdminStats, getAdminStats } from "./stats.controller";
 import {
   verifyUser,
   verifyAdmin,
@@ -43,6 +43,7 @@ router.post("/logout", verifyUser, logout);
 router.post("/switch/:targetUserId", verifyUser, switchAccount);
 router.get("/linked-accounts", verifyUser, getLinkedAccounts);
 router.get("/stats", verifySuperAdmin, getSuperAdminStats);
+router.get("/admin-stats", verifyAdmin, getAdminStats);
 router.get("/details/:id", verifyAdmin, getUserDetails);
 router.get("/list", verifyAdmin, getUsers);
 router.delete("/admin/delete/:id", verifySuperAdmin, deleteUser);
