@@ -1,6 +1,6 @@
 import { Schema, model, Document, Types } from "mongoose";
 
-export type ShareStatus = "available" | "sold" | "reclaimed";
+export type ShareStatus = "available" | "sold" | "reclaimed" | "reserved";
 
 export interface IShareSlot extends Document {
   shareNumber: string;
@@ -9,16 +9,20 @@ export interface IShareSlot extends Document {
   userId?: Types.ObjectId;
   purchaseId?: Types.ObjectId;
   reclaimedAt?: Date;
+  reservedAt?: Date;
+  reserveNote?: string;
 }
 
 const ShareSlotSchema = new Schema<IShareSlot>(
   {
-    shareNumber: { type: String, required: true },  // Removed global unique constraint
-    projectId:     { type: Schema.Types.ObjectId, ref: "Project", required: true, index: true },
-    status:      { type: String, enum: ["available", "sold", "reclaimed"], default: "available", index: true },
+    shareNumber: { type: String, required: true },
+    projectId:   { type: Schema.Types.ObjectId, ref: "Project", required: true, index: true },
+    status:      { type: String, enum: ["available", "sold", "reclaimed", "reserved"], default: "available", index: true },
     userId:      { type: Schema.Types.ObjectId, ref: "User",     default: null },
     purchaseId:  { type: Schema.Types.ObjectId, ref: "Purchase", default: null },
     reclaimedAt: { type: Date, default: null },
+    reservedAt:  { type: Date, default: null },
+    reserveNote: { type: String, default: null },
   },
   { timestamps: true }
 );

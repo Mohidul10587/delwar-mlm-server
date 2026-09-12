@@ -122,6 +122,19 @@ export const createPurchase = async (
         .status(400)
         .json({ message: "This share is not available for purchase" });
 
+    // Check that enough available (non-reserved) slots exist before accepting
+    // the purchase request — gives user an early clear error instead of failing
+    // silently at approval time.
+    const availableSlotCount = await ShareSlot.countDocuments({
+      projectId: share._id,
+      status: "available",
+    });
+    if (availableSlotCount < qty) {
+      return res.status(400).json({
+        message: `Only ${availableSlotCount} share slot(s) available for purchase. ${qty} requested.`,
+      });
+    }
+
     // Fix F-11: validate down payment range for installment.
     // Frontend sends the raw (pre-discount) per-unit down payment.
     // Backend applies the discount itself — no reverse-calculation needed.

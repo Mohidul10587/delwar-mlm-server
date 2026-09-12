@@ -308,17 +308,79 @@ export const updateShare = async (
     const old = await Project.findById(req.params.id);
     if (!old) return res.status(404).json({ message: "Share not found" });
 
+    // ── sharePrefix change detection ─────────────────────────────────────────
+    const newPrefix: string | undefined = req.body.sharePrefix
+      ? (req.body.sharePrefix as string).trim().toUpperCase()
+      : undefined;
+    const prefixChanged =
+      newPrefix !== undefined && newPrefix !== old.sharePrefix;
+
+    if (prefixChanged) {
+      // Ensure the new prefix is not already taken by another project
+      const conflict = await Project.findOne({
+        sharePrefix: newPrefix,
+        _id: { $ne: old._id },
+      });
+      if (conflict) {
+        return res.status(400).json({
+          message: `প্রিফিক্স "${newPrefix}" অলরেডি ব্যবহার করা হয়েছে ("${conflict.title}" প্রজেক্টে)। অনুগ্রহ করে ভিন্ন একটি প্রিফিক্স ব্যবহার করুন।`,
+          code: "PREFIX_ALREADY_USED",
+        });
+      }
+    }
+
     const pkg = await Project.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
       { new: true, runValidators: true }
     );
 
+    // ── Rename all existing ShareSlot shareNumbers if prefix changed ─────────
+    if (prefixChanged) {
+      // Fetch every slot for this project
+      const allSlots = await ShareSlot.find({ projectId: old._id })
+        .select("_id shareNumber")
+        .lean();
+
+      if (allSlots.length > 0) {
+        // Replace old prefix with new prefix in every shareNumber string.
+        // shareNumber format: {PREFIX}-{0001}  — we only replace the prefix part.
+        const bulkOps = allSlots.map((slot) => ({
+          updateOne: {
+            filter: { _id: slot._id },
+            update: {
+              $set: {
+                shareNumber: slot.shareNumber.replace(
+                  new RegExp(`^${old.sharePrefix}-`),
+                  `${newPrefix}-`
+                ),
+              },
+            },
+          },
+        }));
+
+        // Process in batches to avoid hitting MongoDB's 16 MB BSON limit
+        for (let i = 0; i < bulkOps.length; i += BATCH_SIZE) {
+          await ShareSlot.bulkWrite(bulkOps.slice(i, i + BATCH_SIZE), {
+            ordered: false,
+          });
+        }
+
+        console.log(
+          `✅ sharePrefix renamed: "${old.sharePrefix}" → "${newPrefix}" — updated ${allSlots.length} slot(s)`
+        );
+      }
+    }
+
+    // ── totalShares diff handling ─────────────────────────────────────────────
     const newTotal: number =
       req.body.totalShares !== undefined
         ? Number(req.body.totalShares)
         : old.totalShares;
     const diff = newTotal - old.totalShares;
+
+    // Use the effective prefix (new one if changed, otherwise old)
+    const effectivePrefix = prefixChanged ? newPrefix! : old.sharePrefix;
 
     if (diff > 0) {
       // Atomically reserve `diff` sequential numbers for this project
@@ -328,7 +390,7 @@ export const updateShare = async (
         const end = Math.min(batch + BATCH_SIZE, diff);
         for (let i = batch; i < end; i++) {
           docs.push({
-            shareNumber: generateShareNumber(old.sharePrefix, start + 1 + i),
+            shareNumber: generateShareNumber(effectivePrefix, start + 1 + i),
             projectId: old._id,
             status: "available",
             userId: null,
@@ -609,20 +671,20 @@ export const getShareStats = async (
       ]),
     ]);
 
-    // Build a map: projectId -> { available, sold, reclaimed }
+    // Build a map: projectId -> { available, sold, reclaimed, reserved }
     const map: Record<
       string,
-      { available: number; sold: number; reclaimed: number }
+      { available: number; sold: number; reclaimed: number; reserved: number }
     > = {};
     for (const { _id, count } of counts) {
       const key = _id.projectId.toString();
-      if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0 };
-      map[key][_id.status as "available" | "sold" | "reclaimed"] = count;
+      if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0, reserved: 0 };
+      map[key][_id.status as "available" | "sold" | "reclaimed" | "reserved"] = count;
     }
 
     const stats = shares.map((s) => {
       const key = (s._id as any).toString();
-      const { available = 0, sold = 0, reclaimed = 0 } = map[key] ?? {};
+      const { available = 0, sold = 0, reclaimed = 0, reserved = 0 } = map[key] ?? {};
       return {
         _id: s._id,
         title: s.title,
@@ -630,6 +692,7 @@ export const getShareStats = async (
         sold,
         reclaimed,
         available,
+        reserved,
       };
     });
 
@@ -662,17 +725,17 @@ export const getProjectsWithStats = async (
 
     const map: Record<
       string,
-      { available: number; sold: number; reclaimed: number }
+      { available: number; sold: number; reclaimed: number; reserved: number }
     > = {};
     for (const { _id, count } of counts) {
       const key = _id.projectId.toString();
-      if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0 };
-      map[key][_id.status as "available" | "sold" | "reclaimed"] = count;
+      if (!map[key]) map[key] = { available: 0, sold: 0, reclaimed: 0, reserved: 0 };
+      map[key][_id.status as "available" | "sold" | "reclaimed" | "reserved"] = count;
     }
 
     const stats = projects.map((s) => {
       const key = (s._id as any).toString();
-      const { available = 0, sold = 0, reclaimed = 0 } = map[key] ?? {};
+      const { available = 0, sold = 0, reclaimed = 0, reserved = 0 } = map[key] ?? {};
       return {
         _id: s._id,
         title: s.title,
@@ -680,6 +743,7 @@ export const getProjectsWithStats = async (
         sold,
         reclaimed,
         available,
+        reserved,
       };
     });
 
@@ -781,3 +845,168 @@ export const uploadProjectLogo = [
     }
   },
 ];
+
+// ─── Slot Reservation ─────────────────────────────────────────────────────────
+
+/**
+ * POST /share/:id/reserve-slots
+ * Body: { quantity: number, note?: string }
+ *
+ * Reserves the first `quantity` available slots (sorted by shareNumber).
+ * Reserved slots are skipped during purchase allocation.
+ */
+export const reserveSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const quantity = Number(req.body.quantity);
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ message: "quantity must be a positive number" });
+    }
+
+    const note: string | null = req.body.note?.trim() || null;
+
+    // Pick the first `quantity` available slots by shareNumber order
+    const slots = await ShareSlot.find({
+      projectId: project._id,
+      status: "available",
+    })
+      .sort({ shareNumber: 1 })
+      .limit(quantity)
+      .select("_id shareNumber")
+      .lean();
+
+    if (slots.length < quantity) {
+      return res.status(400).json({
+        message: `Only ${slots.length} available slot(s), cannot reserve ${quantity}`,
+        available: slots.length,
+      });
+    }
+
+    const ids = slots.map((s) => s._id);
+    const result = await ShareSlot.updateMany(
+      { _id: { $in: ids }, status: "available" },
+      {
+        $set: {
+          status: "reserved",
+          reservedAt: new Date(),
+          reserveNote: note,
+        },
+      }
+    );
+
+    res.json({
+      message: `${result.modifiedCount} slot(s) reserved successfully`,
+      reserved: result.modifiedCount,
+      from: slots[0].shareNumber,
+      to: slots[slots.length - 1].shareNumber,
+      note,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /share/:id/unreserve-slots
+ * Body: { quantity: number }
+ *
+ * Releases the first `quantity` reserved slots back to available (sorted by shareNumber).
+ */
+export const unreserveSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const quantity = Number(req.body.quantity);
+    if (!quantity || quantity < 1) {
+      return res.status(400).json({ message: "quantity must be a positive number" });
+    }
+
+    // Pick the first `quantity` reserved slots by shareNumber order
+    const slots = await ShareSlot.find({
+      projectId: project._id,
+      status: "reserved",
+    })
+      .sort({ shareNumber: 1 })
+      .limit(quantity)
+      .select("_id shareNumber")
+      .lean();
+
+    if (slots.length === 0) {
+      return res.status(400).json({ message: "No reserved slots found for this project" });
+    }
+
+    const ids = slots.map((s) => s._id);
+    const result = await ShareSlot.updateMany(
+      { _id: { $in: ids }, status: "reserved" },
+      {
+        $set: {
+          status: "available",
+          reservedAt: null,
+          reserveNote: null,
+        },
+      }
+    );
+
+    res.json({
+      message: `${result.modifiedCount} slot(s) released back to available`,
+      released: result.modifiedCount,
+      from: slots[0].shareNumber,
+      to: slots[slots.length - 1].shareNumber,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /share/:id/reserved-slots
+ * Query: page, limit
+ *
+ * Lists all reserved slots for a project with pagination.
+ */
+export const getReservedSlots = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    const page  = Math.max(1, parseInt(req.query.page  as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const skip  = (page - 1) * limit;
+
+    const [slots, total] = await Promise.all([
+      ShareSlot.find({ projectId: project._id, status: "reserved" })
+        .sort({ shareNumber: 1 })
+        .skip(skip)
+        .limit(limit)
+        .select("shareNumber reservedAt reserveNote")
+        .lean(),
+      ShareSlot.countDocuments({ projectId: project._id, status: "reserved" }),
+    ]);
+
+    res.json({
+      projectTitle: project.title,
+      sharePrefix: project.sharePrefix,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      slots,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

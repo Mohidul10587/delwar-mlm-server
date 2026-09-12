@@ -22,7 +22,7 @@ import { sendPurchaseApprovalSms } from "../../utils/sms";
 async function allocateShares(
   purchase: any
 ): Promise<{ error: string } | null> {
-  // Find available slot IDs first
+  // Find available slot IDs first — reserved slots are intentionally excluded
   const available = await ShareSlot.find({
     projectId: purchase.projectId,
     status: "available",
@@ -107,17 +107,26 @@ async function checkAndCompleteShare(projectId: any): Promise<void> {
     if (!share || share.projectStatus === "complete") return;
     if (!share.totalShares || share.totalShares <= 0) return;
 
+    // Count only sold slots — reserved slots are NOT considered sold and
+    // should never trigger auto-complete.
     const soldCount = await ShareSlot.countDocuments({
       projectId,
       status: "sold",
     });
-    if (soldCount >= share.totalShares) {
+
+    // Count non-reserved slots to determine if all purchasable slots are sold
+    const reservedCount = await ShareSlot.countDocuments({
+      projectId,
+      status: "reserved",
+    });
+    const purchasableTotal = share.totalShares - reservedCount;
+
+    if (purchasableTotal > 0 && soldCount >= purchasableTotal) {
       await Project.findByIdAndUpdate(projectId, {
         $set: { projectStatus: "complete" },
       });
     }
   } catch (err) {
-    // Non-critical — log and continue; do not block the approval response
     console.error(
       `[SHARE COMPLETE] checkAndCompleteShare failed for projectId=${projectId}:`,
       err

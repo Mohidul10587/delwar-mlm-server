@@ -15,6 +15,9 @@ import {
   checkSharePrefix,
   uploadProjectLogo,
   searchShares,
+  reserveSlots,
+  unreserveSlots,
+  getReservedSlots,
 } from "./controller";
 import { verifySuperAdmin, verifyStaff } from "../../middleware/auth";
 
@@ -48,5 +51,10 @@ router.patch("/:id/logo", verifySuperAdmin, uploadProjectLogo);
 
 // Slot backfill — for shares that existed before slot system was introduced
 router.post("/:id/backfill-slots", verifySuperAdmin, backfillSlots);
+
+// Slot reservation — super admin only
+router.post("/:id/reserve-slots",   verifySuperAdmin, reserveSlots);
+router.post("/:id/unreserve-slots", verifySuperAdmin, unreserveSlots);
+router.get("/:id/reserved-slots",   verifyStaff,      getReservedSlots);
 
 export default router;
