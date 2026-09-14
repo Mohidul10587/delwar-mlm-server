@@ -25,7 +25,10 @@ function resolveInstallmentGenRates(snap: {
   installmentCommissionRate?: number;
   downPaymentGenerationRates: { generation: number; rate: number }[];
 }): { generation: number; rate: number }[] {
-  if (snap.installmentGenerationRates && snap.installmentGenerationRates.length > 0) {
+  if (
+    snap.installmentGenerationRates &&
+    snap.installmentGenerationRates.length > 0
+  ) {
     return snap.installmentGenerationRates;
   }
   if ((snap.installmentCommissionRate ?? 0) > 0) {
@@ -176,14 +179,17 @@ export const distributeCommissions = async (purchaseId: string) => {
     //
     //   Cash:        snap.effectiveDownPayment = maxDownPayment × (1 − cashDiscount%) × qty
     //   Installment: snap.effectiveDownPayment = userRawDP × (1 − installmentDiscount%) × qty
-    downPaymentPortion = round2(snap.effectiveDownPayment ?? purchase.amountPaid);
+    downPaymentPortion = round2(
+      snap.effectiveDownPayment ?? purchase.amountPaid
+    );
     installmentPortion = 0;
 
     // ── 1. Direct Sale / Referral Commission ─────────────────────────────────
     // এই কমিশন আগের মতোই Instant ক্রেডিট হবে
     if (referrerId) {
-      const commission =
-        round2((snap.directSaleCommissionValue / 100) * downPaymentPortion);
+      const commission = round2(
+        (snap.directSaleCommissionValue / 100) * downPaymentPortion
+      );
       if (commission > 0) {
         const wallet = await atomicCreditWallet(
           referrerId.toString(),
@@ -213,7 +219,7 @@ export const distributeCommissions = async (purchaseId: string) => {
     const rankRecalcIds = new Set<string>();
     if (referrerId) rankRecalcIds.add(referrerId.toString());
 
-    // ── 2. Down Payment Managerial Commission ─────────────────────────────────
+    // ── 2. Down Payment Team management Commission ─────────────────────────────────
     // এই কমিশন এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
     if (downPaymentPortion > 0) {
       const maxGen = snap.downPaymentGenerationRates.length;
@@ -228,7 +234,9 @@ export const distributeCommissions = async (purchaseId: string) => {
           (g) => g.generation === gen
         );
         if (genConfig && genConfig.rate > 0) {
-          const commission = round2((genConfig.rate / 100) * downPaymentPortion);
+          const commission = round2(
+            (genConfig.rate / 100) * downPaymentPortion
+          );
           const note = `Gen ${gen} managerial commission — DP (${
             genConfig.rate
           }% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
@@ -249,7 +257,7 @@ export const distributeCommissions = async (purchaseId: string) => {
       }
     }
 
-    // ── 3. Installment Portion Managerial Commission ──────────────────────────
+    // ── 3. Installment Portion Team management Commission ──────────────────────────
     // এই কমিশনও এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
     if (installmentPortion > 0) {
       const effectiveRates = resolveInstallmentGenRates(snap);
@@ -266,7 +274,9 @@ export const distributeCommissions = async (purchaseId: string) => {
           const genConfig = effectiveRates.find((g) => g.generation === gen);
           if (!genConfig || genConfig.rate <= 0) continue;
 
-          const commission = round2((genConfig.rate / 100) * installmentPortion);
+          const commission = round2(
+            (genConfig.rate / 100) * installmentPortion
+          );
           if (commission > 0) {
             const note = `Gen ${gen} managerial commission — Installment portion (${
               genConfig.rate
