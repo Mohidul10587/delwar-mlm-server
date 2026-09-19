@@ -178,11 +178,29 @@ export const distributeCommissions = async (purchaseId: string) => {
     // No discount is applied here — doing so would cause a double deduction.
     //
     //   Cash:        snap.effectiveDownPayment = maxDownPayment × (1 − cashDiscount%) × qty
+    //                installmentPortion        = amountPaid − effectiveDownPayment
+    //                                          = (discountedFullPrice × qty) − (discountedDP × qty)
+    //                                          = remaining portion after down payment
     //   Installment: snap.effectiveDownPayment = userRawDP × (1 − installmentDiscount%) × qty
+    //                installmentPortion        = 0  (remaining paid in future installments,
+    //                                               handled by distributeInstallmentPaymentCommission)
     downPaymentPortion = round2(
       snap.effectiveDownPayment ?? purchase.amountPaid
     );
-    installmentPortion = 0;
+
+    if (purchase.paymentType === "cash") {
+      // For cash purchases: the buyer pays the full discounted price upfront.
+      // downPaymentPortion covers the DP slice; the remaining slice (remaining
+      // after maxDownPayment) should also generate managerial commission using
+      // the installmentGenerationRates — same rates, different base.
+      installmentPortion = round2(
+        Math.max(0, purchase.amountPaid - downPaymentPortion)
+      );
+    } else {
+      // Installment purchase: remaining amount is collected in future installments.
+      // Each installment payment triggers distributeInstallmentPaymentCommission.
+      installmentPortion = 0;
+    }
 
     // ── 1. Direct Sale / Referral Commission ─────────────────────────────────
     // এই কমিশন আগের মতোই Instant ক্রেডিট হবে
@@ -259,8 +277,14 @@ export const distributeCommissions = async (purchaseId: string) => {
 
     // ── 3. Installment Portion Team management Commission ──────────────────────────
     // এই কমিশনও এখন Pending হিসাবে সংরক্ষিত হবে — Instant ক্রেডিট হবে না
+    // Cash purchase:        installmentPortion = amountPaid − effectiveDownPayment (remaining slice)
+    // Installment purchase: installmentPortion = 0 here; per-installment handled separately
     if (installmentPortion > 0) {
       const effectiveRates = resolveInstallmentGenRates(snap);
+      const portionLabel =
+        purchase.paymentType === "cash"
+          ? "Cash remaining portion"
+          : "Installment portion";
 
       if (effectiveRates.length > 0) {
         const maxGen = effectiveRates.length;
@@ -278,7 +302,7 @@ export const distributeCommissions = async (purchaseId: string) => {
             (genConfig.rate / 100) * installmentPortion
           );
           if (commission > 0) {
-            const note = `Gen ${gen} managerial commission — Installment portion (${
+            const note = `Gen ${gen} managerial commission — ${portionLabel} (${
               genConfig.rate
             }% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
             await savePendingCommission(
