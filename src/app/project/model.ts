@@ -31,10 +31,10 @@ export interface IProject extends Document {
   // Direct sale commission
   directSaleCommissionValue: number;
 
-  // Down payment managerial commission (per generation)
+  // Down payment team management (per generation)
   downPaymentGenerationRates: IGenerationCommissionRate[];
 
-  // Installment managerial commission (per generation)
+  // Installment team management (per generation)
   installmentGenerationRates: IGenerationCommissionRate[];
   /** @deprecated use installmentGenerationRates — kept for backward compat */
   installmentCommissionRate: number;
@@ -67,7 +67,13 @@ export interface IProject extends Document {
 const ProjectSchema = new Schema<IProject>(
   {
     projectId: { type: String, unique: true, sparse: true },
-    sharePrefix: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    sharePrefix: {
+      type: String,
+      required: true,
+      unique: true,
+      uppercase: true,
+      trim: true,
+    },
     title: { type: String, required: true },
     description: { type: String, default: "" },
     images: [{ type: String }],

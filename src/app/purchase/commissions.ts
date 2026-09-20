@@ -191,7 +191,7 @@ export const distributeCommissions = async (purchaseId: string) => {
     if (purchase.paymentType === "cash") {
       // For cash purchases: the buyer pays the full discounted price upfront.
       // downPaymentPortion covers the DP slice; the remaining slice (remaining
-      // after maxDownPayment) should also generate managerial commission using
+      // after maxDownPayment) should also generate team management using
       // the installmentGenerationRates — same rates, different base.
       installmentPortion = round2(
         Math.max(0, purchase.amountPaid - downPaymentPortion)
@@ -249,13 +249,13 @@ export const distributeCommissions = async (purchaseId: string) => {
         const currentId = ancestor.userId.toString();
 
         const genConfig = snap.downPaymentGenerationRates.find(
-          (g) => g.generation === gen
+          (g: any) => g.generation === gen
         );
         if (genConfig && genConfig.rate > 0) {
           const commission = round2(
             (genConfig.rate / 100) * downPaymentPortion
           );
-          const note = `Gen ${gen} managerial commission — DP (${
+          const note = `Gen ${gen} team management — DP (${
             genConfig.rate
           }% of ৳${downPaymentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
           // Pending collection-এ সংরক্ষণ (কোনো wallet update বা ledger entry নয়)
@@ -302,7 +302,7 @@ export const distributeCommissions = async (purchaseId: string) => {
             (genConfig.rate / 100) * installmentPortion
           );
           if (commission > 0) {
-            const note = `Gen ${gen} managerial commission — ${portionLabel} (${
+            const note = `Gen ${gen} team management — ${portionLabel} (${
               genConfig.rate
             }% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
             await savePendingCommission(
@@ -383,7 +383,7 @@ export const distributeInstallmentPaymentCommission = async (
 
       const commission = round2((genConfig.rate / 100) * installmentAmount);
       if (commission > 0) {
-        const note = `Gen ${gen} managerial commission — ${instLabel} (${
+        const note = `Gen ${gen} Royal team management — ${instLabel} (${
           genConfig.rate
         }% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
         // এই কমিশনও Pending হিসাবে সংরক্ষণ করা হচ্ছে
