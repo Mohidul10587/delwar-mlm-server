@@ -333,11 +333,13 @@ body { width:4961px; height:3508px; font-family:'Georgia',serif; line-height:1.7
   <div style="position:absolute;inset:0;padding:160px 220px 140px 220px;display:flex;flex-direction:column;gap:50px;">
     <div style="display:flex;align-items:center;justify-content:space-between;font-size:68px;color:#1a1a1a;margin-top:150px;padding:0 60px;">
       <div>Certificate No. :&nbsp;<span style="border:3px solid #666;padding:10px 30px;font-size:64px;color:#c0392b;font-weight:bold;border-radius:28px;">${certNo}</span></div>
-      ${logoDataUrl ? `<div style="display:flex;align-items:center;justify-content:center;"><img src="${logoDataUrl}" alt="Project Logo" style="height:220px;max-width:600px;object-fit:contain;border-radius:16px;" /></div>` : `<div></div>`}
       <div>Folio No. :&nbsp;<span style="border:3px solid #666;padding:10px 30px;font-size:64px;color:#c0392b;font-weight:bold;border-radius:28px;">${customerId}</span></div>
     </div>
+    <div style="display:flex;align-items:center;justify-content:center;">
+      ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Project Logo" style="height:220px;max-width:600px;object-fit:contain;border-radius:16px;" />` : ``}
+    </div>
     <div style="text-align:center;">
-      <span style="border:3px solid #444;display:inline-block;padding:0px 60px;font-family:monospace;font-weight:bold;font-size:62px;letter-spacing:4px;color:#1a1a1a;margin-top:280px;border-radius:28px;">${certNo}</span>
+      <span style="border:3px solid #444;display:inline-block;padding:0px 60px;font-family:monospace;font-weight:bold;font-size:62px;letter-spacing:4px;color:#1a1a1a;margin-top:10px;border-radius:28px;">${certNo}</span>
     </div>
     <div style="display:flex;gap:60px;align-items:flex-start;margin-top:250px;">
       <div style="flex:0.75;">
