@@ -104,7 +104,7 @@ export const getBatchDetails = async (
     const commissions = await PendingCommission.find({ batchId })
       .populate("userId", "name username phone")
       .populate("purchaseId", "snapshot quantity paymentType")
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .lean();
 
     const totalAmount = commissions.reduce((s, c) => s + c.amount, 0);
