@@ -716,7 +716,14 @@ export const getSalaryEligibleUsers = async (
         };
       });
 
-    const result = rows.filter(Boolean);
+    // Sort: most recently rank-achieved user appears first (newest → oldest)
+    const result = (rows.filter(Boolean) as NonNullable<typeof rows[number]>[]).sort(
+      (a, b) => {
+        const aTime = a.rankAchievedAt ? new Date(a.rankAchievedAt).getTime() : 0;
+        const bTime = b.rankAchievedAt ? new Date(b.rankAchievedAt).getTime() : 0;
+        return bTime - aTime; // descending: newest first
+      }
+    );
 
     res.json({
       year: currentYear,
