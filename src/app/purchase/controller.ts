@@ -408,13 +408,35 @@ export const getPurchases = async (
   next: NextFunction
 ) => {
   try {
-    // H-05 fix: pagination
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 30;
     const skip = (page - 1) * limit;
+    const search = (req.query.search as string)?.trim() ?? "";
 
     const filter: any = {};
     if (req.query.status) filter.status = req.query.status;
+
+    // If search term provided, find matching userIds first then filter purchases
+    if (search) {
+      const matchingUsers = await (await import("../user/model")).User.find({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+          { customerId: { $regex: search, $options: "i" } },
+          { username: { $regex: search, $options: "i" } },
+        ],
+      })
+        .select("_id")
+        .lean();
+
+      const userIds = matchingUsers.map((u) => u._id);
+
+      filter.$or = [
+        { userId: { $in: userIds } },
+        { paymentId: { $regex: search, $options: "i" } },
+        { transactionId: { $regex: search, $options: "i" } },
+      ];
+    }
 
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)

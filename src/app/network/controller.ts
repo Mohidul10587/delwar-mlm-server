@@ -77,6 +77,22 @@ export const getGenerations = async (req: Request, res: Response, next: NextFunc
       .select("_id username name phone createdAt generationAncestors directSalesCount personalPurchaseCount currentRank")
       .lean();
 
+    // Collect all direct-referrer IDs (generationAncestors[0].userId) to populate in bulk
+    const referrerIdSet = new Set<string>();
+    for (const u of all) {
+      const directParentId = (u as any).generationAncestors?.[0]?.userId?.toString();
+      if (directParentId) referrerIdSet.add(directParentId);
+    }
+
+    // Bulk-fetch referrer info once
+    const referrerDocs = await User.find({ _id: { $in: [...referrerIdSet] } })
+      .select("_id username name")
+      .lean();
+    const referrerMap: Record<string, { username: string; name: string }> = {};
+    for (const r of referrerDocs) {
+      referrerMap[r._id.toString()] = { username: (r as any).username, name: (r as any).name };
+    }
+
     // Group each user by the level they appear at under our user
     const genMap: Record<number, any[]> = {};
     for (const u of all) {
@@ -86,6 +102,10 @@ export const getGenerations = async (req: Request, res: Response, next: NextFunc
       if (!entry) continue;
       const level: number = entry.level;
       if (!genMap[level]) genMap[level] = [];
+
+      const directParentId = (u as any).generationAncestors?.[0]?.userId?.toString();
+      const referredBy = directParentId ? (referrerMap[directParentId] ?? null) : null;
+
       genMap[level].push({
         _id: u._id,
         username: (u as any).username,
@@ -95,6 +115,7 @@ export const getGenerations = async (req: Request, res: Response, next: NextFunc
         directSalesCount: (u as any).directSalesCount ?? 0,
         personalPurchaseCount: (u as any).personalPurchaseCount ?? 0,
         currentRank: (u as any).currentRank ?? null,
+        referredBy,
       });
     }
 
