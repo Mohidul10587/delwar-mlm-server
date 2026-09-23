@@ -419,7 +419,7 @@ export const getPurchases = async (
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
         .populate("userId", "name username phone customerId")
-        .populate("projectId", "title cashPrice installment")
+        .populate("projectId", "title cashPrice installment projectId")
         .populate("branchId", "name")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -525,7 +525,7 @@ export const getBranchPurchases = async (
     const [purchases, total] = await Promise.all([
       Purchase.find(filter)
         .populate("userId", "name username phone customerId")
-        .populate("projectId", "title cashPrice installment")
+        .populate("projectId", "title cashPrice installment projectId")
         .populate("branchId", "name")
         .sort({ createdAt: -1 })
         .skip(skip)
