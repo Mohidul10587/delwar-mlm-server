@@ -709,10 +709,23 @@ export const getProjectsWithStats = async (
   next: NextFunction
 ) => {
   try {
-    const [projects, counts] = await Promise.all([
-      // Latest project first
-      Project.find().sort({ createdAt: -1 }).lean(),
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit as string) || 10);
+    const skip = (page - 1) * limit;
+    const search = (req.query.search as string)?.trim() ?? "";
 
+    const filter: Record<string, any> = {};
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { projectId: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const [projects, total, counts] = await Promise.all([
+      Project.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Project.countDocuments(filter),
       ShareSlot.aggregate([
         {
           $group: {
@@ -748,9 +761,11 @@ export const getProjectsWithStats = async (
     });
 
     res.json({
-      // Return all shares to admin (both active and inactive), with isActiveOffer flag
       shares: projects.map((s) => ({ ...s, isActiveOffer: isOfferActive(s) })),
       stats,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
     });
   } catch (err) {
     next(err);
