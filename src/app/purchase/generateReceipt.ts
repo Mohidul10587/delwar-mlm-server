@@ -28,7 +28,7 @@ export interface ReceiptData {
     reviewedBy?: { name?: string; username?: string } | string;
     createdAt: string;
     snapshot?: { shareTitle?: string; cashPrice?: number };
-    projectId?: { title?: string; cashPrice?: number };
+    projectId?: { title?: string; cashPrice?: number; logo?: string };
     userId?: {
       name?: string;
       username?: string;
@@ -56,6 +56,13 @@ export interface ReceiptData {
     createdAt: string;
   };
   shareNumbers?: string[];
+  company?: {
+    siteTitle?: string;
+    logo?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    contactAddress?: string;
+  };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -144,11 +151,48 @@ function takaInWords(amount: number): string {
   return convert(Math.floor(amount)) + " Taka Only";
 }
 
+// ── Logo fetcher (remote URL → base64 data URL) ────────────────────────────────
+// Returns empty string if URL is empty or fetch fails.
+
+async function fetchLogoAsDataUrl(url: string): Promise<string> {
+  if (!url) return "";
+  try {
+    const https = await import("https");
+    const http = await import("http");
+    const urlMod = await import("url");
+    const parsed = new urlMod.URL(url);
+    const lib = parsed.protocol === "https:" ? https : http;
+    return await new Promise<string>((resolve, reject) => {
+      lib
+        .get(url, (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () => {
+            const buf = Buffer.concat(chunks);
+            const contentType = res.headers["content-type"] ?? "image/png";
+            resolve(`data:${contentType};base64,${buf.toString("base64")}`);
+          });
+          res.on("error", reject);
+        })
+        .on("error", reject);
+    });
+  } catch {
+    return "";
+  }
+}
+
 // ── HTML Builder ───────────────────────────────────────────────────────────────
 // Mirrors ReceiptBody component in PaymentReceipt.tsx exactly (914×440 canvas)
 
-export function buildReceiptHtml(data: ReceiptData): string {
+export async function buildReceiptHtml(data: ReceiptData): Promise<string> {
   const bgUrl = toDataUrl("money-recive-bg-v2.jpeg");
+
+  // Load project logo (Cloudinary URL → base64 data URL)
+  const projectLogoUrl = (data.purchase.projectId as any)?.logo ?? "";
+  let projectLogoDataUrl = "";
+  if (projectLogoUrl) {
+    projectLogoDataUrl = await fetchLogoAsDataUrl(projectLogoUrl);
+  }
 
   const { purchase, installment, shareNumbers } = data;
 
@@ -270,8 +314,13 @@ body { width:${W}px; height:${H}px; overflow:hidden; } /* 914×440 */
   <!-- Content layer -->
   <div style="position:relative;z-index:1;width:${W}px;height:${H}px;box-sizing:border-box;padding:10px 14px 10px 14px;display:flex;flex-direction:column;gap:0;">
 
-    <!-- ROW 1: Top-right meta block -->
-    <div style="display:flex;justify-content:flex-end;margin-top:20px;margin-bottom:2px;">
+    <!-- ROW 1: Top-right project logo + meta block -->
+    <div style="display:flex;justify-content:flex-end;margin-top:20px;margin-bottom:2px;gap:12px;align-items:flex-start;">
+      ${
+        projectLogoDataUrl
+          ? `<img src="${projectLogoDataUrl}" alt="Project Logo" style="height:60px;max-width:160px;object-fit:contain;flex-shrink:0;border-radius:6px;" />`
+          : ``
+      }
       <div style="display:flex;flex-direction:column;gap:3px;margin-left:auto;">
         ${metaHtml}
       </div>
@@ -368,7 +417,7 @@ export async function generateReceiptPng(data: ReceiptData): Promise<Buffer> {
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 914, height: 440, deviceScaleFactor: 1 });
-    await page.setContent(buildReceiptHtml(data), {
+    await page.setContent(await buildReceiptHtml(data), {
       waitUntil: "networkidle0",
     });
     const screenshot = await page.screenshot({

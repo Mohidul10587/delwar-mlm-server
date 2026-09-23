@@ -4,7 +4,11 @@ import { InstallmentPayment } from "./installment.model";
 import { Project } from "../project/model";
 import { User } from "../user/model";
 import { Settings } from "../settings/model";
-import { calculateCertificateStatus, calculateTotalPayable, calculateTotalPayableFromPurchase } from "./service";
+import {
+  calculateCertificateStatus,
+  calculateTotalPayable,
+  calculateTotalPayableFromPurchase,
+} from "./service";
 import { Certificate } from "../certificate/model";
 import { ShareSlot } from "../project/shareSlot.model";
 import { Wallet, TransactionLog } from "../wallet/model";
@@ -84,12 +88,10 @@ export const createPurchase = async (
 
     // Validate payment method
     if (!["cash", "bank", "mobile_banking"].includes(resolvedPaymentMethod)) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Invalid payment method. Must be cash, bank, or mobile_banking",
-        });
+      return res.status(400).json({
+        message:
+          "Invalid payment method. Must be cash, bank, or mobile_banking",
+      });
     }
 
     // Receipt image is required for bank and mobile_banking payments
@@ -97,12 +99,10 @@ export const createPurchase = async (
       ["bank", "mobile_banking"].includes(resolvedPaymentMethod) &&
       !receiptImage
     ) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Receipt image is required for bank or mobile banking payments",
-        });
+      return res.status(400).json({
+        message:
+          "Receipt image is required for bank or mobile banking payments",
+      });
     }
 
     if (!["cash", "installment"].includes(paymentType)) {
@@ -237,8 +237,12 @@ export const createPurchase = async (
 
     if (paymentType === "cash") {
       const cashDiscountPct = share.cashDiscount ?? 0;
-      const discountedDPPerUnit = round2(share.maxDownPayment * (1 - cashDiscountPct / 100));
-      const remainingPerUnit = round2(Math.max(0, share.cashPrice - share.maxDownPayment));
+      const discountedDPPerUnit = round2(
+        share.maxDownPayment * (1 - cashDiscountPct / 100)
+      );
+      const remainingPerUnit = round2(
+        Math.max(0, share.cashPrice - share.maxDownPayment)
+      );
       const totalPerUnit = round2(discountedDPPerUnit + remainingPerUnit);
       totalPayable = round2(totalPerUnit * qty);
       resolvedDP = totalPayable; // cash = paid in full upfront
@@ -246,11 +250,16 @@ export const createPurchase = async (
       effectiveDownPayment = round2(discountedDPPerUnit * qty);
     } else {
       const installmentDiscountPct = share.installmentDiscount ?? 0;
-      const discountedDPPerUnit = round2(rawDPPerUnit * (1 - installmentDiscountPct / 100));
+      const discountedDPPerUnit = round2(
+        rawDPPerUnit * (1 - installmentDiscountPct / 100)
+      );
       const discountAmountPerUnit = round2(rawDPPerUnit - discountedDPPerUnit);
       resolvedDP = round2(discountedDPPerUnit * qty);
       // totalPayable = installmentPrice × qty minus the discount applied to down payment
-      totalPayable = round2((share.installmentPrice ?? share.cashPrice) * qty - discountAmountPerUnit * qty);
+      totalPayable = round2(
+        (share.installmentPrice ?? share.cashPrice) * qty -
+          discountAmountPerUnit * qty
+      );
       // EDP: user's chosen raw DP with discount applied once
       effectiveDownPayment = resolvedDP;
     }
@@ -264,7 +273,9 @@ export const createPurchase = async (
 
     const requestedCashbackAmount = round2(Number(cashbackAmount ?? 0));
     const currentPaymentAmount = amountPaid;
-    const maxCashbackAmount = round2(Math.min(totalPayable * 0.1, currentPaymentAmount));
+    const maxCashbackAmount = round2(
+      Math.min(totalPayable * 0.1, currentPaymentAmount)
+    );
     if (
       !Number.isFinite(requestedCashbackAmount) ||
       requestedCashbackAmount < 0 ||
@@ -358,7 +369,9 @@ export const createPurchase = async (
       );
       if (!wallet) {
         await Purchase.findByIdAndDelete(purchase._id);
-        return res.status(400).json({ message: "Insufficient cashback balance" });
+        return res
+          .status(400)
+          .json({ message: "Insufficient cashback balance" });
       }
 
       await TransactionLog.create({
@@ -498,7 +511,9 @@ export const getBranchPurchases = async (
     const { Branch } = await import("../branch/model");
     const branch = await Branch.findOne({ managerId }).lean();
     if (!branch)
-      return res.status(404).json({ message: "No branch assigned to this manager" });
+      return res
+        .status(404)
+        .json({ message: "No branch assigned to this manager" });
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 30;
@@ -523,7 +538,9 @@ export const getBranchPurchases = async (
       .filter((p) => p.paymentType === "installment" && p.status !== "pending")
       .map((p) => p._id);
     const allPayments = installmentPurchaseIds.length
-      ? await InstallmentPayment.find({ purchaseId: { $in: installmentPurchaseIds } }).lean()
+      ? await InstallmentPayment.find({
+          purchaseId: { $in: installmentPurchaseIds },
+        }).lean()
       : [];
     const paymentsByPurchase: Record<string, typeof allPayments> = {};
     for (const pay of allPayments) {
@@ -531,7 +548,9 @@ export const getBranchPurchases = async (
       (paymentsByPurchase[key] ??= []).push(pay);
     }
 
-    const approvedIds = purchases.filter((p) => p.status === "approved").map((p) => p._id);
+    const approvedIds = purchases
+      .filter((p) => p.status === "approved")
+      .map((p) => p._id);
     const slotsByPurchase = await fetchSlotsByPurchase(approvedIds);
 
     const enriched = purchases.map((purchase) => {
@@ -547,7 +566,11 @@ export const getBranchPurchases = async (
           totalPayable,
         }),
       };
-      if (purchase.paymentType !== "installment" || purchase.status === "pending") return base;
+      if (
+        purchase.paymentType !== "installment" ||
+        purchase.status === "pending"
+      )
+        return base;
       const payments = paymentsByPurchase[purchase._id.toString()] ?? [];
       const perInstallment = purchase.installmentAmount ?? 0;
       const totalInstallments = purchase.installmentCount ?? 0;
@@ -567,7 +590,12 @@ export const getBranchPurchases = async (
       };
     });
 
-    res.json({ purchases: enriched, total, page, pages: Math.ceil(total / limit) });
+    res.json({
+      purchases: enriched,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
   } catch (err) {
     next(err);
   }
@@ -583,7 +611,9 @@ export const getBranchPurchaseById = async (
     const { Branch } = await import("../branch/model");
     const branch = await Branch.findOne({ managerId: req.user!._id }).lean();
     if (!branch)
-      return res.status(404).json({ message: "No branch assigned to this manager" });
+      return res
+        .status(404)
+        .json({ message: "No branch assigned to this manager" });
 
     const purchase = await Purchase.findOne({
       _id: req.params.id,
@@ -598,7 +628,10 @@ export const getBranchPurchaseById = async (
 
     const totalPayable = calculateTotalPayableFromPurchase(purchase);
 
-    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+    const slots = await ShareSlot.find({
+      purchaseId: purchase._id,
+      status: "sold",
+    })
       .select("shareNumber")
       .sort({ shareNumber: 1 })
       .lean();
@@ -672,7 +705,7 @@ export const getPurchaseReceipt = async (
   try {
     const purchase = await Purchase.findById(req.params.id)
       .populate("userId", "name username phone customerId")
-      .populate("projectId", "title cashPrice image")
+      .populate("projectId", "title cashPrice image logo")
       .populate("reviewedBy", "name username") // cashier / receiver
       .lean();
 
@@ -733,7 +766,7 @@ export const getInstallmentReceipt = async (
 
     const purchase = await Purchase.findById(purchaseId)
       .populate("userId", "name username phone customerId")
-      .populate("projectId", "title cashPrice image")
+      .populate("projectId", "title cashPrice image logo")
       .lean();
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
@@ -821,7 +854,7 @@ export const downloadPurchaseReceipt = async (
   try {
     const purchase = await Purchase.findById(req.params.id)
       .populate("userId", "name username phone customerId")
-      .populate("projectId", "title cashPrice image")
+      .populate("projectId", "title cashPrice image logo")
       .populate("reviewedBy", "name username")
       .lean();
 
@@ -836,16 +869,33 @@ export const downloadPurchaseReceipt = async (
       return res.status(403).json({ message: "Forbidden" });
 
     if (purchase.status !== "approved")
-      return res.status(400).json({ message: "Receipt only available for approved purchases" });
+      return res
+        .status(400)
+        .json({ message: "Receipt only available for approved purchases" });
 
-    const slots = await ShareSlot.find({ purchaseId: purchase._id, status: "sold" })
+    const slots = await ShareSlot.find({
+      purchaseId: purchase._id,
+      status: "sold",
+    })
       .select("shareNumber")
       .sort({ shareNumber: 1 })
+      .lean();
+
+    // Fetch company settings for receipt header (logo etc.)
+    const settings = await Settings.findOne()
+      .select("siteTitle logo contactPhone contactEmail contactAddress")
       .lean();
 
     const pngBuffer = await generateReceiptPng({
       purchase: purchase as any,
       shareNumbers: slots.map((s) => s.shareNumber),
+      company: {
+        siteTitle: (settings as any)?.siteTitle ?? "",
+        logo: (settings as any)?.logo ?? "",
+        contactPhone: (settings as any)?.contactPhone ?? "",
+        contactEmail: (settings as any)?.contactEmail ?? "",
+        contactAddress: (settings as any)?.contactAddress ?? "",
+      },
     });
 
     res.set({
@@ -871,7 +921,7 @@ export const downloadInstallmentReceipt = async (
 
     const purchase = await Purchase.findById(purchaseId)
       .populate("userId", "name username phone customerId")
-      .populate("projectId", "title cashPrice image")
+      .populate("projectId", "title cashPrice image logo")
       .lean();
     if (!purchase)
       return res.status(404).json({ message: "Purchase not found" });
@@ -890,11 +940,25 @@ export const downloadInstallmentReceipt = async (
       return res.status(404).json({ message: "Installment not found" });
 
     if (installment.status !== "approved")
-      return res.status(400).json({ message: "Receipt only available for approved installments" });
+      return res
+        .status(400)
+        .json({ message: "Receipt only available for approved installments" });
+
+    // Fetch company settings for receipt header (logo etc.)
+    const settings = await Settings.findOne()
+      .select("siteTitle logo contactPhone contactEmail contactAddress")
+      .lean();
 
     const pngBuffer = await generateReceiptPng({
       purchase: purchase as any,
       installment: installment as any,
+      company: {
+        siteTitle: (settings as any)?.siteTitle ?? "",
+        logo: (settings as any)?.logo ?? "",
+        contactPhone: (settings as any)?.contactPhone ?? "",
+        contactEmail: (settings as any)?.contactEmail ?? "",
+        contactAddress: (settings as any)?.contactAddress ?? "",
+      },
     });
 
     res.set({

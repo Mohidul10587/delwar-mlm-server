@@ -157,7 +157,7 @@ export const register = async (
     const hashedPassword = await bcrypt.hash(password, 10);
     const generationAncestors = await buildGenerationAncestors(referrerId);
     const firstRankName = await getFirstRankName();
-    const customerId = await generateCustomId("CUS");
+    const customerId = await generateCustomId("CIN");
     const user = await Model.create({
       customerId,
       name,
@@ -235,7 +235,7 @@ export const adminRegister = async (
     const hashedPassword = await bcrypt.hash(password, 10);
     const generationAncestors = await buildGenerationAncestors(referrerId);
     const firstRankName = await getFirstRankName();
-    const customerId = await generateCustomId("CUS");
+    const customerId = await generateCustomId("CIN");
     const user = await Model.create({
       customerId,
       name,
