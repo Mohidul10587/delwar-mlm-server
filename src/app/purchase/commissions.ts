@@ -302,7 +302,7 @@ export const distributeCommissions = async (purchaseId: string) => {
             (genConfig.rate / 100) * installmentPortion
           );
           if (commission > 0) {
-            const note = `Gen ${gen} team management — ${portionLabel} (${
+            const note = `Gen ${gen} Team management commission — ${portionLabel} (${
               genConfig.rate
             }% of ৳${installmentPortion.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle} x${qty}`;
             await savePendingCommission(
@@ -383,7 +383,7 @@ export const distributeInstallmentPaymentCommission = async (
 
       const commission = round2((genConfig.rate / 100) * installmentAmount);
       if (commission > 0) {
-        const note = `Gen ${gen} Royal team management — ${instLabel} (${
+        const note = `Gen ${gen} Royal team management commission — ${instLabel} (${
           genConfig.rate
         }% of ৳${installmentAmount.toLocaleString()}) — Buyer: ${buyerName} (@${buyerUsername}), Share: ${shareTitle}`;
         // এই কমিশনও Pending হিসাবে সংরক্ষণ করা হচ্ছে
