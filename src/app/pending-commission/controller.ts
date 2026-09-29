@@ -32,7 +32,8 @@ const atomicCreditWallet = async (
     { $inc: { [field]: amount, totalBalance: amount } },
     { new: true }
   );
-  if (!wallet) throw new Error(`Wallet not found for userId=${userId} after upsert`);
+  if (!wallet)
+    throw new Error(`Wallet not found for userId=${userId} after upsert`);
   return wallet;
 };
 
@@ -41,6 +42,8 @@ const atomicCreditWallet = async (
  * প্রতিদিনের সব Pending Batch-এর তালিকা।
  * প্রতিটি batch-এ: batchId, batchDate, totalCommissions count, totalAmount, status summary।
  * Super Admin Panel-এ দেখানো হবে।
+ *
+ * ?status=pending → শুধুমাত্র এখনো pending আছে এমন batch গুলো ফেরত দেবে।
  */
 export const getPendingBatches = async (
   req: Request,
@@ -48,7 +51,9 @@ export const getPendingBatches = async (
   next: NextFunction
 ) => {
   try {
-    const batches = await PendingCommission.aggregate([
+    const onlyPending = req.query.status === "pending";
+
+    const pipeline: any[] = [
       {
         $group: {
           _id: "$batchId",
@@ -68,8 +73,15 @@ export const getPendingBatches = async (
           },
         },
       },
-      { $sort: { batchDate: -1 } },
-    ]);
+    ];
+
+    if (onlyPending) {
+      pipeline.push({ $match: { pendingCount: { $gt: 0 } } });
+    }
+
+    pipeline.push({ $sort: { batchDate: -1 } });
+
+    const batches = await PendingCommission.aggregate(pipeline);
 
     // Enrich each batch with status label
     const enriched = batches.map((b) => ({
@@ -91,7 +103,8 @@ export const getPendingBatches = async (
 
 // ── GET /pending-commission/batches/:batchId ──────────────────────────────────
 /**
- * নির্দিষ্ট Batch-এর সব Pending Commission গুলো দেখান (ইউজার তথ্য সহ)।
+ * নির্দিষ্ট Batch-এর সব Commission গুলো দেখান (ইউজার তথ্য সহ)।
+ * ?status=pending → শুধু pending commission গুলো ফেরত দেবে।
  */
 export const getBatchDetails = async (
   req: Request,
@@ -101,7 +114,12 @@ export const getBatchDetails = async (
   try {
     const { batchId } = req.params;
 
-    const commissions = await PendingCommission.find({ batchId })
+    const filter: Record<string, unknown> = { batchId };
+    if (req.query.status === "pending") {
+      filter.status = "pending";
+    }
+
+    const commissions = await PendingCommission.find(filter)
       .populate("userId", "name username phone")
       .populate("purchaseId", "snapshot quantity paymentType")
       .sort({ createdAt: -1 })
@@ -149,7 +167,8 @@ export const releaseBatch = async (
 
     if (pendingCommissions.length === 0) {
       return res.status(400).json({
-        message: "No pending commissions found in this batch (already released or empty)",
+        message:
+          "No pending commissions found in this batch (already released or empty)",
       });
     }
 
@@ -212,9 +231,7 @@ export const releaseBatch = async (
       } catch (err) {
         failCount++;
         const errMsg = err instanceof Error ? err.message : String(err);
-        errors.push(
-          `commissionId=${commission._id.toString()}: ${errMsg}`
-        );
+        errors.push(`commissionId=${commission._id.toString()}: ${errMsg}`);
         console.error(
           `[BATCH RELEASE ERROR] Failed to release commissionId=${commission._id}:`,
           err
