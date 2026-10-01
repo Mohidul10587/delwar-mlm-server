@@ -159,56 +159,6 @@ export const adminDebit = async (
   }
 };
 
-export const adminGiveIncentiveBonus = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { amount, note } = req.body;
-
-    // Fix V-02: validate amount
-    const amt = Number(amount);
-    if (isNaN(amt) || amt <= 0) {
-      return res.status(400).json({ message: "Amount must be greater than 0" });
-    }
-
-    // Fix F-12: atomic $inc keeps totalBalance consistent
-    const wallet = await Wallet.findOneAndUpdate(
-      { userId: req.params.userId },
-      { $inc: { cashbackBalance: amt, totalBalance: amt } },
-      { new: true, upsert: true }
-    );
-
-    await TransactionLog.create({
-      userId: req.params.userId,
-      type: "incentive_bonus",
-      amount: amt,
-      balanceAfter: wallet.totalBalance,
-      note: note || "Incentive bonus granted by admin",
-    });
-
-    try {
-      await CompanyLedger.create({
-        date: new Date(),
-        type: "incentive_bonus_paid",
-        amount: amt,
-        userId: req.params.userId,
-        note: note || "Incentive bonus granted by admin",
-      });
-    } catch (ledgerErr) {
-      console.error(
-        `[LEDGER ERROR] incentive_bonus_paid for userId=${req.params.userId}:`,
-        ledgerErr
-      );
-    }
-
-    res.json({ message: "Incentive bonus granted successfully", wallet });
-  } catch (err) {
-    next(err);
-  }
-};
-
 // Admin loan balance adjustment: positive amount = give loan, negative = deduct from loan
 export const adminAdjustLoanBalance = async (
   req: Request,
