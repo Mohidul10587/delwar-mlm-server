@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { Purchase } from "./model";
-import { calculateCertificateStatus, calculateTotalPayable, calculateTotalPayableFromPurchase } from "./service";
+import {
+  calculateCertificateStatus,
+  calculateTotalPayable,
+  calculateTotalPayableFromPurchase,
+} from "./service";
 import { round2 } from "../../utils/walletUtils";
 import { Certificate } from "../certificate/model";
 import { distributeCommissions } from "./commissions";
@@ -60,7 +64,11 @@ async function allocateShares(
       await ShareSlot.updateMany(
         // Only roll back slots claimed by this purchase; never touch a slot
         // concurrently allocated by somebody else.
-        { _id: { $in: candidateIds }, purchaseId: purchase._id, status: "sold" },
+        {
+          _id: { $in: candidateIds },
+          purchaseId: purchase._id,
+          status: "sold",
+        },
         { $set: { status: "available", userId: null, purchaseId: null } }
       );
     }
@@ -198,7 +206,7 @@ export const updatePurchaseStatus = async (
           amount: purchase.cashbackAmount,
           balanceAfter: wallet.totalBalance,
           relatedPurchaseId: purchase._id,
-          note: `Cashback refunded for rejected purchase ${purchase._id.toString()}`,
+          note: `Cash bonus refunded for rejected purchase ${purchase._id.toString()}`,
         });
       }
 
@@ -219,7 +227,13 @@ export const updatePurchaseStatus = async (
     if (allocationError) {
       // Roll back the status change so the purchase can be retried
       await Purchase.findByIdAndUpdate(purchase._id, {
-        $set: { status: "pending", reviewNote: "", reviewedBy: null, reviewedByInfo: null, reviewedAt: null },
+        $set: {
+          status: "pending",
+          reviewNote: "",
+          reviewedBy: null,
+          reviewedByInfo: null,
+          reviewedAt: null,
+        },
       });
       return res.status(400).json({ message: allocationError.error });
     }
@@ -275,7 +289,9 @@ export const updatePurchaseStatus = async (
         if (cashbackAmt > 0) {
           const updatedWallet = await Wallet.findOneAndUpdate(
             { userId: purchase.userId },
-            { $inc: { cashbackBalance: cashbackAmt, totalBalance: cashbackAmt } },
+            {
+              $inc: { cashbackBalance: cashbackAmt, totalBalance: cashbackAmt },
+            },
             { new: true, upsert: true }
           );
           await TransactionLog.create({
@@ -284,7 +300,9 @@ export const updatePurchaseStatus = async (
             amount: cashbackAmt,
             balanceAfter: updatedWallet!.totalBalance,
             relatedPurchaseId: purchase._id,
-            note: `Incentive bonus ${cashbackPct}% on effective down payment ৳${effectiveDP.toLocaleString()} — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
+            note: `Incentive bonus ${cashbackPct}% on effective down payment ৳${effectiveDP.toLocaleString()} — ${
+              purchase.snapshot.shareTitle
+            } x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
           });
           try {
             await CompanyLedger.create({
@@ -294,18 +312,24 @@ export const updatePurchaseStatus = async (
               relatedId: purchase._id,
               relatedModel: "Purchase",
               userId: purchase.userId,
-              note: `Auto cashback ${cashbackPct}% for purchaseId=${(purchase._id as any).toString()}`,
+              note: `Auto cashback ${cashbackPct}% for purchaseId=${(
+                purchase._id as any
+              ).toString()}`,
             });
           } catch (ledgerErr) {
             console.error(
-              `[LEDGER ERROR] cashback_paid for purchaseId=${(purchase._id as any).toString()}:`,
+              `[LEDGER ERROR] cashback_paid for purchaseId=${(
+                purchase._id as any
+              ).toString()}:`,
               ledgerErr
             );
           }
         }
       } catch (cashbackErr) {
         console.error(
-          `[CASHBACK ERROR] Auto cashback failed for purchaseId=${(purchase._id as any).toString()}:`,
+          `[CASHBACK ERROR] Auto cashback failed for purchaseId=${(
+            purchase._id as any
+          ).toString()}:`,
           cashbackErr
         );
       }
@@ -325,7 +349,11 @@ export const updatePurchaseStatus = async (
         relatedId: purchase._id,
         relatedModel: "Purchase",
         userId: purchase.userId,
-        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+        note: `Purchase approved — ${purchase.snapshot?.shareTitle ?? ""} x${
+          purchase.quantity
+        } [${
+          purchase.paymentType
+        }] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
       });
     } catch (ledgerErr) {
       console.error(
@@ -415,10 +443,14 @@ export const retryCommission = async (
     if (purchase.status !== "approved")
       return res
         .status(400)
-        .json({ message: "Commission retry only available for approved purchases" });
+        .json({
+          message: "Commission retry only available for approved purchases",
+        });
 
     if (purchase.commissionProcessed) {
-      return res.json({ message: "Commission already processed — no action taken" });
+      return res.json({
+        message: "Commission already processed — no action taken",
+      });
     }
 
     await distributeCommissions((purchase._id as any).toString());

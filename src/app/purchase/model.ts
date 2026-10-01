@@ -53,7 +53,7 @@ export interface IPurchaseSnapshot {
   /** @deprecated use installmentGenerationRates — kept for backward compat with old records */
   installmentCommissionRate: number;
   installmentGenerationRates: { generation: number; rate: number }[];
-  /** Cashback % for cash purchases — captured at purchase time */
+  /** Cash bonus % for cash purchases — captured at purchase time */
   cashbackPercent: number;
   rankQualification: {
     rankName: string;
@@ -153,7 +153,7 @@ const SnapshotSchema = new Schema(
     installmentGenerationRates: [
       { generation: { type: Number }, rate: { type: Number }, _id: false },
     ],
-    // Cashback % for cash purchases (captured at purchase time)
+    // Cash bonus % for cash purchases (captured at purchase time)
     cashbackPercent: { type: Number, default: 0 },
     rankQualification: [
       {

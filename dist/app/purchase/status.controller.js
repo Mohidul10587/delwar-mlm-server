@@ -1,13 +1,37 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+var __awaiter =
+  (this && this.__awaiter) ||
+  function (thisArg, _arguments, P, generator) {
+    function adopt(value) {
+      return value instanceof P
+        ? value
+        : new P(function (resolve) {
+            resolve(value);
+          });
+    }
     return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
+      function fulfilled(value) {
+        try {
+          step(generator.next(value));
+        } catch (e) {
+          reject(e);
+        }
+      }
+      function rejected(value) {
+        try {
+          step(generator["throw"](value));
+        } catch (e) {
+          reject(e);
+        }
+      }
+      function step(result) {
+        result.done
+          ? resolve(result.value)
+          : adopt(result.value).then(fulfilled, rejected);
+      }
+      step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
-};
+  };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.reclaimShares = exports.updatePurchaseStatus = void 0;
 const model_1 = require("./model");
@@ -28,63 +52,75 @@ const sms_1 = require("../../utils/sms");
  * two concurrent approvals cannot grab the same slot.
  */
 function allocateShares(purchase) {
-    return __awaiter(this, void 0, void 0, function* () {
-        // Find available slot IDs first
-        const available = yield shareSlot_model_1.ShareSlot.find({
-            projectId: purchase.projectId,
-            status: "available",
-        })
-            .sort({ shareNumber: 1 })
-            .limit(purchase.quantity)
-            .select("_id")
-            .lean();
-        if (available.length < purchase.quantity) {
-            return {
-                error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required`,
-            };
-        }
-        // Atomically claim the selected slots in one guarded update. MongoDB checks
-        // the status predicate while applying the update, so concurrent approvals
-        // cannot take a slot that was already sold.
-        const candidateIds = available.map((slot) => slot._id);
-        const claimResult = yield shareSlot_model_1.ShareSlot.updateMany({ _id: { $in: candidateIds }, status: "available" }, {
-            $set: {
-                status: "sold",
-                userId: purchase.userId,
-                purchaseId: purchase._id,
-            },
-        });
-        const claimed = claimResult.modifiedCount;
-        if (claimed < purchase.quantity) {
-            // Roll back whatever we already claimed
-            if (claimed > 0) {
-                yield shareSlot_model_1.ShareSlot.updateMany(
-                // Only roll back slots claimed by this purchase; never touch a slot
-                // concurrently allocated by somebody else.
-                { _id: { $in: candidateIds }, purchaseId: purchase._id, status: "sold" }, { $set: { status: "available", userId: null, purchaseId: null } });
-            }
-            return {
-                error: `Only ${claimed} slot(s) could be allocated (concurrent conflict). Please retry.`,
-            };
-        }
-        return null;
-    });
+  return __awaiter(this, void 0, void 0, function* () {
+    // Find available slot IDs first
+    const available = yield shareSlot_model_1.ShareSlot.find({
+      projectId: purchase.projectId,
+      status: "available",
+    })
+      .sort({ shareNumber: 1 })
+      .limit(purchase.quantity)
+      .select("_id")
+      .lean();
+    if (available.length < purchase.quantity) {
+      return {
+        error: `Only ${available.length} share slot(s) available, ${purchase.quantity} required`,
+      };
+    }
+    // Atomically claim the selected slots in one guarded update. MongoDB checks
+    // the status predicate while applying the update, so concurrent approvals
+    // cannot take a slot that was already sold.
+    const candidateIds = available.map((slot) => slot._id);
+    const claimResult = yield shareSlot_model_1.ShareSlot.updateMany(
+      { _id: { $in: candidateIds }, status: "available" },
+      {
+        $set: {
+          status: "sold",
+          userId: purchase.userId,
+          purchaseId: purchase._id,
+        },
+      }
+    );
+    const claimed = claimResult.modifiedCount;
+    if (claimed < purchase.quantity) {
+      // Roll back whatever we already claimed
+      if (claimed > 0) {
+        yield shareSlot_model_1.ShareSlot.updateMany(
+          // Only roll back slots claimed by this purchase; never touch a slot
+          // concurrently allocated by somebody else.
+          {
+            _id: { $in: candidateIds },
+            purchaseId: purchase._id,
+            status: "sold",
+          },
+          { $set: { status: "available", userId: null, purchaseId: null } }
+        );
+      }
+      return {
+        error: `Only ${claimed} slot(s) could be allocated (concurrent conflict). Please retry.`,
+      };
+    }
+    return null;
+  });
 }
 /**
  * Reclaims all sold share slots belonging to a purchase.
  */
 function reclaimPurchaseShares(purchaseId) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const result = yield shareSlot_model_1.ShareSlot.updateMany({ purchaseId, status: "sold" }, {
-            $set: {
-                status: "reclaimed",
-                reclaimedAt: new Date(),
-                userId: null,
-                purchaseId: null,
-            },
-        });
-        return result.modifiedCount;
-    });
+  return __awaiter(this, void 0, void 0, function* () {
+    const result = yield shareSlot_model_1.ShareSlot.updateMany(
+      { purchaseId, status: "sold" },
+      {
+        $set: {
+          status: "reclaimed",
+          reclaimedAt: new Date(),
+          userId: null,
+          purchaseId: null,
+        },
+      }
+    );
+    return result.modifiedCount;
+  });
 }
 /**
  * After a purchase approval allocates slots, check whether all slots for the
@@ -96,221 +132,308 @@ function reclaimPurchaseShares(purchaseId) {
  * - Only "sold" slots count; "available" and "reclaimed" do not.
  */
 function checkAndCompleteShare(projectId) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const share = yield model_5.Project.findById(projectId)
-                .select("totalShares projectStatus")
-                .lean();
-            if (!share || share.projectStatus === "complete")
-                return;
-            if (!share.totalShares || share.totalShares <= 0)
-                return;
-            const soldCount = yield shareSlot_model_1.ShareSlot.countDocuments({
-                projectId,
-                status: "sold",
-            });
-            if (soldCount >= share.totalShares) {
-                yield model_5.Project.findByIdAndUpdate(projectId, {
-                    $set: { projectStatus: "complete" },
-                });
-            }
-        }
-        catch (err) {
-            // Non-critical — log and continue; do not block the approval response
-            console.error(`[SHARE COMPLETE] checkAndCompleteShare failed for projectId=${projectId}:`, err);
-        }
-    });
+  return __awaiter(this, void 0, void 0, function* () {
+    try {
+      const share = yield model_5.Project.findById(projectId)
+        .select("totalShares projectStatus")
+        .lean();
+      if (!share || share.projectStatus === "complete") return;
+      if (!share.totalShares || share.totalShares <= 0) return;
+      const soldCount = yield shareSlot_model_1.ShareSlot.countDocuments({
+        projectId,
+        status: "sold",
+      });
+      if (soldCount >= share.totalShares) {
+        yield model_5.Project.findByIdAndUpdate(projectId, {
+          $set: { projectStatus: "complete" },
+        });
+      }
+    } catch (err) {
+      // Non-critical — log and continue; do not block the approval response
+      console.error(
+        `[SHARE COMPLETE] checkAndCompleteShare failed for projectId=${projectId}:`,
+        err
+      );
+    }
+  });
 }
 // ── Update Purchase Status (Approve / Reject) ─────────────────────────────────
-const updatePurchaseStatus = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+const updatePurchaseStatus = (req, res, next) =>
+  __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     try {
-        const { status, reviewNote } = req.body;
-        if (!["approved", "rejected"].includes(status))
-            return res.status(400).json({ message: "Invalid status" });
-        if (status === "rejected" && !String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim())
-            return res.status(400).json({ message: "Rejection reason is required" });
-        const purchase = yield model_1.Purchase.findById(req.params.id);
-        if (!purchase)
-            return res.status(404).json({ message: "Purchase not found" });
-        const wasAlreadyApproved = purchase.status === "approved";
-        const wasAlreadyRejected = purchase.status === "rejected";
-        // Step 1 — Allocate share slots (only on first approval)
-        if (status === "approved" && !wasAlreadyApproved) {
-            const allocationError = yield allocateShares(purchase);
-            if (allocationError) {
-                return res.status(400).json({ message: allocationError.error });
-            }
+      const { status, reviewNote } = req.body;
+      if (!["approved", "rejected"].includes(status))
+        return res.status(400).json({ message: "Invalid status" });
+      if (
+        status === "rejected" &&
+        !String(
+          reviewNote !== null && reviewNote !== void 0 ? reviewNote : ""
+        ).trim()
+      )
+        return res
+          .status(400)
+          .json({ message: "Rejection reason is required" });
+      const purchase = yield model_1.Purchase.findById(req.params.id);
+      if (!purchase)
+        return res.status(404).json({ message: "Purchase not found" });
+      const wasAlreadyApproved = purchase.status === "approved";
+      const wasAlreadyRejected = purchase.status === "rejected";
+      // Step 1 — Allocate share slots (only on first approval)
+      if (status === "approved" && !wasAlreadyApproved) {
+        const allocationError = yield allocateShares(purchase);
+        if (allocationError) {
+          return res.status(400).json({ message: allocationError.error });
         }
-        // Step 2 — For cash: mark full amount as paid
-        if (status === "approved" &&
-            !wasAlreadyApproved &&
-            purchase.paymentType === "cash") {
-            const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
-            if (fullAmount > purchase.amountPaid) {
-                purchase.amountPaid = fullAmount;
-            }
+      }
+      // Step 2 — For cash: mark full amount as paid
+      if (
+        status === "approved" &&
+        !wasAlreadyApproved &&
+        purchase.paymentType === "cash"
+      ) {
+        const fullAmount = purchase.snapshot.cashPrice * purchase.quantity;
+        if (fullAmount > purchase.amountPaid) {
+          purchase.amountPaid = fullAmount;
         }
-        // Step 3 — Save purchase status
-        purchase.status = status;
-        purchase.reviewNote = String(reviewNote !== null && reviewNote !== void 0 ? reviewNote : "").trim();
-        purchase.reviewedBy = req.user._id;
-        purchase.reviewedAt = new Date();
+      }
+      // Step 3 — Save purchase status
+      purchase.status = status;
+      purchase.reviewNote = String(
+        reviewNote !== null && reviewNote !== void 0 ? reviewNote : ""
+      ).trim();
+      purchase.reviewedBy = req.user._id;
+      purchase.reviewedAt = new Date();
+      yield purchase.save();
+      // Cash bonus is reserved when the request is submitted. A rejected request
+      // returns only that reserved portion; approved purchases keep it applied.
+      if (
+        status === "rejected" &&
+        !wasAlreadyRejected &&
+        purchase.cashbackAmount > 0 &&
+        !purchase.cashbackRefunded
+      ) {
+        const wallet = yield model_6.Wallet.findOneAndUpdate(
+          { userId: purchase.userId },
+          {
+            $inc: {
+              cashbackBalance: purchase.cashbackAmount,
+              totalBalance: purchase.cashbackAmount,
+            },
+          },
+          { new: true, upsert: true }
+        );
+        purchase.cashbackRefunded = true;
         yield purchase.save();
-        // Cashback is reserved when the request is submitted. A rejected request
-        // returns only that reserved portion; approved purchases keep it applied.
-        if (status === "rejected" &&
-            !wasAlreadyRejected &&
-            purchase.cashbackAmount > 0 &&
-            !purchase.cashbackRefunded) {
-            const wallet = yield model_6.Wallet.findOneAndUpdate({ userId: purchase.userId }, {
-                $inc: {
-                    cashbackBalance: purchase.cashbackAmount,
-                    totalBalance: purchase.cashbackAmount,
-                },
-            }, { new: true, upsert: true });
-            purchase.cashbackRefunded = true;
-            yield purchase.save();
-            yield model_6.TransactionLog.create({
-                userId: purchase.userId,
-                type: "cashback_payment_refund",
-                amount: purchase.cashbackAmount,
-                balanceAfter: wallet.totalBalance,
-                relatedPurchaseId: purchase._id,
-                note: `Cashback refunded for rejected purchase ${purchase._id.toString()}`,
-            });
-        }
-        // Respond immediately
-        res.json({ message: `Purchase ${status}`, purchase });
-        if (status === "approved" && !wasAlreadyApproved) {
-            // Send SMS notification for purchase approval
-            try {
-                const user = yield model_3.User.findById(purchase.userId).select("phone").lean();
-                if (user && user.phone) {
-                    const totalAmount = purchase.amountPaid;
-                    const productName = ((_a = purchase.snapshot) === null || _a === void 0 ? void 0 : _a.shareTitle) || "Product";
-                    yield (0, sms_1.sendPurchaseApprovalSms)(user.phone, purchase._id.toString(), totalAmount, productName);
-                }
-            }
-            catch (smsError) {
-                console.error("Failed to send purchase approval SMS:", smsError);
-                // Don't fail the approval if SMS fails
-            }
-            // Step 4 — User personal shares count
-            yield model_3.User.findByIdAndUpdate(purchase.userId, {
-                $inc: { personalPurchaseCount: purchase.quantity },
-            });
-            // Step 4b — Recalc buyer's own rank (Rank 2 depends on personal purchase count)
-            yield (0, controller_1.recalcUserRank)(purchase.userId.toString());
-            // Step 5 — Fix P-02: await commission distribution so errors are caught
-            if (!purchase.commissionProcessed) {
-                yield (0, commissions_1.distributeCommissions)(purchase._id.toString());
-            }
-            // Step 5c — Auto cashback for cash purchases
-            // Only triggers when paymentType === "cash" and cashbackPercent > 0
-            if (purchase.paymentType === "cash" &&
-                ((_c = (_b = purchase.snapshot) === null || _b === void 0 ? void 0 : _b.cashbackPercent) !== null && _c !== void 0 ? _c : 0) > 0) {
-                try {
-                    const cashbackPct = purchase.snapshot.cashbackPercent;
-                    const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
-                    const cashbackAmt = Math.floor((cashbackPct / 100) * totalPaid);
-                    if (cashbackAmt > 0) {
-                        const updatedWallet = yield model_6.Wallet.findOneAndUpdate({ userId: purchase.userId }, { $inc: { cashbackBalance: cashbackAmt, totalBalance: cashbackAmt } }, { new: true, upsert: true });
-                        yield model_6.TransactionLog.create({
-                            userId: purchase.userId,
-                            type: "cashback",
-                            amount: cashbackAmt,
-                            balanceAfter: updatedWallet.totalBalance,
-                            relatedPurchaseId: purchase._id,
-                            note: `Cashback ${cashbackPct}% — ${purchase.snapshot.shareTitle} x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
-                        });
-                        try {
-                            yield model_4.CompanyLedger.create({
-                                date: new Date(),
-                                type: "cashback_paid",
-                                amount: cashbackAmt,
-                                relatedId: purchase._id,
-                                relatedModel: "Purchase",
-                                userId: purchase.userId,
-                                note: `Auto cashback ${cashbackPct}% for purchaseId=${purchase._id.toString()}`,
-                            });
-                        }
-                        catch (ledgerErr) {
-                            console.error(`[LEDGER ERROR] cashback_paid for purchaseId=${purchase._id.toString()}:`, ledgerErr);
-                        }
-                    }
-                }
-                catch (cashbackErr) {
-                    console.error(`[CASHBACK ERROR] Auto cashback failed for purchaseId=${purchase._id.toString()}:`, cashbackErr);
-                }
-            }
-            // Step 6 — Ledger entry
-            const buyer = yield model_3.User.findById(purchase.userId)
-                .select("name username")
-                .lean();
-            const buyerName = (_d = buyer === null || buyer === void 0 ? void 0 : buyer.name) !== null && _d !== void 0 ? _d : "";
-            const buyerUsername = (_e = buyer === null || buyer === void 0 ? void 0 : buyer.username) !== null && _e !== void 0 ? _e : "";
-            try {
-                yield model_4.CompanyLedger.create({
-                    date: new Date(),
-                    type: "purchase_received",
-                    amount: purchase.amountPaid,
-                    relatedId: purchase._id,
-                    relatedModel: "Purchase",
-                    userId: purchase.userId,
-                    note: `Purchase approved — ${(_g = (_f = purchase.snapshot) === null || _f === void 0 ? void 0 : _f.shareTitle) !== null && _g !== void 0 ? _g : ""} x${purchase.quantity} [${purchase.paymentType}] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
-                });
-            }
-            catch (ledgerErr) {
-                // Fix E-02: log ledger failures — do not silently swallow
-                console.error(`[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`, ledgerErr);
-            }
-            // Step 7 — Auto-complete share if all slots are now sold
-            yield checkAndCompleteShare(purchase.projectId);
-        }
-        // Step 8 — Update certificate status
-        const purchaseWithShare = yield model_1.Purchase.findById(purchase._id)
-            .populate("projectId", "cashPrice")
+        yield model_6.TransactionLog.create({
+          userId: purchase.userId,
+          type: "cashback_payment_refund",
+          amount: purchase.cashbackAmount,
+          balanceAfter: wallet.totalBalance,
+          relatedPurchaseId: purchase._id,
+          note: `Cash bonus refunded for rejected purchase ${purchase._id.toString()}`,
+        });
+      }
+      // Respond immediately
+      res.json({ message: `Purchase ${status}`, purchase });
+      if (status === "approved" && !wasAlreadyApproved) {
+        // Send SMS notification for purchase approval
+        try {
+          const user = yield model_3.User.findById(purchase.userId)
+            .select("phone")
             .lean();
-        if (purchaseWithShare) {
-            const projectPrice = Number((_j = (_h = purchaseWithShare === null || purchaseWithShare === void 0 ? void 0 : purchaseWithShare.projectId) === null || _h === void 0 ? void 0 : _h.cashPrice) !== null && _j !== void 0 ? _j : 0);
-            const totalPayable = (0, service_1.calculateTotalPayable)(projectPrice, purchaseWithShare.quantity);
-            const certificateStatus = (0, service_1.calculateCertificateStatus)({
-                status: purchaseWithShare.status,
-                paymentType: purchaseWithShare.paymentType,
-                amountPaid: purchaseWithShare.amountPaid,
-                totalPayable,
-            });
-            yield model_2.Certificate.findOneAndUpdate({ purchaseId: purchase._id }, {
-                status: certificateStatus,
-                issuedAt: certificateStatus === "issued" ? new Date() : undefined,
-            }, { upsert: true, new: true });
+          if (user && user.phone) {
+            const totalAmount = purchase.amountPaid;
+            const productName =
+              ((_a = purchase.snapshot) === null || _a === void 0
+                ? void 0
+                : _a.shareTitle) || "Product";
+            yield (0, sms_1.sendPurchaseApprovalSms)(
+              user.phone,
+              purchase._id.toString(),
+              totalAmount,
+              productName
+            );
+          }
+        } catch (smsError) {
+          console.error("Failed to send purchase approval SMS:", smsError);
+          // Don't fail the approval if SMS fails
         }
+        // Step 4 — User personal shares count
+        yield model_3.User.findByIdAndUpdate(purchase.userId, {
+          $inc: { personalPurchaseCount: purchase.quantity },
+        });
+        // Step 4b — Recalc buyer's own rank (Rank 2 depends on personal purchase count)
+        yield (0, controller_1.recalcUserRank)(purchase.userId.toString());
+        // Step 5 — Fix P-02: await commission distribution so errors are caught
+        if (!purchase.commissionProcessed) {
+          yield (0, commissions_1.distributeCommissions)(
+            purchase._id.toString()
+          );
+        }
+        // Step 5c — Auto cashback for cash purchases
+        // Only triggers when paymentType === "cash" and cashbackPercent > 0
+        if (
+          purchase.paymentType === "cash" &&
+          ((_c =
+            (_b = purchase.snapshot) === null || _b === void 0
+              ? void 0
+              : _b.cashbackPercent) !== null && _c !== void 0
+            ? _c
+            : 0) > 0
+        ) {
+          try {
+            const cashbackPct = purchase.snapshot.cashbackPercent;
+            const totalPaid = purchase.snapshot.cashPrice * purchase.quantity;
+            const cashbackAmt = Math.floor((cashbackPct / 100) * totalPaid);
+            if (cashbackAmt > 0) {
+              const updatedWallet = yield model_6.Wallet.findOneAndUpdate(
+                { userId: purchase.userId },
+                {
+                  $inc: {
+                    cashbackBalance: cashbackAmt,
+                    totalBalance: cashbackAmt,
+                  },
+                },
+                { new: true, upsert: true }
+              );
+              yield model_6.TransactionLog.create({
+                userId: purchase.userId,
+                type: "cashback",
+                amount: cashbackAmt,
+                balanceAfter: updatedWallet.totalBalance,
+                relatedPurchaseId: purchase._id,
+                note: `Cash bonus ${cashbackPct}% — ${
+                  purchase.snapshot.shareTitle
+                } x${purchase.quantity} — ৳${cashbackAmt.toLocaleString()}`,
+              });
+              try {
+                yield model_4.CompanyLedger.create({
+                  date: new Date(),
+                  type: "cashback_paid",
+                  amount: cashbackAmt,
+                  relatedId: purchase._id,
+                  relatedModel: "Purchase",
+                  userId: purchase.userId,
+                  note: `Auto cashback ${cashbackPct}% for purchaseId=${purchase._id.toString()}`,
+                });
+              } catch (ledgerErr) {
+                console.error(
+                  `[LEDGER ERROR] cashback_paid for purchaseId=${purchase._id.toString()}:`,
+                  ledgerErr
+                );
+              }
+            }
+          } catch (cashbackErr) {
+            console.error(
+              `[CASHBACK ERROR] Auto cashback failed for purchaseId=${purchase._id.toString()}:`,
+              cashbackErr
+            );
+          }
+        }
+        // Step 6 — Ledger entry
+        const buyer = yield model_3.User.findById(purchase.userId)
+          .select("name username")
+          .lean();
+        const buyerName =
+          (_d = buyer === null || buyer === void 0 ? void 0 : buyer.name) !==
+            null && _d !== void 0
+            ? _d
+            : "";
+        const buyerUsername =
+          (_e =
+            buyer === null || buyer === void 0 ? void 0 : buyer.username) !==
+            null && _e !== void 0
+            ? _e
+            : "";
+        try {
+          yield model_4.CompanyLedger.create({
+            date: new Date(),
+            type: "purchase_received",
+            amount: purchase.amountPaid,
+            relatedId: purchase._id,
+            relatedModel: "Purchase",
+            userId: purchase.userId,
+            note: `Purchase approved — ${
+              (_g =
+                (_f = purchase.snapshot) === null || _f === void 0
+                  ? void 0
+                  : _f.shareTitle) !== null && _g !== void 0
+                ? _g
+                : ""
+            } x${purchase.quantity} [${
+              purchase.paymentType
+            }] — Buyer: ${buyerName} (@${buyerUsername}), ৳${purchase.amountPaid.toLocaleString()}`,
+          });
+        } catch (ledgerErr) {
+          // Fix E-02: log ledger failures — do not silently swallow
+          console.error(
+            `[LEDGER ERROR] Failed to create purchase_received ledger for purchaseId=${purchase._id}:`,
+            ledgerErr
+          );
+        }
+        // Step 7 — Auto-complete share if all slots are now sold
+        yield checkAndCompleteShare(purchase.projectId);
+      }
+      // Step 8 — Update certificate status
+      const purchaseWithShare = yield model_1.Purchase.findById(purchase._id)
+        .populate("projectId", "cashPrice")
+        .lean();
+      if (purchaseWithShare) {
+        const projectPrice = Number(
+          (_j =
+            (_h =
+              purchaseWithShare === null || purchaseWithShare === void 0
+                ? void 0
+                : purchaseWithShare.projectId) === null || _h === void 0
+              ? void 0
+              : _h.cashPrice) !== null && _j !== void 0
+            ? _j
+            : 0
+        );
+        const totalPayable = (0, service_1.calculateTotalPayable)(
+          projectPrice,
+          purchaseWithShare.quantity
+        );
+        const certificateStatus = (0, service_1.calculateCertificateStatus)({
+          status: purchaseWithShare.status,
+          paymentType: purchaseWithShare.paymentType,
+          amountPaid: purchaseWithShare.amountPaid,
+          totalPayable,
+        });
+        yield model_2.Certificate.findOneAndUpdate(
+          { purchaseId: purchase._id },
+          {
+            status: certificateStatus,
+            issuedAt: certificateStatus === "issued" ? new Date() : undefined,
+          },
+          { upsert: true, new: true }
+        );
+      }
+    } catch (err) {
+      next(err);
     }
-    catch (err) {
-        next(err);
-    }
-});
+  });
 exports.updatePurchaseStatus = updatePurchaseStatus;
 // ── Reclaim Shares (Installment Default) ─────────────────────────────────────
-const reclaimShares = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+const reclaimShares = (req, res, next) =>
+  __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const purchase = yield model_1.Purchase.findById(req.params.purchaseId);
-        if (!purchase)
-            return res.status(404).json({ message: "Purchase not found" });
-        const reclaimed = yield reclaimPurchaseShares(purchase._id);
-        if (reclaimed === 0) {
-            return res.status(404).json({
-                message: "No sold share slots found for this purchase",
-            });
-        }
-        res.json({
-            message: `${reclaimed} share slot(s) reclaimed`,
-            reclaimed,
+      const purchase = yield model_1.Purchase.findById(req.params.purchaseId);
+      if (!purchase)
+        return res.status(404).json({ message: "Purchase not found" });
+      const reclaimed = yield reclaimPurchaseShares(purchase._id);
+      if (reclaimed === 0) {
+        return res.status(404).json({
+          message: "No sold share slots found for this purchase",
         });
+      }
+      res.json({
+        message: `${reclaimed} share slot(s) reclaimed`,
+        reclaimed,
+      });
+    } catch (err) {
+      next(err);
     }
-    catch (err) {
-        next(err);
-    }
-});
+  });
 exports.reclaimShares = reclaimShares;

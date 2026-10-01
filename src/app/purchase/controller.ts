@@ -282,7 +282,7 @@ export const createPurchase = async (
       requestedCashbackAmount > maxCashbackAmount
     ) {
       return res.status(400).json({
-        message: `Cashback payment cannot exceed ৳${maxCashbackAmount.toLocaleString()}`,
+        message: `Cash bonus payment cannot exceed ৳${maxCashbackAmount.toLocaleString()}`,
       });
     }
     const otherPaymentAmount = currentPaymentAmount - requestedCashbackAmount;
@@ -380,7 +380,7 @@ export const createPurchase = async (
         amount: requestedCashbackAmount,
         balanceAfter: wallet.totalBalance,
         relatedPurchaseId: purchase._id,
-        note: `Cashback used for ${share.title} x${qty}`,
+        note: `Cash bonus used for ${share.title} x${qty}`,
       });
     }
 
@@ -418,7 +418,9 @@ export const getPurchases = async (
 
     // If search term provided, find matching userIds first then filter purchases
     if (search) {
-      const matchingUsers = await (await import("../user/model")).User.find({
+      const matchingUsers = await (
+        await import("../user/model")
+      ).User.find({
         $or: [
           { name: { $regex: search, $options: "i" } },
           { phone: { $regex: search, $options: "i" } },

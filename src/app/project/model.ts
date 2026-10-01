@@ -57,7 +57,7 @@ export interface IProject extends Document {
   // Cover slider flag — only one share can have this true at a time
   isCoverSlider: boolean;
 
-  // Cashback percentage for cash purchases — credited automatically on approval
+  // Cash bonus percentage for cash purchases — credited automatically on approval
   cashbackPercent: number;
 
   // Project logo — shown on certificates generated for this project
@@ -132,7 +132,7 @@ const ProjectSchema = new Schema<IProject>(
     // Cover slider — admin selects which share's images appear as cover
     isCoverSlider: { type: Boolean, default: false },
 
-    // Cashback % for cash purchases — auto-credited on approval (non-withdrawable, non-transferable)
+    // Cash bonus % for cash purchases — auto-credited on approval (non-withdrawable, non-transferable)
     cashbackPercent: { type: Number, default: 0 },
 
     // Project logo — uploaded via Cloudinary, used on certificates
